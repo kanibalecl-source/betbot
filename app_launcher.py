@@ -15,17 +15,13 @@ def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
     return False
 
 
-# =========================
-# 🤖 BOT (POPRAWNA NAZWA)
-# =========================
+# 🤖 BOT
 subprocess.Popen(
     ["python", "live_engine.py"]
 )
 
 
-# =========================
-# 📊 DASHBOARD (1 NA START)
-# =========================
+# 📊 DASHBOARD (1)
 subprocess.Popen(
     [
         "python",
@@ -41,9 +37,7 @@ subprocess.Popen(
 )
 
 
-# =========================
-# ⏳ CZEKAJ NA DASHBOARD
-# =========================
+# ⏳ sprawdzenie czy działa
 ready = wait_for_port("127.0.0.1", 8501, timeout=40)
 
 if ready:
