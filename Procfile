@@ -1,1 +1,1 @@
-worker: python3 app_launcher.py
+web: python3 app_launcher.py
