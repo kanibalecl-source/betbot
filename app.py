@@ -1,0 +1,61 @@
+from pathlib import Path
+import pandas as pd
+from flask import Flask, render_template, request, jsonify, redirect, url_for
+
+from database import init_db, save_bet, list_bets
+
+BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
+PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
+
+app = Flask(__name__)
+
+
+def load_picks():
+    if not PICKS_FILE.exists():
+        return []
+
+    df = pd.read_csv(PICKS_FILE)
+    df = df.fillna("")
+    return df.to_dict(orient="records")
+
+
+@app.route("/")
+def index():
+    init_db()
+    picks = load_picks()
+    return render_template("index.html", picks=picks, page="dashboard")
+
+
+@app.route("/bets")
+def bets():
+    init_db()
+    rows = list_bets(1000)
+    return render_template("bets.html", bets=rows, page="bets")
+
+
+@app.post("/play")
+def play():
+    picks = load_picks()
+    pick_id = request.form.get("pick_id")
+    stake = request.form.get("stake")
+
+    if not pick_id or not stake:
+        return jsonify({"ok": False, "error": "Brak pick_id albo stawki"}), 400
+
+    pick = next((p for p in picks if str(p.get("pick_id")) == str(pick_id)), None)
+    if not pick:
+        return jsonify({"ok": False, "error": "Nie znaleziono typu"}), 404
+
+    save_bet(pick, stake)
+    return redirect(url_for("index"))
+
+
+@app.route("/health")
+def health():
+    return {"ok": True}
+
+
+if __name__ == "__main__":
+    init_db()
+    app.run(host="0.0.0.0", port=8000, debug=False)

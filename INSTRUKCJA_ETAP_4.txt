@@ -1,0 +1,63 @@
+ETAP 4 — AUTO WYNIKI, CLV, RAPORT, AUTOTUNE
+
+CEL:
+- system sam sprawdza wyniki
+- system sam rozlicza kliknięte zakłady
+- system liczy profit
+- system próbuje pobrać closing odds i liczyć CLV
+- system przygotowuje miesięczny raport
+- system ostrożnie wyłącza słabe rynki po danych
+
+CO SIĘ ZMIENI:
+1. pojawią się:
+   settle_results.py
+   settle_loop.py
+   monthly_report.py
+   auto_tune.py
+
+2. start_all.cmd będzie uruchamiał:
+   - bot_loop.py
+   - settle_loop.py
+   - app.py
+
+3. w zakładce "Zagrane" zaczną pojawiać się:
+   status OPEN/CLOSED
+   result WIN/LOSS
+   profit
+   closing_odds
+   clv
+
+CO ZNIKNIE:
+- nic
+
+CO BĘDZIE INNE:
+- po meczu system będzie próbował sam rozliczyć bet.
+- rozliczenie działa po fixture_id przez API-Football.
+- closing odds działa przez The Odds API:
+  najpierw odds_event_id, potem fallback po drużynach.
+
+KLUCZE API:
+System szuka kluczy w kolejności:
+1. .env
+2. secrets_config.py
+3. Twój istniejący data_api.py
+
+Wymagane nazwy:
+API_FOOTBALL_KEY
+ODDS_API_KEY
+
+WAŻNE:
+- jeśli Twoje obecne data_api.py ma już te zmienne, nie musisz ich przepisywać.
+- jeśli nie, wpisz je do secrets_config.py albo .env.
+
+JAK WDROŻYĆ:
+1. Wypakuj ten ZIP do folderu bota.
+2. Nadpisz pliki.
+3. Sprawdź klucze API.
+4. Uruchom:
+   start_all.cmd
+
+PO WDROŻENIU:
+- bot będzie generował typy w pętli
+- web panel będzie działał
+- settle_loop będzie sprawdzał wyniki w pętli
