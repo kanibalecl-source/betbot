@@ -1,3 +1,4 @@
+print("NOWA WERSJA START")
 import subprocess
 import webbrowser
 import time
