@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 🔑 API (NOWE - potrzebne do działania bota)
-API_FOOTBALL_KEY = os.getenv(0d7ba25228cd257230eb64bc1ed3ed3f)
+API_FOOTBALL_KEY = os.getenv("0d7ba25228cd257230eb64bc1ed3ed3f")
 TELEGRAM_TOKEN = os.getenv(8770844047:AAFPkni-UjEIXqHfXJ_sg97pUZhVBGdwDh0)
 CHAT_ID = os.getenv(8770844047)
 
