@@ -1,5 +1,4 @@
 import os
-
 if os.environ.get("RAILWAY_ENVIRONMENT"):
     import sys
     sys.exit()
