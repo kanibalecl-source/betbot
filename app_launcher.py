@@ -3,6 +3,8 @@ print("NOWA WERSJA START")
 import subprocess
 import time
 import socket
+import os
+
 
 def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
     start = time.time()
@@ -15,13 +17,17 @@ def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
     return False
 
 
+# 🔌 PORT z Railway
+port = os.environ.get("PORT", "8501")
+
+
 # 🤖 BOT
 subprocess.Popen(
     ["python", "live_engine.py"]
 )
 
 
-# 📊 DASHBOARD (1)
+# 📊 DASHBOARD
 subprocess.Popen(
     [
         "python",
@@ -30,15 +36,22 @@ subprocess.Popen(
         "run",
         "dashboard_live.py",
         "--server.port",
-        "8501",
+        port,
         "--server.address",
         "0.0.0.0",
     ]
 )
 
 
-# ⏳ sprawdzenie czy działa
-ready = wait_for_port("127.0.0.1", 8501, timeout=40)
+# ⏳ czekamy aż dashboard ruszy
+ready = wait_for_port("127.0.0.1", int(port), timeout=40)
 
 if ready:
-    print("Dashboard działa")
+    print("Dashboard działa 🚀")
+else:
+    print("Dashboard NIE wystartował ❌")
+
+
+# 🔁 utrzymanie procesu (Railway tego wymaga)
+while True:
+    time.sleep(60)
