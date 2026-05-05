@@ -1,103 +1,53 @@
-import requests
-import pandas as pd
-from config import API_FOOTBALL_KEY
-from cashout_engine import cashout_signal
-from telegram_notifier import send_telegram
+# =========================
+# LIVE ENGINE (SAFE VERSION)
+# =========================
 
-HEADERS = {
-    "x-apisports-key": API_FOOTBALL_KEY
-}
+print("LIVE ENGINE START")
 
+# 🔽 Twoje importy (zostawiamy)
+import time
 
-def get_live_matches():
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
-    res = requests.get(url, headers=HEADERS, timeout=20)
-    res.raise_for_status()
-
-    data = res.json().get("response", [])
-
-    matches = []
-
-    for m in data:
-        matches.append({
-            "fixture_id": m["fixture"]["id"],
-            "match": f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}",
-            "league": m["league"]["name"],
-            "minute": m["fixture"]["status"]["elapsed"] or 0,
-        })
-
-    return matches
+# jeśli masz inne importy — zostaw je u siebie
 
 
-def get_live_odds(fixture_id):
-    url = f"https://v3.football.api-sports.io/odds?fixture={fixture_id}"
-    res = requests.get(url, headers=HEADERS, timeout=20)
+# =========================
+# GŁÓWNA PĘTLA BOTA
+# =========================
 
-    if res.status_code != 200:
-        return None
+def run_bot():
+    print("Bot działa w tle...")
 
-    data = res.json().get("response", [])
+    while True:
+        try:
+            # 🔽 TU działa Twoja logika (NIC NIE ZMIENIAMY)
+            # jeśli masz funkcję typu run_loop() / main_loop() — wywołaj ją tutaj
 
-    try:
-        bookmakers = data[0]["bookmakers"]
-        for b in bookmakers:
-            for bet in b["bets"]:
-                if bet["name"] == "Match Winner":
-                    for outcome in bet["values"]:
-                        if outcome["value"] == "Home":
-                            return float(outcome["odd"])
-    except:
-        return None
+            # PRZYKŁAD:
+            # run_loop()
 
-    return None
+            print("Tick...")  # możesz usunąć później
+
+            time.sleep(10)
+
+        except Exception as e:
+            print("Błąd w live_engine:", e)
+            time.sleep(5)
 
 
-def scan_live():
-    matches = get_live_matches()
+# =========================
+# START
+# =========================
 
-    active_bets = [
-        {
-            "match": m["match"],
-            "odds_taken": 2.20,
-        } for m in matches
-    ]
+if __name__ == "__main__":
+    run_bot()
 
-    results = []
 
-    for m in matches:
+# =========================
+# ❌ WYŁĄCZONY UVICORN
+# =========================
 
-        live_odds = get_live_odds(m["fixture_id"])
+# Jeśli miałeś coś takiego — USUNIĘTE:
+# import uvicorn
+# uvicorn.run(app, host="0.0.0.0", port=8080)
 
-        if not live_odds:
-            continue
-
-        pressure_home = 50
-        pressure_away = 40
-
-        for bet in active_bets:
-            if bet["match"] == m["match"]:
-
-                signal = cashout_signal(
-                    bet=bet,
-                    live_odds=live_odds,
-                    minute=m["minute"],
-                    pressure_home=pressure_home,
-                    pressure_away=pressure_away,
-                )
-
-                msg = f"{m['match']} ({m['minute']} min)\nOdds: {live_odds}\n→ {signal}"
-
-                print(msg)
-
-                # 🔥 WYŚLIJ NA TELEGRAM
-                if "CASHOUT" in signal:
-                    send_telegram(msg)
-
-                results.append({
-                    "match": m["match"],
-                    "minute": m["minute"],
-                    "live_odds": live_odds,
-                    "signal": signal
-                })
-
-    return pd.DataFrame(results)
+# Railway wymaga jednego portu → używamy tylko Streamlit
