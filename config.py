@@ -1,3 +1,19 @@
+import os
+from dotenv import load_dotenv
+
+# wczytaj zmienne środowiskowe
+load_dotenv()
+
+# 🔑 API (NOWE - potrzebne do działania bota)
+API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+
+
+# =========================
+# 💰 TWOJE USTAWIENIA (BEZ ZMIAN)
+# =========================
+
 BANKROLL = 1000.0
 
 MAX_TOTAL_PICKS = 12
@@ -15,3 +31,14 @@ LOW_MAX_ODDS = 5.00
 
 MIN_BOOKS_FOR_SAFE = 2
 MIN_BOOKS_FOR_LOW = 2
+
+
+# 🔍 DEBUG (opcjonalnie - tylko informacja w logach)
+if not API_FOOTBALL_KEY:
+    print("❌ Brak API_FOOTBALL_KEY")
+
+if not TELEGRAM_TOKEN:
+    print("❌ Brak TELEGRAM_TOKEN")
+
+if not CHAT_ID:
+    print("❌ Brak CHAT_ID")
