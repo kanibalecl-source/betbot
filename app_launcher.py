@@ -1,9 +1,14 @@
+import os
+
+if os.environ.get("RAILWAY_ENVIRONMENT"):
+    import sys
+    sys.exit()
 print("NOWA WERSJA START")
 
 import subprocess
 import time
 import socket
-import os
+
 
 
 def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
