@@ -8,5 +8,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["sleep", "999999"]
+CMD ["python", "-c", "print('PYTHON_OK'); import time; time.sleep(999999)"]
 RUN echo "DOCKERFILE_OK"
