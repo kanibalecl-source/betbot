@@ -12,7 +12,7 @@ process = subprocess.Popen(
     [
         "streamlit",
         "run",
-        "dashboard_live.py",
+        "dashboard_streamlit.py",
         "--server.port",
         port,
         "--server.address",
