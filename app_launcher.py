@@ -8,6 +8,14 @@ port = os.environ.get("PORT", "8080")
 
 print(f"PORT: {port}")
 
+# 🤖 LIVE ENGINE
+subprocess.Popen(
+    ["python", "live_engine.py"]
+)
+
+print("LIVE ENGINE STARTED")
+
+# 📊 STREAMLIT
 process = subprocess.Popen(
     [
         "streamlit",
@@ -17,18 +25,10 @@ process = subprocess.Popen(
         port,
         "--server.address",
         "0.0.0.0",
-        "--server.headless",
-        "true",
-        "--browser.gatherUsageStats",
-        "false",
     ]
 )
 
 print("STREAMLIT STARTED")
 
-while True:
-    if process.poll() is not None:
-        print("STREAMLIT CRASHED")
-        break
-
-    time.sleep(5)
+# UTRZYMANIE PROCESU
+process.wait()
