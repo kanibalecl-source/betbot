@@ -14,19 +14,35 @@ try:
 
     st.success("Dane LIVE załadowane ✅")
 
-    st.json(data)
-
     st.subheader("⚽ MECZE LIVE")
 
     for match in data["matches"]:
 
         st.markdown("---")
 
-        st.write(f"🏠 {match['home']}")
-        st.write(f"🆚 {match['away']}")
-        st.write(f"⏱ Minuta: {match['minute']}")
-        st.write(f"📈 Typ: {match['prediction']}")
-        st.write(f"🎯 Confidence: {match['confidence']}%")
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Mecz",
+                f"{match['home']} vs {match['away']}"
+            )
+
+        with col2:
+            st.metric(
+                "Minuta",
+                match['minute']
+            )
+
+        with col3:
+            st.metric(
+                "Confidence",
+                f"{match['confidence']}%"
+            )
+
+        st.success(
+            f"📈 Typ LIVE: {match['prediction']}"
+        )
 
 except Exception as e:
 
