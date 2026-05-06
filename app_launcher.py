@@ -1,31 +1,15 @@
 import os
-print("NOWA WERSJA START")
-
 import subprocess
 import time
-import socket
 
+print("NOWA WERSJA START")
 
-def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            with socket.create_connection((host, port), timeout=1):
-                return True
-        except OSError:
-            time.sleep(1)
-    return False
+port = os.environ.get("PORT", "8080")
 
+print(f"PORT: {port}")
 
-# 🔌 PORT z Railway
-port = os.environ.get("PORT", "8501")
-
-
-# 📊 DASHBOARD
-subprocess.Popen(
+subprocess.run(
     [
-        "python",
-        "-m",
         "streamlit",
         "run",
         "dashboard_live.py",
@@ -33,16 +17,9 @@ subprocess.Popen(
         port,
         "--server.address",
         "0.0.0.0",
+        "--server.headless",
+        "true",
+        "--browser.gatherUsageStats",
+        "false",
     ]
 )
-
-print("TEST KONCA STARTU")
-
-time.sleep(10)
-
-print("KONIEC TESTU")
-
-
-# 🔁 utrzymanie procesu
-while True:
-    time.sleep(60)
