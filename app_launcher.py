@@ -8,7 +8,7 @@ port = os.environ.get("PORT", "8080")
 
 print(f"PORT: {port}")
 
-subprocess.run(
+process = subprocess.Popen(
     [
         "streamlit",
         "run",
@@ -23,3 +23,12 @@ subprocess.run(
         "false",
     ]
 )
+
+print("STREAMLIT STARTED")
+
+while True:
+    if process.poll() is not None:
+        print("STREAMLIT CRASHED")
+        break
+
+    time.sleep(5)
