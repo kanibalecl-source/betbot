@@ -1,5 +1,1 @@
-{
-  "deploy": {
-    "startCommand":"python app_launcher.py"
-  }
-}
+{}
