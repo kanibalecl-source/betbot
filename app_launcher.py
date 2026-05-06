@@ -2,21 +2,25 @@ import os
 import subprocess
 import time
 
-print("NOWA WERSJA START")
+print("🚀 BETBOT PRODUCTION START")
 
 port = os.environ.get("PORT", "8080")
 
-print(f"PORT: {port}")
+# =========================
+# BOT CORE
+# =========================
 
-# 🤖 LIVE ENGINE
 subprocess.Popen(
-    ["python", "live_engine.py"]
+    ["python", "bot.py"]
 )
 
-print("LIVE ENGINE STARTED")
+print("✅ bot.py uruchomiony")
 
-# 📊 STREAMLIT
-process = subprocess.Popen(
+# =========================
+# DASHBOARD
+# =========================
+
+subprocess.Popen(
     [
         "streamlit",
         "run",
@@ -28,7 +32,11 @@ process = subprocess.Popen(
     ]
 )
 
-print("STREAMLIT STARTED")
+print("✅ dashboard uruchomiony")
 
-# UTRZYMANIE PROCESU
-process.wait()
+# =========================
+# KEEP ALIVE
+# =========================
+
+while True:
+    time.sleep(60)
