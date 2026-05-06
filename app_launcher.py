@@ -23,11 +23,10 @@ def wait_for_port(host: str, port: int, timeout: int = 30) -> bool:
 port = os.environ.get("PORT", "8501")
 
 
-# 🤖 BOT
-subprocess.Popen(
-    ["python", "live_engine.py"]
-)
-
+# 🤖 BOT WYŁĄCZONY
+# subprocess.Popen(
+#     ["python", "live_engine.py"]
+# )
 
 # 📊 DASHBOARD
 subprocess.Popen(
