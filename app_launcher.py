@@ -2,23 +2,15 @@ import os
 import subprocess
 import time
 
-print("🚀 BETBOT PRODUCTION START")
+print("🚀 BETBOT FULL SYSTEM START")
 
 port = os.environ.get("PORT", "8080")
 
-# =========================
-# BOT CORE
-# =========================
-
 subprocess.Popen(
-    ["python", "bot.py"]
+    ["python", "scheduler_engine.py"]
 )
 
-print("✅ bot.py uruchomiony")
-
-# =========================
-# DASHBOARD
-# =========================
+print("✅ scheduler_engine.py uruchomiony")
 
 subprocess.Popen(
     [
@@ -32,11 +24,7 @@ subprocess.Popen(
     ]
 )
 
-print("✅ dashboard uruchomiony")
-
-# =========================
-# KEEP ALIVE
-# =========================
+print("✅ dashboard_streamlit.py uruchomiony")
 
 while True:
     time.sleep(60)
