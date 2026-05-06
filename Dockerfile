@@ -8,5 +8,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "app_launcher.py"]
+CMD ["sleep", "999999"]
 RUN echo "DOCKERFILE_OK"
