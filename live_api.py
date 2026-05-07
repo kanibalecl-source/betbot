@@ -1,56 +1,68 @@
+import time
 import requests
-from config import API_FOOTBALL_KEY, ODDS_API_KEY
+import pandas as pd
+from pathlib import Path
 
-# =========================
-# LIVE MATCHES (minuta, wynik)
-# =========================
+from config import API_FOOTBALL_KEY
+
+HEADERS = {
+    "x-apisports-key": API_FOOTBALL_KEY
+}
+
+DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
+
+LIVE_FILE = DATA_DIR / "live_matches.csv"
+
+
 def get_live_matches():
     url = "https://v3.football.api-sports.io/fixtures?live=all"
 
-    headers = {
-        "x-apisports-key": API_FOOTBALL_KEY
-    }
+    try:
+        res = requests.get(url, headers=HEADERS, timeout=20)
+        res.raise_for_status()
 
-    res = requests.get(url, headers=headers)
-    data = res.json()
+        data = res.json().get("response", [])
 
-    matches = []
+        matches = []
 
-    for m in data.get("response", []):
+        for m in data:
+            matches.append({
+                "fixture_id": m["fixture"]["id"],
+                "home": m["teams"]["home"]["name"],
+                "away": m["teams"]["away"]["name"],
+                "league": m["league"]["name"],
+                "minute": m["fixture"]["status"]["elapsed"] or 0,
+                "score": f"{m['goals']['home']}:{m['goals']['away']}",
+                "status": m["fixture"]["status"]["short"]
+            })
 
-        matches.append({
-            "fixture_id": m["fixture"]["id"],
-            "mecz": f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}",
-            "minute": m["fixture"]["status"]["elapsed"],
-            "home_goals": m["goals"]["home"],
-            "away_goals": m["goals"]["away"]
-        })
+        return matches
 
-    return matches
+    except Exception as e:
+        print(f"❌ LIVE API ERROR: {e}")
+        return []
 
 
-# =========================
-# LIVE ODDS
-# =========================
-def get_live_odds():
-    url = f"https://api.the-odds-api.com/v4/sports/soccer_epl/odds/?apiKey={ODDS_API_KEY}&regions=eu&markets=totals"
+print("🚀 LIVE ENGINE STARTED")
 
-    res = requests.get(url)
-    data = res.json()
+while True:
 
-    odds_map = {}
+    print("💓 LIVE LOOP")
 
-    for game in data:
-        match = f"{game['home_team']} vs {game['away_team']}"
+    live_matches = get_live_matches()
 
-        try:
-            markets = game["bookmakers"][0]["markets"]
-            for m in markets:
-                if m["key"] == "totals":
-                    for outcome in m["outcomes"]:
-                        if outcome["name"] == "Over" and outcome["point"] == 2.5:
-                            odds_map[match] = outcome["price"]
-        except:
-            continue
+    print(live_matches[:2])
 
-    return odds_map
+    if live_matches:
+
+        df = pd.DataFrame(live_matches)
+
+        df.to_csv(LIVE_FILE, index=False)
+
+        print("✅ live_matches.csv UPDATED")
+
+    else:
+        print("⚠️ NO LIVE MATCHES")
+
+    time.sleep(60)
