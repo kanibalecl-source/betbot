@@ -2,7 +2,9 @@ import requests
 import time
 from model_goals import build_model
 
-API_KEY = "TWOJ_KLUCZ"
+import os
+
+API_KEY = os.getenv("API_FOOTBALL_KEY")
 BASE_URL = "https://v3.football.api-sports.io"
 
 HEADERS = {"x-apisports-key": API_KEY}
