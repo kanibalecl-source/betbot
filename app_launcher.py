@@ -6,46 +6,41 @@ print("🚀 APP LAUNCHER START")
 
 port = os.environ.get("PORT", "8080")
 
-# =========================
-# START SCHEDULER
-# =========================
+try:
+    print("🚀 START scheduler_engine.py")
 
-scheduler_process = subprocess.Popen(
-    ["python", "scheduler_engine.py"]
-)
+    scheduler_process = subprocess.Popen(
+        ["python3", "scheduler_engine.py"]
+    )
 
-print("✅ scheduler_engine.py uruchomiony")
+    print("✅ scheduler_engine.py STARTED")
 
-# =========================
-# START DASHBOARD
-# =========================
+except Exception as e:
+    print(f"❌ scheduler_engine.py ERROR: {e}")
 
-dashboard_process = subprocess.Popen(
-    [
-        "streamlit",
-        "run",
-        "dashboard_streamlit.py",
-        "--server.port",
-        port,
-        "--server.address",
-        "0.0.0.0",
-    ]
-)
+try:
+    print("🚀 START dashboard_streamlit.py")
 
-print("✅ dashboard_streamlit.py uruchomiony")
+    dashboard_process = subprocess.Popen(
+        [
+            "streamlit",
+            "run",
+            "dashboard_streamlit.py",
+            "--server.port",
+            port,
+            "--server.address",
+            "0.0.0.0",
+        ]
+    )
 
-# =========================
-# KEEP APP ALIVE
-# =========================
+    print("✅ dashboard_streamlit.py STARTED")
+
+except Exception as e:
+    print(f"❌ dashboard_streamlit.py ERROR: {e}")
+
+print("✅ APP RUNNING")
 
 while True:
-    scheduler_status = scheduler_process.poll()
-    dashboard_status = dashboard_process.poll()
-
-    if scheduler_status is not None:
-        print("❌ scheduler_engine.py zakończył działanie")
-
-    if dashboard_status is not None:
-        print("❌ dashboard_streamlit.py zakończył działanie")
+    print("💓 HEARTBEAT")
 
     time.sleep(30)
