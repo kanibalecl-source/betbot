@@ -1,45 +1,37 @@
-import threading
+import subprocess
 import time
 from datetime import datetime
 
-from bot_loop import main as prematch_loop
 
-
-def safe_runner(name, target):
+def run_prematch():
     while True:
         try:
-            print(f"🚀 START MODUŁU: {name}")
-            target()
+            print("🚀 START PREMATCH BOT")
+
+            result = subprocess.run(
+                ["python", "bot.py"],
+                capture_output=True,
+                text=True
+            )
+
+            print(result.stdout)
+
+            if result.stderr:
+                print("❌ STDERR:")
+                print(result.stderr)
 
         except Exception as e:
-            print(f"❌ BŁĄD {name}: {e}")
+            print(f"❌ BŁĄD PREMATCH: {e}")
 
-        print(f"🔁 Restart modułu za 10 sekund: {name}")
-        time.sleep(10)
-
-
-def start_thread(name, target):
-    thread = threading.Thread(
-        target=safe_runner,
-        args=(name, target),
-        daemon=True
-    )
-
-    thread.start()
-
-    print(f"✅ Thread aktywny: {name}")
-
-    return thread
+        print("⏳ Kolejne uruchomienie za 5 minut")
+        time.sleep(300)
 
 
 def main():
     print("🚀 BETBOT PRODUCTION SCHEDULER")
     print(f"⏰ {datetime.now()}")
 
-    start_thread("PREMATCH ENGINE", prematch_loop)
-
-    while True:
-        time.sleep(60)
+    run_prematch()
 
 
 if __name__ == "__main__":
