@@ -4,8 +4,8 @@ import pandas as pd
 from pathlib import Path
 
 from config import API_FOOTBALL_KEY
-from cashout_engine import cashout_signal
-from telegram_notifier import send_telegram
+
+print("✅ LIVE_ENGINE IMPORT OK")
 
 HEADERS = {
     "x-apisports-key": API_FOOTBALL_KEY
@@ -38,118 +38,65 @@ def get_live_matches():
     return matches
 
 
-def get_live_odds(fixture_id):
-    url = f"https://v3.football.api-sports.io/odds?fixture={fixture_id}"
+def analyze_match(match):
+    minute = match["minute"]
 
-    res = requests.get(url, headers=HEADERS, timeout=20)
+    if minute >= 70:
+        typ = "OVER 2.5"
+        confidence = 82
 
-    if res.status_code != 200:
-        return None
+    elif minute >= 55:
+        typ = "BTTS"
+        confidence = 76
 
-    data = res.json().get("response", [])
+    else:
+        typ = "OVER 1.5"
+        confidence = 65
 
-    try:
-        bookmakers = data[0]["bookmakers"]
-
-        for b in bookmakers:
-            for bet in b["bets"]:
-                if bet["name"] == "Match Winner":
-
-                    for outcome in bet["values"]:
-                        if outcome["value"] == "Home":
-                            return float(outcome["odd"])
-
-    except:
-        return None
-
-    return None
+    return {
+        "mecz": match["mecz"],
+        "liga": match["liga"],
+        "minute": minute,
+        "typ": typ,
+        "confidence": confidence,
+    }
 
 
-def scan_live():
+def save_live_picks(picks):
+    if not picks:
+        return
+
+    df = pd.DataFrame(picks)
+
+    if CSV_FILE.exists():
+        old = pd.read_csv(CSV_FILE)
+        df = pd.concat([old, df], ignore_index=True)
+
+    df.to_csv(CSV_FILE, index=False)
+
+    print(f"✅ LIVE PICKS SAVED: {len(picks)}")
+
+
+def run_live():
+    print("⚽ LIVE ENGINE RUN")
 
     matches = get_live_matches()
 
-    active_bets = [
-        {
-            "mecz": m["mecz"],
-            "odds_taken": 2.20,
-        }
-        for m in matches
-    ]
+    print(f"📡 LIVE MATCHES: {len(matches)}")
 
-    results = []
+    picks = []
 
-    for m in matches:
+    for match in matches[:10]:
+        result = analyze_match(match)
 
-        live_odds = get_live_odds(m["fixture_id"])
+        print(
+            f"🔥 {result['mecz']} | "
+            f"{result['typ']} | "
+            f"{result['confidence']}%"
+        )
 
-        if not live_odds:
-            continue
+        picks.append(result)
 
-        pressure_home = 50
-        pressure_away = 40
+    save_live_picks(picks)
 
-        for bet in active_bets:
-
-            if bet["mecz"] == m["mecz"]:
-
-                signal = cashout_signal(
-                    bet=bet,
-                    live_odds=live_odds,
-                    minute=m["minute"],
-                    pressure_home=pressure_home,
-                    pressure_away=pressure_away,
-                )
-
-                msg = (
-                    f"{m['mecz']} ({m['minute']} min)\n"
-                    f"Odds: {live_odds}\n"
-                    f"→ {signal}"
-                )
-
-                print(msg)
-
-                if "CASHOUT" in signal:
-                    try:
-                        send_telegram(msg)
-                    except Exception as e:
-                        print("TELEGRAM ERROR:", e)
-
-                results.append({
-                    "data_analizy": pd.Timestamp.now(),
-                    "liga": m["liga"],
-                    "mecz": m["mecz"],
-                    "typ": signal,
-                    "kod_rynku": "LIVE",
-                    "kurs_buk": live_odds,
-                    "prawd_bota": 0,
-                    "kurs_bota": 0,
-                    "edge": 0,
-                    "ocena": "LIVE",
-                    "stawka_pln": 0,
-                })
-
-    return pd.DataFrame(results)
-
-
-print("LIVE ENGINE START 🚀")
-
-while True:
-
-    try:
-
-        df = scan_live()
-
-        if not df.empty:
-            df.to_csv(CSV_FILE, index=False)
-
-            print(f"ZAPISANO {len(df)} LIVE PICKS")
-
-        else:
-            print("BRAK LIVE PICKS")
-
-    except Exception as e:
-
-        print("LIVE ENGINE ERROR:", e)
-
-    time.sleep(60)
+    print("✅ LIVE ENGINE COMPLETE")
