@@ -1,6 +1,3 @@
-# dashboard_streamlit.py
-
-```python
 import streamlit as st
 import pandas as pd
 from pathlib import Path
@@ -51,4 +48,3 @@ if live_file.exists():
 
 else:
     st.warning("Brak danych LIVE")
-```
