@@ -30,8 +30,14 @@ if prematch_file.exists():
 
         st.success(f"Załadowano {len(prematch_df)} prematch picks")
 
+        columns_to_show = [
+            "fixture_id"
+        ]
+
+        filtered_df = prematch_df[columns_to_show]
+
         st.dataframe(
-            prematch_df,
+            filtered_df,
             use_container_width=True,
             height=400
         )
