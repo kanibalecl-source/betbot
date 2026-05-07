@@ -1,12 +1,22 @@
+print("🚀 LIVE BOT FILE START")
+
 import time
 from datetime import datetime
 
-from live_engine import run_live
+print("✅ IMPORT TIME OK")
+
+try:
+    from live_engine import run_live
+    print("✅ IMPORT LIVE_ENGINE OK")
+
+except Exception as e:
+    print(f"❌ IMPORT ERROR: {e}")
+    raise
 
 
 def main():
     print("🚀 LIVE ENGINE START")
-    print(f"⏰ {datetime.now()}")
+    print(datetime.now())
 
     while True:
         try:
@@ -17,9 +27,9 @@ def main():
             print("✅ LIVE LOOP COMPLETE")
 
         except Exception as e:
-            print(f"❌ LIVE ENGINE ERROR: {e}")
+            print(f"❌ LIVE ERROR: {e}")
 
-        print("⏳ Kolejne LIVE sprawdzenie za 60 sekund")
+        print("⏳ Sleep 60s")
         time.sleep(60)
 
 
