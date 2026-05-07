@@ -3,6 +3,7 @@ import time
 from datetime import datetime
 
 from bot_loop import main as prematch_loop
+from live_bot import run_live
 
 
 def safe_runner(name, target):
@@ -10,6 +11,7 @@ def safe_runner(name, target):
         try:
             print(f"🚀 START MODUŁU: {name}")
             target()
+
         except Exception as e:
             print(f"❌ BŁĄD {name}: {e}")
 
@@ -32,11 +34,24 @@ def start_thread(name, target):
 
 
 def main():
-    print("🚀 SCHEDULER ENGINE START")
+    print("🚀 FULL BETBOT SCHEDULER START")
     print(f"⏰ {datetime.now()}")
 
-    # PREMATCH CORE
-    start_thread("PREMATCH", prematch_loop)
+    # =========================
+    # PREMATCH ENGINE
+    # =========================
+
+    start_thread("PREMATCH ENGINE", prematch_loop)
+
+    # =========================
+    # LIVE ENGINE
+    # =========================
+
+    start_thread("LIVE ENGINE", run_live)
+
+    # =========================
+    # KEEP ALIVE
+    # =========================
 
     while True:
         time.sleep(60)
