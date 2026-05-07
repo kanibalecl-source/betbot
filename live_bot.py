@@ -39,32 +39,18 @@ def get_live_matches():
 
         return matches
 
-    except Exception as e:
-        print(f"❌ LIVE API ERROR: {e}")
+    except Exception:
         return []
 
 
-print("🚀 LIVE ENGINE STARTED")
-
 while True:
 
-    print("💓 LIVE LOOP")
-
     live_matches = get_live_matches()
-
-    print(f"⚽ LIVE MATCHES: {len(live_matches)}")
 
     if live_matches:
 
         df = pd.DataFrame(live_matches)
 
         df.to_csv(LIVE_FILE, index=False)
-
-        print("✅ live_matches.csv UPDATED")
-
-        print(df.head(5))
-
-    else:
-        print("⚠️ NO LIVE MATCHES")
 
     time.sleep(60)
