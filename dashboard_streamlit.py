@@ -49,14 +49,3 @@ if live_file.exists():
 else:
     st.warning("Brak danych LIVE")
 
----
-
-# Ważne
-
-NIE może być:
-- ```python
-- ```
-- żadnych dodatkowych znaków
-- żadnych opisów
-
-Tylko czysty kod 🚀
