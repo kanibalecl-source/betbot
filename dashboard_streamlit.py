@@ -7,45 +7,74 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("⚽ BETBOT AI")
-
 # =========================
-# PREMATCH PICKS
+# HEADER
 # =========================
 
-st.header("📊 PREMATCH PICKS")
+st.title("⚽ BETBOT AI DASHBOARD")
+
+st.markdown("---")
+
+# =========================
+# PREMATCH SECTION
+# =========================
+
+st.subheader("📊 PREMATCH PICKS")
 
 prematch_file = Path("data/auto_all_picks.csv")
 
 if prematch_file.exists():
 
-    prematch_df = pd.read_csv(prematch_file)
+    try:
+        prematch_df = pd.read_csv(prematch_file)
 
-    st.dataframe(
-        prematch_df,
-        use_container_width=True
-    )
+        st.success(f"Załadowano {len(prematch_df)} prematch picks")
+
+        st.dataframe(
+            prematch_df,
+            use_container_width=True,
+            height=400
+        )
+
+    except Exception as e:
+        st.error(f"Błąd PREMATCH: {e}")
 
 else:
     st.warning("Brak danych PREMATCH")
 
+st.markdown("---")
+
 # =========================
-# LIVE MATCHES
+# LIVE SECTION
 # =========================
 
-st.header("🔴 LIVE MATCHES")
+st.subheader("🔴 LIVE MATCHES")
 
 live_file = Path("data/live_matches.csv")
 
 if live_file.exists():
 
-    live_df = pd.read_csv(live_file)
+    try:
+        live_df = pd.read_csv(live_file)
 
-    st.dataframe(
-        live_df,
-        use_container_width=True
-    )
+        st.success(f"Aktywne mecze LIVE: {len(live_df)}")
+
+        st.dataframe(
+            live_df,
+            use_container_width=True,
+            height=500
+        )
+
+    except Exception as e:
+        st.error(f"Błąd LIVE: {e}")
 
 else:
     st.warning("Brak danych LIVE")
 
+st.markdown("---")
+
+# =========================
+# FOOTER
+# =========================
+
+st.caption("BETBOT AI • LIVE ENGINE ACTIVE 🚀")
