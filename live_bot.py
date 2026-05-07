@@ -1,57 +1,27 @@
-import requests
 import time
-from model_goals import build_model
+from datetime import datetime
 
-import os
-
-API_KEY = os.getenv("API_FOOTBALL_KEY")
-BASE_URL = "https://v3.football.api-sports.io"
-
-HEADERS = {"x-apisports-key": API_KEY}
+from live_engine import run_live
 
 
-def get_live_matches():
-    r = requests.get(
-        BASE_URL + "/fixtures",
-        headers=HEADERS,
-        params={"live": "all"}
-    )
-    return r.json().get("response", [])
-
-
-def analyze_live(match):
-    minute = match["fixture"]["status"]["elapsed"]
-    home = match["goals"]["home"]
-    away = match["goals"]["away"]
-
-    total = home + away
-
-    # 🔥 STRATEGIA OVER
-    if minute > 60 and total <= 1:
-        return "OVER 1.5 → WEJDŹ"
-
-    if minute > 70 and total == 0:
-        return "OVER 0.5 → AGRESYWNIE"
-
-    return None
-
-
-def run_live():
-    print("=== LIVE BOT START ===")
+def main():
+    print("🚀 LIVE ENGINE START")
+    print(f"⏰ {datetime.now()}")
 
     while True:
-        matches = get_live_matches()
+        try:
+            print("⚽ START LIVE LOOP")
 
-        for m in matches:
-            signal = analyze_live(m)
+            run_live()
 
-            if signal:
-                print(
-                    m["teams"]["home"]["name"],
-                    "vs",
-                    m["teams"]["away"]["name"],
-                    "|",
-                    signal
-                )
+            print("✅ LIVE LOOP COMPLETE")
 
+        except Exception as e:
+            print(f"❌ LIVE ENGINE ERROR: {e}")
+
+        print("⏳ Kolejne LIVE sprawdzenie za 60 sekund")
         time.sleep(60)
+
+
+if __name__ == "__main__":
+    main()
