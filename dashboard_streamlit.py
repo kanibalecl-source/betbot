@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 import requests
-import random
 import os
 
 # =====================================================
@@ -260,10 +259,14 @@ if banner.exists():
 # TABS
 # =====================================================
 
-tab1, tab2 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
     "🚨 LIVE",
-    "⚽ PREMATCH"
+    "⚽ PREMATCH",
+    "📊 ANALYTICS",
+    "🕘 HISTORY",
+    "🏆 RANKING",
+    "🔔 ALERTS"
 
 ])
 
@@ -333,5 +336,61 @@ with tab2:
         st.table(
             prematch_df[existing]
         )
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# ANALYTICS
+# =====================================================
+
+with tab3:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("ANALYTICS ENGINE")
+
+    st.info("Analytics coming soon.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# HISTORY
+# =====================================================
+
+with tab4:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("HISTORY ENGINE")
+
+    st.info("History coming soon.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# RANKING
+# =====================================================
+
+with tab5:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("RANKING ENGINE")
+
+    st.info("Ranking coming soon.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# ALERTS
+# =====================================================
+
+with tab6:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("ALERT ENGINE")
+
+    st.info("Alerts coming soon.")
 
     st.markdown('</div>', unsafe_allow_html=True)
