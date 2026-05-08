@@ -437,29 +437,6 @@ with tab3:
         unsafe_allow_html=True
     )
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.metric(
-            "ROI",
-            "+24.8%"
-        )
-
-    with col2:
-
-        st.metric(
-            "WIN RATE",
-            "62.8%"
-        )
-
-    with col3:
-
-        st.metric(
-            "AI EDGE",
-            "+13.4%"
-        )
-
 # =========================
 # HISTORY
 # =========================
@@ -478,8 +455,6 @@ with tab4:
         """,
         unsafe_allow_html=True
     )
-
-    st.info("Historia zakładów.")
 
 # =========================
 # RANKING
@@ -500,8 +475,6 @@ with tab5:
         unsafe_allow_html=True
     )
 
-    st.info("Ranking AI.")
-
 # =========================
 # ALERTS
 # =========================
@@ -520,5 +493,3 @@ with tab6:
         """,
         unsafe_allow_html=True
     )
-
-    st.info("Alerty AI.")
