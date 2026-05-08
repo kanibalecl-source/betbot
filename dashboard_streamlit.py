@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import html
 
 # =========================
 # CONFIG
@@ -21,16 +20,8 @@ LIVE_FILE = DATA_DIR / "live_matches.csv"
 BANNER_FILE = Path("kanibal_banner_pro.webp")
 
 # =========================
-# HELPERS
+# LOAD DATA
 # =========================
-
-def safe_text(value):
-
-    if pd.isna(value):
-        return "-"
-
-    return html.escape(str(value))
-
 
 def load_csv(path):
 
@@ -43,11 +34,6 @@ def load_csv(path):
             return pd.DataFrame()
 
     return pd.DataFrame()
-
-
-# =========================
-# LOAD DATA
-# =========================
 
 live_df = load_csv(LIVE_FILE)
 
@@ -64,31 +50,31 @@ st.markdown(
     .stApp {
 
         background:
-            radial-gradient(circle at top right, rgba(81,255,0,0.14), transparent 28%),
+            radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
             radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
             linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
 
-        color: #f5f5f5;
+        color:white;
     }
 
     header[data-testid="stHeader"] {
 
-        background: transparent;
+        background:transparent;
     }
 
     .block-container {
 
-        padding-top: 1.2rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-        max-width: 1500px;
+        max-width:100% !important;
+        padding-top:0.6rem;
+        padding-left:2rem;
+        padding-right:2rem;
     }
 
     .panel {
 
-        border: 1px solid rgba(255,255,255,0.08);
+        border:1px solid rgba(255,255,255,0.08);
 
-        border-radius: 16px;
+        border-radius:18px;
 
         background:
             linear-gradient(
@@ -97,11 +83,11 @@ st.markdown(
                 rgba(255,255,255,0.018)
             );
 
-        box-shadow: 0 18px 45px rgba(0,0,0,0.35);
+        padding:26px;
 
-        padding: 22px;
+        margin-bottom:22px;
 
-        margin-bottom: 18px;
+        box-shadow:0 18px 45px rgba(0,0,0,0.35);
     }
 
     .panel-title {
@@ -125,9 +111,9 @@ st.markdown(
 
         color:#8f969d;
         font-size:12px;
-        letter-spacing:.9px;
+        letter-spacing:1px;
         text-transform:uppercase;
-        margin-bottom:20px;
+        margin-top:8px;
     }
 
     h1, h2 {
@@ -136,51 +122,49 @@ st.markdown(
     }
 
     /* =========================
-       NAVBAR
+       TABS
     ========================= */
 
-    div[role="radiogroup"] {
+    .stTabs [data-baseweb="tab-list"] {
 
-        display:flex;
         gap:0;
-        width:100%;
+        background:#090b0d;
         border-radius:14px;
         overflow:hidden;
         border:1px solid rgba(255,255,255,0.08);
-        margin-bottom:22px;
+        margin-top:16px;
+        margin-bottom:24px;
     }
 
-    div[role="radiogroup"] label {
+    .stTabs [data-baseweb="tab"] {
 
-        flex:1;
+        height:68px;
         background:#090b0d;
-        padding:18px 0;
-        text-align:center;
+        color:white;
+        font-weight:800;
+        font-size:13px;
         border-right:1px solid rgba(255,255,255,0.06);
+        flex-grow:1;
     }
 
-    div[role="radiogroup"] label:last-child {
-
-        border-right:none;
-    }
-
-    div[role="radiogroup"] p {
-
-        font-weight:800 !important;
-        color:white !important;
-        font-size:13px !important;
-    }
-
-    div[role="radiogroup"] label[data-baseweb="radio"]:has(input:checked) {
+    .stTabs [aria-selected="true"] {
 
         background:
             linear-gradient(
                 180deg,
                 rgba(88,255,47,0.15),
                 rgba(88,255,47,0.05)
-            );
+            ) !important;
 
-        border-bottom:3px solid #58ff2f;
+        color:#58ff2f !important;
+
+        border-bottom:3px solid #58ff2f !important;
+    }
+
+    .stDataFrame {
+
+        border-radius:14px;
+        overflow:hidden;
     }
 
     </style>
@@ -200,32 +184,25 @@ if BANNER_FILE.exists():
     )
 
 # =========================
-# NAVBAR
+# TABS
 # =========================
 
-selected_tab = st.radio(
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
-    "",
+    "🚨 LIVE",
+    "⚽ PREMATCH",
+    "📊 ANALYTICS",
+    "🕘 HISTORY",
+    "🏆 RANKING",
+    "🔔 ALERTS"
 
-    [
-        "LIVE",
-        "PREMATCH",
-        "ANALYTICS",
-        "HISTORY",
-        "RANKING",
-        "ALERTS",
-        "SETTINGS"
-    ],
-
-    horizontal=True,
-    label_visibility="collapsed"
-)
+])
 
 # =========================
 # LIVE
 # =========================
 
-if selected_tab == "LIVE":
+with tab1:
 
     st.markdown(
         """
@@ -256,7 +233,7 @@ if selected_tab == "LIVE":
             live_df,
             use_container_width=True,
             height=min(
-                700,
+                900,
                 35 * len(live_df) + 120
             )
         )
@@ -266,7 +243,7 @@ if selected_tab == "LIVE":
         st.warning("Brak danych LIVE")
 
     # =========================
-    # CASHOUT GUIDE
+    # CASHOUT
     # =========================
 
     st.markdown(
@@ -340,7 +317,7 @@ if selected_tab == "LIVE":
 # PREMATCH
 # =========================
 
-elif selected_tab == "PREMATCH":
+with tab2:
 
     st.markdown(
         """
@@ -403,7 +380,7 @@ elif selected_tab == "PREMATCH":
             prematch_df,
             use_container_width=True,
             height=min(
-                700,
+                900,
                 35 * len(prematch_df) + 120
             )
         )
@@ -416,7 +393,7 @@ elif selected_tab == "PREMATCH":
 # ANALYTICS
 # =========================
 
-elif selected_tab == "ANALYTICS":
+with tab3:
 
     st.markdown(
         """
@@ -458,7 +435,7 @@ elif selected_tab == "ANALYTICS":
 # HISTORY
 # =========================
 
-elif selected_tab == "HISTORY":
+with tab4:
 
     st.markdown(
         """
@@ -479,7 +456,7 @@ elif selected_tab == "HISTORY":
 # RANKING
 # =========================
 
-elif selected_tab == "RANKING":
+with tab5:
 
     st.markdown(
         """
@@ -500,7 +477,7 @@ elif selected_tab == "RANKING":
 # ALERTS
 # =========================
 
-elif selected_tab == "ALERTS":
+with tab6:
 
     st.markdown(
         """
@@ -516,30 +493,3 @@ elif selected_tab == "ALERTS":
     )
 
     st.info("Alerty AI.")
-
-# =========================
-# SETTINGS
-# =========================
-
-elif selected_tab == "SETTINGS":
-
-    st.markdown(
-        """
-        <div class="panel">
-
-            <h2>
-                SETTINGS ENGINE
-            </h2>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.toggle("LIVE ENGINE", value=True)
-
-    st.toggle("PREMATCH ENGINE", value=True)
-
-    st.toggle("CASHOUT AI", value=True)
-
-    st.toggle("BANKROLL ENGINE", value=True)
