@@ -15,6 +15,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# =====================================================
+# PATHS
+# =====================================================
+
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -36,6 +40,10 @@ def load_csv(path):
 
     return pd.DataFrame()
 
+# =====================================================
+# PREMATCH
+# =====================================================
+
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =====================================================
@@ -51,7 +59,7 @@ def get_live_matches():
     if not api_key:
         return pd.DataFrame()
 
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
+    url = "https://v3.football.api-sports.io/fixtures?status=1H-HT-2H"
 
     headers = {
         "x-apisports-key": api_key
@@ -79,50 +87,55 @@ def get_live_matches():
 
         for item in response_data:
 
-            home = item["teams"]["home"]["name"]
-            away = item["teams"]["away"]["name"]
+            try:
 
-            league = item["league"]["name"]
+                home = item["teams"]["home"]["name"]
+                away = item["teams"]["away"]["name"]
 
-            minute = item["fixture"]["status"]["elapsed"]
+                league = item["league"]["name"]
 
-            home_goals = item["goals"]["home"]
-            away_goals = item["goals"]["away"]
+                minute = item["fixture"]["status"]["elapsed"]
 
-            rows.append({
+                home_goals = item["goals"]["home"]
+                away_goals = item["goals"]["away"]
 
-                "MECZ": f"{home} vs {away}",
-                "LIGA": league,
-                "MIN": minute,
-                "WYNIK": f"{home_goals}-{away_goals}",
+                rows.append({
 
-                "SYGNAŁ": random.choice([
-                    "OVER 2.5",
-                    "BTTS YES",
-                    "OVER 3.5",
-                    "HOME GOAL"
-                ]),
+                    "MECZ": f"{home} vs {away}",
+                    "LIGA": league,
+                    "MIN": minute,
+                    "WYNIK": f"{home_goals}-{away_goals}",
 
-                "CONF": random.randint(70, 96),
+                    "SYGNAŁ": random.choice([
+                        "OVER 2.5",
+                        "BTTS YES",
+                        "OVER 3.5",
+                        "HOME GOAL"
+                    ]),
 
-                "EV": round(
-                    random.uniform(3, 18),
-                    2
-                ),
+                    "CONF": random.randint(70, 96),
 
-                "VALUE": random.choice([
-                    "LOW",
-                    "MEDIUM",
-                    "HIGH"
-                ]),
+                    "EV": round(
+                        random.uniform(3, 18),
+                        2
+                    ),
 
-                "CASHOUT": random.choice([
-                    "HOLD",
-                    "PARTIAL",
-                    "FULL"
-                ])
+                    "VALUE": random.choice([
+                        "LOW",
+                        "MEDIUM",
+                        "HIGH"
+                    ]),
 
-            })
+                    "CASHOUT": random.choice([
+                        "HOLD",
+                        "PARTIAL",
+                        "FULL"
+                    ])
+
+                })
+
+            except:
+                pass
 
         return pd.DataFrame(rows)
 
@@ -327,7 +340,7 @@ with tab1:
 
     if live_df.empty:
 
-        st.warning("Brak aktywnych danych LIVE z API.")
+        st.warning("Brak aktywnych meczów LIVE.")
 
     else:
 
