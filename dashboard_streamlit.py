@@ -173,6 +173,7 @@ st.markdown(
         border-radius:14px;
         overflow:hidden;
         font-size:14px;
+        margin-top:12px;
     }
 
     .custom-table th {
@@ -264,12 +265,10 @@ with tab1:
     if not live_df.empty:
 
         st.markdown(
-
             live_df.to_html(
                 index=False,
                 classes="custom-table"
             ),
-
             unsafe_allow_html=True
         )
 
@@ -408,12 +407,10 @@ with tab2:
         prematch_df = prematch_df[existing_columns]
 
         st.markdown(
-
             prematch_df.to_html(
                 index=False,
                 classes="custom-table"
             ),
-
             unsafe_allow_html=True
         )
 
