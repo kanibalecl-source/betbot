@@ -9,6 +9,12 @@ HEADERS = {
     "x-apisports-key": API_FOOTBALL_KEY
 }
 
+# =========================
+# BANKROLL SETTINGS
+# =========================
+
+BANKROLL = 1000
+
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -174,10 +180,6 @@ def calculate_ev(confidence, odds):
 
 def cashout_signal(minute, pressure, momentum, confidence):
 
-    # =========================
-    # CASHOUT AI
-    # =========================
-
     if (
         minute >= 80 and
         pressure <= 4 and
@@ -201,6 +203,42 @@ def cashout_signal(minute, pressure, momentum, confidence):
         return "HOLD POSITION"
 
     return "NO CASHOUT"
+
+
+# =========================
+# BANKROLL ENGINE
+# =========================
+
+def kelly_stake(confidence, odds, bankroll):
+
+    try:
+
+        probability = confidence / 100
+
+        edge = (probability * odds) - 1
+
+        if edge <= 0:
+            return 0
+
+        kelly = edge / (odds - 1)
+
+        stake = bankroll * kelly
+
+        return round(max(0, stake), 2)
+
+    except:
+        return 0
+
+
+def risk_level(ev):
+
+    if ev >= 20:
+        return "LOW RISK"
+
+    elif ev >= 10:
+        return "MEDIUM RISK"
+
+    return "HIGH RISK"
 
 
 def get_live_matches():
@@ -241,7 +279,7 @@ def get_live_matches():
             odds = get_live_odds(fixture_id)
 
             # =========================
-            # LIVE SIGNALS
+            # LIVE AI SIGNALS
             # =========================
 
             live_pick = "NO SIGNAL"
@@ -286,6 +324,14 @@ def get_live_matches():
                 confidence
             )
 
+            stake = kelly_stake(
+                confidence,
+                odds,
+                BANKROLL
+            ) if odds else 0
+
+            risk = risk_level(ev)
+
             matches.append({
 
                 "home": m["teams"]["home"]["name"],
@@ -301,6 +347,8 @@ def get_live_matches():
                 "value": value,
                 "ev": ev,
                 "cashout": cashout,
+                "stake": stake,
+                "risk": risk,
                 "status": m["fixture"]["status"]["short"]
 
             })
@@ -314,7 +362,7 @@ def get_live_matches():
         return []
 
 
-print("🚀 CASHOUT AI ENGINE STARTED")
+print("🚀 BANKROLL ENGINE STARTED")
 
 while True:
 
