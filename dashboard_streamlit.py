@@ -32,16 +32,17 @@ def load_csv(path):
         try:
             return pd.read_csv(path)
 
-        except:
+        except Exception:
             return pd.DataFrame()
 
     return pd.DataFrame()
 
 # =========================
-# LOAD LIVE
+# LOAD DATA
 # =========================
 
 live_df = load_csv(LIVE_FILE)
+prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
 # REAL LIVE DATA
@@ -53,7 +54,7 @@ if live_df.empty:
 
         API_KEY = os.getenv("API_FOOTBALL_KEY")
 
-        print("API KEY FOUND:", bool(API_KEY))
+        st.write("API KEY FOUND:", bool(API_KEY))
 
         URL = "https://v3.football.api-sports.io/fixtures?live=all"
 
@@ -70,7 +71,11 @@ if live_df.empty:
             timeout=30
         )
 
+        st.write("STATUS CODE:", response.status_code)
+
         data = response.json()
+
+        st.write("API RESPONSE:", data)
 
         rows = []
 
@@ -125,13 +130,7 @@ if live_df.empty:
 
     except Exception as e:
 
-        print("LIVE ERROR:", e)
-
-# =========================
-# LOAD PREMATCH
-# =========================
-
-prematch_df = load_csv(PREMATCH_FILE)
+        st.error(e)
 
 # =========================
 # STYLE
@@ -252,11 +251,6 @@ h1, h2, h3 {
     background:rgba(255,59,48,0.08);
     border:1px solid rgba(255,59,48,0.25);
     color:#ff3b30;
-}
-
-[data-testid="stTable"] {
-
-    width:100%;
 }
 
 table {
