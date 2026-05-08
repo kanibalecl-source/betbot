@@ -1,5 +1,3 @@
-# live_bot.py
-
 import time
 import requests
 import pandas as pd
@@ -40,11 +38,9 @@ def get_fixture_statistics(fixture_id):
         stats = {}
 
         for stat in home_stats:
-
             stats[f"home_{stat['type']}"] = stat["value"]
 
         for stat in away_stats:
-
             stats[f"away_{stat['type']}"] = stat["value"]
 
         return stats
@@ -71,6 +67,32 @@ def pressure_score(stats):
         )
 
         return total_pressure
+
+    except:
+        return 0
+
+
+def momentum_score(stats):
+
+    try:
+
+        home_attacks = int(stats.get("home_Dangerous Attacks") or 0)
+        away_attacks = int(stats.get("away_Dangerous Attacks") or 0)
+
+        home_possession = stats.get("home_Ball Possession") or "0%"
+        away_possession = stats.get("away_Ball Possession") or "0%"
+
+        home_possession = int(str(home_possession).replace("%", ""))
+        away_possession = int(str(away_possession).replace("%", ""))
+
+        momentum = (
+            home_attacks +
+            away_attacks +
+            home_possession +
+            away_possession
+        )
+
+        return momentum
 
     except:
         return 0
@@ -109,27 +131,42 @@ def get_live_matches():
 
             pressure = pressure_score(stats)
 
+            momentum = momentum_score(stats)
+
             # =========================
-            # LIVE AI SIGNALS
+            # LIVE MOMENTUM AI SIGNALS
             # =========================
 
             live_pick = "NO SIGNAL"
             confidence = 0
 
-            if minute >= 70 and pressure >= 10:
+            if (
+                minute >= 70 and
+                pressure >= 10 and
+                momentum >= 120
+            ):
 
                 live_pick = "OVER 2.5"
-                confidence = 86
+                confidence = 90
 
-            elif minute >= 60 and pressure >= 8:
+            elif (
+                minute >= 60 and
+                pressure >= 8 and
+                momentum >= 100
+            ):
 
                 live_pick = "BTTS"
-                confidence = 80
+                confidence = 84
 
-            elif minute >= 35 and total_goals == 0 and pressure >= 6:
+            elif (
+                minute >= 35 and
+                total_goals == 0 and
+                pressure >= 6 and
+                momentum >= 90
+            ):
 
                 live_pick = "OVER 1.5"
-                confidence = 72
+                confidence = 76
 
             matches.append({
 
@@ -139,6 +176,7 @@ def get_live_matches():
                 "minute": minute,
                 "score": f"{home_goals}:{away_goals}",
                 "pressure": pressure,
+                "momentum": momentum,
                 "signal": live_pick,
                 "confidence": confidence,
                 "status": m["fixture"]["status"]["short"]
@@ -154,7 +192,7 @@ def get_live_matches():
         return []
 
 
-print("🚀 LIVE PRESSURE ENGINE STARTED")
+print("🚀 LIVE MOMENTUM ENGINE STARTED")
 
 while True:
 
