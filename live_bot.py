@@ -172,6 +172,37 @@ def calculate_ev(confidence, odds):
         return 0
 
 
+def cashout_signal(minute, pressure, momentum, confidence):
+
+    # =========================
+    # CASHOUT AI
+    # =========================
+
+    if (
+        minute >= 80 and
+        pressure <= 4 and
+        momentum <= 60
+    ):
+
+        return "FULL CASHOUT"
+
+    elif (
+        minute >= 70 and
+        confidence <= 55
+    ):
+
+        return "PARTIAL CASHOUT"
+
+    elif (
+        pressure >= 12 and
+        momentum >= 140
+    ):
+
+        return "HOLD POSITION"
+
+    return "NO CASHOUT"
+
+
 def get_live_matches():
 
     url = "https://v3.football.api-sports.io/fixtures?live=all"
@@ -210,7 +241,7 @@ def get_live_matches():
             odds = get_live_odds(fixture_id)
 
             # =========================
-            # LIVE EV AI SIGNALS
+            # LIVE SIGNALS
             # =========================
 
             live_pick = "NO SIGNAL"
@@ -248,6 +279,13 @@ def get_live_matches():
 
             ev = calculate_ev(confidence, odds) if odds else 0
 
+            cashout = cashout_signal(
+                minute,
+                pressure,
+                momentum,
+                confidence
+            )
+
             matches.append({
 
                 "home": m["teams"]["home"]["name"],
@@ -262,6 +300,7 @@ def get_live_matches():
                 "odds": odds,
                 "value": value,
                 "ev": ev,
+                "cashout": cashout,
                 "status": m["fixture"]["status"]["short"]
 
             })
@@ -275,7 +314,7 @@ def get_live_matches():
         return []
 
 
-print("🚀 LIVE EV ENGINE STARTED")
+print("🚀 CASHOUT AI ENGINE STARTED")
 
 while True:
 
