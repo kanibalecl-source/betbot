@@ -5,9 +5,9 @@ import requests
 import random
 import os
 
-# =========================
+# =========================================================
 # CONFIG
-# =========================
+# =========================================================
 
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
@@ -15,15 +15,18 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# =========================================================
+# PATHS
+# =========================================================
+
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LIVE_FILE = DATA_DIR / "live_matches.csv"
 
-# =========================
+# =========================================================
 # LOAD CSV
-# =========================
+# =========================================================
 
 def load_csv(path):
 
@@ -37,104 +40,107 @@ def load_csv(path):
 
     return pd.DataFrame()
 
-# =========================
-# LOAD DATA
-# =========================
+# =========================================================
+# LOAD PREMATCH
+# =========================================================
 
-live_df = load_csv(LIVE_FILE)
 prematch_df = load_csv(PREMATCH_FILE)
 
-# =========================
-# REAL LIVE DATA
-# =========================
+# =========================================================
+# REAL LIVE FETCH
+# =========================================================
 
-if live_df.empty:
+def get_live_matches():
 
     try:
 
-        API_KEY = os.getenv("API_FOOTBALL_KEY")
+        api_key = os.getenv("API_FOOTBALL_KEY")
 
-        st.write("API KEY FOUND:", bool(API_KEY))
+        if not api_key:
+            return pd.DataFrame()
 
-        URL = "https://v3.football.api-sports.io/fixtures?live=all"
+        url = "https://v3.football.api-sports.io/fixtures?live=all"
 
-        HEADERS = {
-
-            "x-rapidapi-key": API_KEY,
-            "x-rapidapi-host": "v3.football.api-sports.io"
-
+        headers = {
+            "x-apisports-key": api_key
         }
 
         response = requests.get(
-            URL,
-            headers=HEADERS,
+            url,
+            headers=headers,
             timeout=30
         )
 
-        st.write("STATUS CODE:", response.status_code)
+        if response.status_code != 200:
+            return pd.DataFrame()
 
         data = response.json()
 
-        st.write("API RESPONSE:", data)
+        if "response" not in data:
+            return pd.DataFrame()
 
         rows = []
 
-        for item in data.get("response", []):
+        for item in data["response"]:
 
-            rows.append({
+            try:
 
-                "home": item["teams"]["home"]["name"],
-                "away": item["teams"]["away"]["name"],
-                "league": item["league"]["name"],
-                "minute": item["fixture"]["status"]["elapsed"],
-                "score": f"{item['goals']['home']}-{item['goals']['away']}",
-                "signal": random.choice([
-                    "OVER 2.5",
-                    "BTTS YES",
-                    "HOME GOAL"
-                ]),
-                "confidence": random.randint(70, 95),
-                "ev": round(random.uniform(3, 18), 2),
-                "value": random.choice([
-                    "LOW",
-                    "MEDIUM",
-                    "HIGH"
-                ]),
-                "cashout": random.choice([
-                    "HOLD",
-                    "PARTIAL",
-                    "FULL"
-                ]),
-                "stake": random.choice([
-                    "1%",
-                    "2%",
-                    "3%"
-                ]),
-                "risk": random.choice([
-                    "LOW",
-                    "MEDIUM",
-                    "HIGH"
-                ]),
-                "status": "LIVE"
+                home = item["teams"]["home"]["name"]
+                away = item["teams"]["away"]["name"]
 
-            })
+                league = item["league"]["name"]
 
-        if rows:
+                minute = item["fixture"]["status"]["elapsed"]
 
-            live_df = pd.DataFrame(rows)
+                home_goals = item["goals"]["home"]
+                away_goals = item["goals"]["away"]
 
-            live_df.to_csv(
-                LIVE_FILE,
-                index=False
-            )
+                score = f"{home_goals}-{away_goals}"
 
-    except Exception as e:
+                rows.append({
 
-        st.error(e)
+                    "MECZ": f"{home} vs {away}",
+                    "LIGA": league,
+                    "MIN": minute,
+                    "WYNIK": score,
+                    "SYGNAŁ": random.choice([
+                        "OVER 2.5",
+                        "BTTS YES",
+                        "HOME GOAL",
+                        "OVER 3.5"
+                    ]),
+                    "CONF": random.randint(70, 96),
+                    "EV": round(random.uniform(3, 18), 2),
+                    "VALUE": random.choice([
+                        "LOW",
+                        "MEDIUM",
+                        "HIGH"
+                    ]),
+                    "CASHOUT": random.choice([
+                        "HOLD",
+                        "PARTIAL",
+                        "FULL"
+                    ])
 
-# =========================
+                })
+
+            except Exception:
+                pass
+
+        return pd.DataFrame(rows)
+
+    except Exception:
+        return pd.DataFrame()
+
+# =========================================================
+# LIVE DATA
+# =========================================================
+
+live_df = get_live_matches()
+
+# =========================================================
 # STYLE
-# =========================
+# =========================================================
 
 st.markdown("""
 <style>
@@ -285,9 +291,9 @@ tbody tr:hover {
 </style>
 """, unsafe_allow_html=True)
 
-# =========================
+# =========================================================
 # BANNER
-# =========================
+# =========================================================
 
 banner = Path("kanibal_banner_pro.webp")
 
@@ -298,9 +304,9 @@ if banner.exists():
         use_container_width=True
     )
 
-# =========================
+# =========================================================
 # TABS
-# =========================
+# =========================================================
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
@@ -313,9 +319,9 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 ])
 
-# =========================
+# =========================================================
 # LIVE
-# =========================
+# =========================================================
 
 with tab1:
 
@@ -329,7 +335,7 @@ with tab1:
 
     if live_df.empty:
 
-        st.warning("Brak danych LIVE")
+        st.warning("Brak danych LIVE lub brak aktywnych meczów.")
 
     else:
 
@@ -359,9 +365,9 @@ with tab1:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
+# =========================================================
 # PREMATCH
-# =========================
+# =========================================================
 
 with tab2:
 
@@ -408,9 +414,9 @@ with tab2:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
+# =========================================================
 # ANALYTICS
-# =========================
+# =========================================================
 
 with tab3:
 
@@ -424,9 +430,9 @@ with tab3:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
+# =========================================================
 # HISTORY
-# =========================
+# =========================================================
 
 with tab4:
 
@@ -438,9 +444,9 @@ with tab4:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
+# =========================================================
 # RANKING
-# =========================
+# =========================================================
 
 with tab5:
 
@@ -452,9 +458,9 @@ with tab5:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================
+# =========================================================
 # ALERTS
-# =========================
+# =========================================================
 
 with tab6:
 
