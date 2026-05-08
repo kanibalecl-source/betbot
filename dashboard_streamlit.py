@@ -47,29 +47,24 @@ def load_csv(path):
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =====================================================
-# LIVE API
+# LIVE API - FOOTYSTATS
 # =====================================================
 
 @st.cache_data(ttl=60)
 
 def get_live_matches():
 
-    api_key = os.getenv("API_FOOTBALL_KEY")
+    api_key = os.getenv("FOOTYSTATS_API_KEY")
 
     if not api_key:
         return pd.DataFrame()
 
-    url = "https://v3.football.api-sports.io/fixtures?status=1H-HT-2H"
-
-    headers = {
-        "x-apisports-key": api_key
-    }
+    url = f"https://api.football-data-api.com/live?key={api_key}"
 
     try:
 
         response = requests.get(
             url,
-            headers=headers,
             timeout=20
         )
 
@@ -78,26 +73,26 @@ def get_live_matches():
 
         data = response.json()
 
-        response_data = data.get("response", [])
+        matches = data.get("data", [])
 
-        if not response_data:
+        if not matches:
             return pd.DataFrame()
 
         rows = []
 
-        for item in response_data:
+        for match in matches:
 
             try:
 
-                home = item["teams"]["home"]["name"]
-                away = item["teams"]["away"]["name"]
+                home = match.get("home_name", "")
+                away = match.get("away_name", "")
 
-                league = item["league"]["name"]
+                league = match.get("competition_name", "")
 
-                minute = item["fixture"]["status"]["elapsed"]
+                minute = match.get("minute", 0)
 
-                home_goals = item["goals"]["home"]
-                away_goals = item["goals"]["away"]
+                home_goals = match.get("homeGoalCount", 0)
+                away_goals = match.get("awayGoalCount", 0)
 
                 rows.append({
 
@@ -293,6 +288,11 @@ tbody tr td {
     font-size:13px !important;
 }
 
+tbody tr:hover {
+
+    background:rgba(88,255,47,0.05) !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -387,5 +387,63 @@ with tab2:
     else:
 
         st.table(prematch_df)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# ANALYTICS
+# =====================================================
+
+with tab3:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("ANALYTICS ENGINE")
+
+    st.metric("ROI", "+24.8%")
+    st.metric("WIN RATE", "62.8%")
+    st.metric("AI EDGE", "+13.4%")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# HISTORY
+# =====================================================
+
+with tab4:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("HISTORY ENGINE")
+
+    st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# RANKING
+# =====================================================
+
+with tab5:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("RANKING ENGINE")
+
+    st.info("TOP VALUE PICKS coming soon.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# =====================================================
+# ALERTS
+# =====================================================
+
+with tab6:
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("ALERT ENGINE")
+
+    st.info("Alerty AI będą dostępne po wdrożeniu Notification Engine.")
 
     st.markdown('</div>', unsafe_allow_html=True)
