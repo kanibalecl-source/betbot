@@ -182,9 +182,6 @@ st.markdown(
         padding:16px;
         text-align:left;
         border-bottom:1px solid rgba(255,255,255,0.08);
-        position:sticky;
-        top:0;
-        z-index:2;
     }
 
     .custom-table td {
@@ -202,21 +199,6 @@ st.markdown(
     table {
 
         width:100% !important;
-    }
-
-    .element-container {
-
-        overflow:visible !important;
-    }
-
-    [data-testid="stTable"] {
-
-        overflow:visible !important;
-    }
-
-    [data-testid="stVerticalBlock"] {
-
-        overflow:visible !important;
     }
 
     </style>
@@ -294,10 +276,6 @@ with tab1:
     else:
 
         st.warning("Brak danych LIVE")
-
-    # =========================
-    # CASHOUT
-    # =========================
 
     st.markdown(
         """
