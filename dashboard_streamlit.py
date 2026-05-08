@@ -3,6 +3,10 @@ import pandas as pd
 from pathlib import Path
 import html
 
+# =========================
+# CONFIG
+# =========================
+
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
     layout="wide",
@@ -10,707 +14,532 @@ st.set_page_config(
 )
 
 DATA_DIR = Path("data")
+
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 LIVE_FILE = DATA_DIR / "live_matches.csv"
+
 BANNER_FILE = Path("kanibal_banner_pro.webp")
 
+# =========================
+# HELPERS
+# =========================
 
 def safe_text(value):
+
     if pd.isna(value):
         return "-"
+
     return html.escape(str(value))
 
 
 def load_csv(path):
+
     if path.exists():
+
         try:
             return pd.read_csv(path)
-        except Exception:
+
+        except:
             return pd.DataFrame()
+
     return pd.DataFrame()
 
 
-def badge(value, kind="green"):
-    value = safe_text(value)
+# =========================
+# LOAD DATA
+# =========================
 
-    colors = {
-        "green": ("#58ff2f", "rgba(88,255,47,0.12)", "rgba(88,255,47,0.35)"),
-        "yellow": ("#ffd21a", "rgba(255,210,26,0.12)", "rgba(255,210,26,0.35)"),
-        "red": ("#ff3b30", "rgba(255,59,48,0.12)", "rgba(255,59,48,0.35)"),
-        "gray": ("#d7d7d7", "rgba(255,255,255,0.06)", "rgba(255,255,255,0.12)")
-    }
+live_df = load_csv(LIVE_FILE)
 
-    fg, bg, border = colors.get(kind, colors["gray"])
+prematch_df = load_csv(PREMATCH_FILE)
 
-    return f"""
-    <span style="
-        color:{fg};
-        background:{bg};
-        border:1px solid {border};
-        padding:6px 10px;
-        border-radius:8px;
-        font-weight:800;
-        font-size:12px;
-        letter-spacing:.4px;
-        display:inline-block;
-        min-width:70px;
-        text-align:center;
-    ">
-        {value}
-    </span>
-    """
-
-
-def confidence_bar(value):
-    try:
-        value = int(float(value))
-    except Exception:
-        value = 0
-
-    color = "#58ff2f"
-    if value < 60:
-        color = "#ff3b30"
-    elif value < 80:
-        color = "#ffd21a"
-
-    return f"""
-    <div style="display:flex;align-items:center;gap:10px;">
-        <span style="width:42px;font-weight:800;color:#ffffff;">{value}%</span>
-        <div style="height:8px;background:#2b2f33;border-radius:999px;width:110px;overflow:hidden;">
-            <div style="height:8px;background:{color};width:{max(0, min(value, 100))}%;border-radius:999px;"></div>
-        </div>
-    </div>
-    """
-
-
-def risk_badge(value):
-    value_text = str(value).upper()
-
-    if "LOW" in value_text:
-        return badge("LOW", "green")
-    if "MEDIUM" in value_text:
-        return badge("MEDIUM", "yellow")
-    if "HIGH" in value_text:
-        return badge("HIGH", "red")
-
-    return badge(value, "gray")
-
-
-def cashout_badge(value):
-    value_text = str(value).upper()
-
-    if "HOLD" in value_text:
-        return badge("HOLD", "green")
-    if "PARTIAL" in value_text:
-        return badge("PARTIAL", "yellow")
-    if "FULL" in value_text:
-        return badge("FULL", "red")
-
-    return badge(value, "gray")
-
-
-def signal_badge(value):
-    value_text = str(value).upper()
-
-    if "OVER" in value_text:
-        return badge(value, "green")
-    if "BTTS" in value_text:
-        return badge(value, "yellow")
-    if "NO SIGNAL" in value_text:
-        return badge("NO SIGNAL", "gray")
-
-    return badge(value, "green")
-
+# =========================
+# CSS
+# =========================
 
 st.markdown(
     """
     <style>
-        .stApp {
-            background:
-                radial-gradient(circle at top right, rgba(81,255,0,0.14), transparent 28%),
-                radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
-                linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
-            color: #f5f5f5;
-        }
 
-        header[data-testid="stHeader"] {
-            background: transparent;
-        }
+    .stApp {
 
-        .block-container {
-            padding-top: 1.2rem;
-            padding-left: 1rem;
-            padding-right: 1rem;
-            max-width: 1500px;
-        }
+        background:
+            radial-gradient(circle at top right, rgba(81,255,0,0.14), transparent 28%),
+            radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
+            linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
 
-        h1, h2, h3 {
-            color: #ffffff !important;
-            font-family: Arial, Helvetica, sans-serif;
-            letter-spacing: .5px;
-        }
+        color: #f5f5f5;
+    }
 
-        .kanibal-banner {
-            width: 100%;
-            border-radius: 18px;
-            overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.08);
-            box-shadow: 0 20px 60px rgba(0,0,0,0.55);
-            margin-bottom: 18px;
-        }
+    header[data-testid="stHeader"] {
 
-        .nav {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 12px;
-            overflow: hidden;
-            margin: 18px 0;
-            background: rgba(255,255,255,0.025);
-        }
+        background: transparent;
+    }
 
-        .nav div {
-            padding: 18px 10px;
-            text-align: center;
-            font-weight: 800;
-            font-size: 13px;
-            color: #d7d7d7;
-            border-right: 1px solid rgba(255,255,255,0.07);
-        }
+    .block-container {
 
-        .nav div:last-child {
-            border-right: none;
-        }
+        padding-top: 1.2rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        max-width: 1500px;
+    }
 
-        .nav .active {
-            color: #70ff2f;
-            border-bottom: 3px solid #70ff2f;
-            background: rgba(112,255,47,0.08);
-        }
+    .panel {
 
-        .panel {
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 16px;
-            background:
-                linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
-            box-shadow: 0 18px 45px rgba(0,0,0,0.35);
-            padding: 22px;
-            margin-bottom: 18px;
-        }
+        border: 1px solid rgba(255,255,255,0.08);
 
-        .panel-title {
-            display:flex;
-            align-items:center;
-            gap:12px;
-            margin-bottom:6px;
-        }
+        border-radius: 16px;
 
-        .green-dot {
-            width:14px;
-            height:14px;
-            border-radius:50%;
-            background:#58ff2f;
-            box-shadow:0 0 16px rgba(88,255,47,0.9);
-        }
+        background:
+            linear-gradient(
+                180deg,
+                rgba(255,255,255,0.045),
+                rgba(255,255,255,0.018)
+            );
 
-        .subtitle {
-            color:#8f969d;
-            font-size:12px;
-            letter-spacing:.9px;
-            text-transform:uppercase;
-            margin-bottom:20px;
-        }
+        box-shadow: 0 18px 45px rgba(0,0,0,0.35);
 
-        .table {
-            width:100%;
-            border-collapse:collapse;
-            overflow:hidden;
-        }
+        padding: 22px;
 
-        .table th {
-            color:#9aa0a6;
-            font-size:12px;
-            text-transform:uppercase;
-            letter-spacing:.6px;
-            padding:12px 10px;
-            text-align:left;
-            border-bottom:1px solid rgba(255,255,255,0.09);
-        }
+        margin-bottom: 18px;
+    }
 
-        .table td {
-            padding:14px 10px;
-            border-bottom:1px solid rgba(255,255,255,0.07);
-            color:#f2f2f2;
-            font-size:14px;
-            vertical-align:middle;
-        }
+    .panel-title {
 
-        .table tr:hover {
-            background:rgba(112,255,47,0.04);
-        }
+        display:flex;
+        align-items:center;
+        gap:12px;
+        margin-bottom:6px;
+    }
 
-        .minute {
-            color:#70ff2f;
-            font-weight:900;
-            font-size:18px;
-        }
+    .green-dot {
 
-        .positive {
-            color:#70ff2f;
-            font-weight:900;
-        }
+        width:14px;
+        height:14px;
+        border-radius:50%;
+        background:#58ff2f;
+        box-shadow:0 0 16px rgba(88,255,47,0.9);
+    }
 
-        .negative {
-            color:#ff3b30;
-            font-weight:900;
-        }
+    .subtitle {
 
-        .metric-grid {
-            display:grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap:12px;
-            margin-top:15px;
-        }
+        color:#8f969d;
+        font-size:12px;
+        letter-spacing:.9px;
+        text-transform:uppercase;
+        margin-bottom:20px;
+    }
 
-        .metric-card {
-            background:rgba(255,255,255,0.035);
-            border:1px solid rgba(255,255,255,0.07);
-            border-radius:12px;
-            padding:16px;
-        }
+    h1, h2 {
 
-        .metric-label {
-            color:#8f969d;
-            font-size:11px;
-            text-transform:uppercase;
-            letter-spacing:.7px;
-        }
+        color:white !important;
+    }
 
-        .metric-value {
-            color:#ffffff;
-            font-size:28px;
-            font-weight:900;
-            margin-top:5px;
-        }
+    /* =========================
+       NAVBAR
+    ========================= */
 
-        .metric-change {
-            color:#70ff2f;
-            font-size:13px;
-            margin-top:3px;
-        }
+    div[role="radiogroup"] {
 
-        .small-list {
-            display:flex;
-            flex-direction:column;
-            gap:12px;
-            margin-top:18px;
-        }
+        display:flex;
+        gap:0;
+        width:100%;
+        border-radius:14px;
+        overflow:hidden;
+        border:1px solid rgba(255,255,255,0.08);
+        margin-bottom:22px;
+    }
 
-        .rank-row {
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-            padding:12px;
-            border-bottom:1px solid rgba(255,255,255,0.08);
-        }
+    div[role="radiogroup"] label {
 
-        .rank-number {
-            width:28px;
-            height:28px;
-            border-radius:50%;
-            border:1px solid rgba(112,255,47,0.6);
-            color:#70ff2f;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-weight:900;
-            margin-right:12px;
-        }
+        flex:1;
+        background:#090b0d;
+        padding:18px 0;
+        text-align:center;
+        border-right:1px solid rgba(255,255,255,0.06);
+    }
 
-        .footer {
-            color:#6f767d;
-            font-size:12px;
-            letter-spacing:.8px;
-            margin-top:20px;
-            padding-bottom:30px;
-        }
+    div[role="radiogroup"] label:last-child {
 
-        @media (max-width: 900px) {
-            .nav {
-                grid-template-columns: repeat(2, 1fr);
-            }
+        border-right:none;
+    }
 
-            .metric-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
+    div[role="radiogroup"] p {
 
-            .table th, .table td {
-                font-size:12px;
-                padding:10px 6px;
-            }
-        }
+        font-weight:800 !important;
+        color:white !important;
+        font-size:13px !important;
+    }
+
+    div[role="radiogroup"] label[data-baseweb="radio"]:has(input:checked) {
+
+        background:
+            linear-gradient(
+                180deg,
+                rgba(88,255,47,0.15),
+                rgba(88,255,47,0.05)
+            );
+
+        border-bottom:3px solid #58ff2f;
+    }
+
     </style>
     """,
     unsafe_allow_html=True
 )
 
+# =========================
+# BANNER
+# =========================
+
 if BANNER_FILE.exists():
-    st.image(str(BANNER_FILE), use_container_width=True)
-else:
+
+    st.image(
+        str(BANNER_FILE),
+        use_container_width=True
+    )
+
+# =========================
+# NAVBAR
+# =========================
+
+selected_tab = st.radio(
+
+    "",
+
+    [
+        "LIVE",
+        "PREMATCH",
+        "ANALYTICS",
+        "HISTORY",
+        "RANKING",
+        "ALERTS",
+        "SETTINGS"
+    ],
+
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+# =========================
+# LIVE
+# =========================
+
+if selected_tab == "LIVE":
+
     st.markdown(
         """
         <div class="panel">
-            <h1>KANIBAL ANALYTICS</h1>
-            <div class="subtitle">ANALIZA. PRZEWAGA. ZYSK.</div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
-st.markdown(
-    """
-    <div class="nav">
-        <div class="active">📡 LIVE</div>
-        <div>⚽ PREMATCH</div>
-        <div>📊 ANALYTICS</div>
-        <div>🕘 HISTORY</div>
-        <div>🏆 RANKING</div>
-        <div>🔔 ALERTS</div>
-        <div>⚙️ SETTINGS</div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+            <div class="panel-title">
 
-live_df = load_csv(LIVE_FILE)
-prematch_df = load_csv(PREMATCH_FILE)
+                <div class="green-dot"></div>
 
-# =========================
-# LIVE PANEL
-# =========================
+                <h2 style="margin:0;">
+                    LIVE SIGNALS
+                </h2>
 
-st.markdown(
-    """
-    <div class="panel">
-        <div class="panel-title">
-            <div class="green-dot"></div>
-            <h2 style="margin:0;">LIVE SIGNALS</h2>
-        </div>
-        <div class="subtitle">AKTUALIZOWANE CO 60 SEKUND</div>
-    """,
-    unsafe_allow_html=True
-)
-
-if live_df.empty:
-    st.markdown(
-        """
-        <div style="
-            padding:20px;
-            border:1px solid rgba(255,210,26,0.25);
-            background:rgba(255,210,26,0.08);
-            color:#ffd21a;
-            border-radius:12px;
-            font-weight:800;">
-            Brak danych LIVE
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-else:
-    rows = ""
-
-    for _, row in live_df.iterrows():
-        home = safe_text(row.get("home", "-"))
-        away = safe_text(row.get("away", "-"))
-        league = safe_text(row.get("league", "-"))
-        minute = safe_text(row.get("minute", "-"))
-        score = safe_text(row.get("score", "-"))
-        signal = row.get("signal", "NO SIGNAL")
-        confidence = row.get("confidence", 0)
-        odds = safe_text(row.get("odds", "-"))
-        value = row.get("value", 0)
-        ev = row.get("ev", 0)
-        cashout = row.get("cashout", "NO CASHOUT")
-        stake = safe_text(row.get("stake", "-"))
-        risk = row.get("risk", "-")
-
-        try:
-            value_num = float(value)
-        except Exception:
-            value_num = 0
-
-        try:
-            ev_num = float(ev)
-        except Exception:
-            ev_num = 0
-
-        value_class = "positive" if value_num >= 0 else "negative"
-        ev_class = "positive" if ev_num >= 0 else "negative"
-
-        rows += f"""
-        <tr>
-            <td>{league}</td>
-            <td><b>{home}</b><br><span style="color:#9aa0a6;">{away}</span></td>
-            <td><span class="minute">{minute}'</span></td>
-            <td><b>{score}</b></td>
-            <td>{signal_badge(signal)}</td>
-            <td>{confidence_bar(confidence)}</td>
-            <td>{odds}</td>
-            <td class="{value_class}">{safe_text(value)}%</td>
-            <td class="{ev_class}">{safe_text(ev)}%</td>
-            <td>{cashout_badge(cashout)}</td>
-            <td>{stake}</td>
-            <td>{risk_badge(risk)}</td>
-        </tr>
-        """
-
-    st.markdown(
-        f"""
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>League</th>
-                    <th>Match</th>
-                    <th>Minute</th>
-                    <th>Score</th>
-                    <th>Signal</th>
-                    <th>Confidence</th>
-                    <th>Odds</th>
-                    <th>Value</th>
-                    <th>EV</th>
-                    <th>Cashout</th>
-                    <th>Stake</th>
-                    <th>Risk</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows}
-            </tbody>
-        </table>
-        """,
-        unsafe_allow_html=True
-    )
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# =========================
-# ANALYTICS PANELS
-# =========================
-
-total_live = len(live_df) if not live_df.empty else 0
-
-avg_confidence = 0
-avg_value = 0
-avg_ev = 0
-
-if not live_df.empty:
-    if "confidence" in live_df.columns:
-        avg_confidence = round(pd.to_numeric(live_df["confidence"], errors="coerce").fillna(0).mean(), 2)
-    if "value" in live_df.columns:
-        avg_value = round(pd.to_numeric(live_df["value"], errors="coerce").fillna(0).mean(), 2)
-    if "ev" in live_df.columns:
-        avg_ev = round(pd.to_numeric(live_df["ev"], errors="coerce").fillna(0).mean(), 2)
-
-col1, col2, col3 = st.columns([1.2, 0.8, 0.9])
-
-with col1:
-    st.markdown(
-        f"""
-        <div class="panel">
-            <h3>STATS OVERVIEW</h3>
-            <div class="metric-grid">
-                <div class="metric-card">
-                    <div class="metric-label">Total Signals</div>
-                    <div class="metric-value">{total_live}</div>
-                    <div class="metric-change">LIVE</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg Confidence</div>
-                    <div class="metric-value">{avg_confidence}%</div>
-                    <div class="metric-change">AI SCORE</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg Value</div>
-                    <div class="metric-value">{avg_value}%</div>
-                    <div class="metric-change">EDGE</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label">Avg EV</div>
-                    <div class="metric-value">{avg_ev}%</div>
-                    <div class="metric-change">EXPECTED VALUE</div>
-                </div>
             </div>
+
+            <div class="subtitle">
+                AKTUALIZOWANE CO 60 SEKUND
+            </div>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
-with col2:
-    ranking_html = ""
+    if not live_df.empty:
 
-    if not live_df.empty and "value" in live_df.columns:
-        ranking_df = live_df.copy()
-        ranking_df["value"] = pd.to_numeric(ranking_df["value"], errors="coerce").fillna(0)
-        ranking_df = ranking_df.sort_values("value", ascending=False).head(5)
+        st.dataframe(
+            live_df,
+            use_container_width=True,
+            height=min(
+                700,
+                35 * len(live_df) + 120
+            )
+        )
 
-        for index, (_, row) in enumerate(ranking_df.iterrows(), start=1):
-            match_name = f"{safe_text(row.get('home', '-'))} vs {safe_text(row.get('away', '-'))}"
-            league = safe_text(row.get("league", "-"))
-            value = safe_text(row.get("value", 0))
-
-            ranking_html += f"""
-            <div class="rank-row">
-                <div style="display:flex;align-items:center;">
-                    <div class="rank-number">{index}</div>
-                    <div>
-                        <b>{match_name}</b><br>
-                        <span style="color:#8f969d;font-size:12px;">{league}</span>
-                    </div>
-                </div>
-                <div class="positive">+{value}%</div>
-            </div>
-            """
     else:
-        ranking_html = "<div style='color:#8f969d;padding:14px;'>Brak danych rankingu</div>"
 
-    st.markdown(
-        f"""
-        <div class="panel">
-            <h3>VALUE TOP 5</h3>
-            <div class="small-list">
-                {ranking_html}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+        st.warning("Brak danych LIVE")
 
-with col3:
-    low = medium = high = 0
+    # =========================
+    # CASHOUT GUIDE
+    # =========================
 
-    if not live_df.empty and "risk" in live_df.columns:
-        risk_series = live_df["risk"].astype(str).str.upper()
-        low = int(risk_series.str.contains("LOW").sum())
-        medium = int(risk_series.str.contains("MEDIUM").sum())
-        high = int(risk_series.str.contains("HIGH").sum())
-
-    st.markdown(
-        f"""
-        <div class="panel">
-            <h3>RISK DISTRIBUTION</h3>
-            <div style="display:flex;flex-direction:column;gap:14px;margin-top:22px;">
-                <div style="display:flex;justify-content:space-between;">
-                    <span>{badge("LOW", "green")}</span><b>{low}</b>
-                </div>
-                <div style="display:flex;justify-content:space-between;">
-                    <span>{badge("MEDIUM", "yellow")}</span><b>{medium}</b>
-                </div>
-                <div style="display:flex;justify-content:space-between;">
-                    <span>{badge("HIGH", "red")}</span><b>{high}</b>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-# =========================
-# PREMATCH PANEL
-# =========================
-
-st.markdown(
-    """
-    <div class="panel">
-        <div class="panel-title">
-            <div class="green-dot"></div>
-            <h2 style="margin:0;">PREMATCH PICKS</h2>
-        </div>
-        <div class="subtitle">CORE VALUE ENGINE</div>
-    """,
-    unsafe_allow_html=True
-)
-
-if prematch_df.empty:
     st.markdown(
         """
-        <div style="
-            padding:20px;
-            border:1px solid rgba(255,210,26,0.25);
-            background:rgba(255,210,26,0.08);
-            color:#ffd21a;
-            border-radius:12px;
-            font-weight:800;">
-            Brak danych PREMATCH
+        <div class="panel">
+
+            <h2>
+                CASHOUT AI GUIDE
+            </h2>
+
+            <div style="
+                margin-top:14px;
+                padding:16px;
+                border-radius:12px;
+                border:1px solid rgba(88,255,47,0.35);
+                background:rgba(88,255,47,0.08);
+            ">
+
+                <b style="color:#70ff2f;">
+                    HOLD POSITION
+                </b><br>
+
+                <span style="color:#cfd4d8;">
+                    Wysoka presja i momentum.
+                </span>
+
+            </div>
+
+            <div style="
+                margin-top:12px;
+                padding:16px;
+                border-radius:12px;
+                border:1px solid rgba(255,210,26,0.35);
+                background:rgba(255,210,26,0.08);
+            ">
+
+                <b style="color:#ffd21a;">
+                    PARTIAL CASHOUT
+                </b><br>
+
+                <span style="color:#cfd4d8;">
+                    Rozważ częściowe wyjście.
+                </span>
+
+            </div>
+
+            <div style="
+                margin-top:12px;
+                padding:16px;
+                border-radius:12px;
+                border:1px solid rgba(255,59,48,0.35);
+                background:rgba(255,59,48,0.08);
+            ">
+
+                <b style="color:#ff3b30;">
+                    FULL CASHOUT
+                </b><br>
+
+                <span style="color:#cfd4d8;">
+                    Wyjdź z zakładu.
+                </span>
+
+            </div>
+
         </div>
         """,
         unsafe_allow_html=True
     )
-else:
-    prematch_df = prematch_df.drop(
-        columns=[
-            "pick_id",
-            "odds_event_id",
-            "home_team",
-            "away_team",
-            "match_date"
-        ],
-        errors="ignore"
-    )
-
-    st.dataframe(
-        prematch_df,
-        use_container_width=True,
-        height=min(420, 36 * len(prematch_df) + 80)
-    )
-
-st.markdown("</div>", unsafe_allow_html=True)
 
 # =========================
-# CASHOUT GUIDE
+# PREMATCH
 # =========================
 
-st.markdown(
-    """
-    <div class="panel">
-        <h3>CASHOUT AI GUIDE</h3>
+elif selected_tab == "PREMATCH":
 
-        <div style="
-            margin-top:14px;
-            padding:16px;
-            border-radius:12px;
-            border:1px solid rgba(88,255,47,0.35);
-            background:rgba(88,255,47,0.08);
-        ">
-            <b style="color:#70ff2f;">HOLD POSITION</b><br>
-            <span style="color:#cfd4d8;">Wysoka presja i momentum. Trzymaj zakład.</span>
+    st.markdown(
+        """
+        <div class="panel">
+
+            <div class="panel-title">
+
+                <div class="green-dot"></div>
+
+                <h2 style="margin:0;">
+                    PREMATCH PICKS
+                </h2>
+
+            </div>
+
+            <div class="subtitle">
+                CORE VALUE ENGINE
+            </div>
+
         </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-        <div style="
-            margin-top:12px;
-            padding:16px;
-            border-radius:12px;
-            border:1px solid rgba(255,210,26,0.35);
-            background:rgba(255,210,26,0.08);
-        ">
-            <b style="color:#ffd21a;">PARTIAL CASHOUT</b><br>
-            <span style="color:#cfd4d8;">Spadający confidence. Rozważ częściowe wyjście.</span>
+    if not prematch_df.empty:
+
+        wanted_columns = [
+
+            "data",
+            "liga",
+            "mecz",
+            "market",
+            "typ",
+            "kurs_buk",
+            "kurs_model",
+            "kurs_bota",
+            "prawd_model",
+            "prawd_rynek",
+            "prawd_final",
+            "edge",
+            "ev",
+            "kelly_full",
+            "kelly_25",
+            "home_xg",
+            "away_xg",
+            "marza_sum",
+            "marza_%",
+            "status"
+        ]
+
+        existing_columns = [
+
+            col for col in wanted_columns
+            if col in prematch_df.columns
+        ]
+
+        prematch_df = prematch_df[existing_columns]
+
+        st.dataframe(
+            prematch_df,
+            use_container_width=True,
+            height=min(
+                700,
+                35 * len(prematch_df) + 120
+            )
+        )
+
+    else:
+
+        st.warning("Brak danych PREMATCH")
+
+# =========================
+# ANALYTICS
+# =========================
+
+elif selected_tab == "ANALYTICS":
+
+    st.markdown(
+        """
+        <div class="panel">
+
+            <h2>
+                ANALYTICS ENGINE
+            </h2>
+
         </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-        <div style="
-            margin-top:12px;
-            padding:16px;
-            border-radius:12px;
-            border:1px solid rgba(255,59,48,0.35);
-            background:rgba(255,59,48,0.08);
-        ">
-            <b style="color:#ff3b30;">FULL CASHOUT</b><br>
-            <span style="color:#cfd4d8;">Niski momentum i presja. Wyjdź z zakładu.</span>
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        st.metric(
+            "ROI",
+            "+24.8%"
+        )
+
+    with col2:
+
+        st.metric(
+            "WIN RATE",
+            "62.8%"
+        )
+
+    with col3:
+
+        st.metric(
+            "AI EDGE",
+            "+13.4%"
+        )
+
+# =========================
+# HISTORY
+# =========================
+
+elif selected_tab == "HISTORY":
+
+    st.markdown(
+        """
+        <div class="panel">
+
+            <h2>
+                HISTORY ENGINE
+            </h2>
+
         </div>
-    </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-    <div class="footer">
-        KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    st.info("Historia zakładów.")
+
+# =========================
+# RANKING
+# =========================
+
+elif selected_tab == "RANKING":
+
+    st.markdown(
+        """
+        <div class="panel">
+
+            <h2>
+                RANKING ENGINE
+            </h2>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.info("Ranking AI.")
+
+# =========================
+# ALERTS
+# =========================
+
+elif selected_tab == "ALERTS":
+
+    st.markdown(
+        """
+        <div class="panel">
+
+            <h2>
+                ALERT ENGINE
+            </h2>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.info("Alerty AI.")
+
+# =========================
+# SETTINGS
+# =========================
+
+elif selected_tab == "SETTINGS":
+
+    st.markdown(
+        """
+        <div class="panel">
+
+            <h2>
+                SETTINGS ENGINE
+            </h2>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.toggle("LIVE ENGINE", value=True)
+
+    st.toggle("PREMATCH ENGINE", value=True)
+
+    st.toggle("CASHOUT AI", value=True)
+
+    st.toggle("BANKROLL ENGINE", value=True)
