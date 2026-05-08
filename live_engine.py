@@ -1,125 +1,123 @@
+import requests
 import pandas as pd
 from pathlib import Path
-from datetime import datetime
-import random
 import time
+import random
 
 # =========================
-# DATA PATH
+# CONFIG
 # =========================
+
+API_KEY = "YOUR_API_KEY"
+
+URL = "https://v3.football.api-sports.io/fixtures?live=all"
+
+HEADERS = {
+
+    "x-rapidapi-key": API_KEY,
+    "x-rapidapi-host": "v3.football.api-sports.io"
+
+}
 
 DATA_DIR = Path("data")
-
 DATA_DIR.mkdir(exist_ok=True)
 
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 
 # =========================
-# SAMPLE LIVE MATCHES
+# GET LIVE MATCHES
 # =========================
 
-MATCHES = [
+def get_live_matches():
 
-    {
-        "home": "Barcelona",
-        "away": "Real Madrid",
-        "league": "La Liga"
-    },
+    try:
 
-    {
-        "home": "Liverpool",
-        "away": "Arsenal",
-        "league": "Premier League"
-    },
+        response = requests.get(
+            URL,
+            headers=HEADERS,
+            timeout=30
+        )
 
-    {
-        "home": "Inter",
-        "away": "Milan",
-        "league": "Serie A"
-    },
+        data = response.json()
 
-    {
-        "home": "PSG",
-        "away": "Monaco",
-        "league": "Ligue 1"
-    }
+        rows = []
 
-]
+        for item in data["response"]:
 
-# =========================
-# GENERATE LIVE DATA
-# =========================
+            home = item["teams"]["home"]["name"]
+            away = item["teams"]["away"]["name"]
 
-def generate_live_data():
+            league = item["league"]["name"]
 
-    rows = []
+            minute = item["fixture"]["status"]["elapsed"]
 
-    for match in MATCHES:
+            home_goals = item["goals"]["home"]
+            away_goals = item["goals"]["away"]
 
-        minute = random.randint(1, 90)
+            score = f"{home_goals}-{away_goals}"
 
-        home_goals = random.randint(0, 4)
-        away_goals = random.randint(0, 4)
+            confidence = random.randint(70, 96)
 
-        signal = random.choice([
-            "OVER 2.5",
-            "BTTS YES",
-            "OVER 3.5",
-            "HOME GOAL",
-            "AWAY GOAL"
-        ])
+            ev = round(random.uniform(2, 18), 2)
 
-        confidence = random.randint(70, 97)
+            signal = random.choice([
+                "OVER 2.5",
+                "BTTS YES",
+                "HOME GOAL",
+                "OVER 3.5"
+            ])
 
-        ev = round(random.uniform(3, 18), 2)
+            value = random.choice([
+                "LOW",
+                "MEDIUM",
+                "HIGH"
+            ])
 
-        value = random.choice([
-            "LOW",
-            "MEDIUM",
-            "HIGH"
-        ])
+            cashout = random.choice([
+                "HOLD",
+                "PARTIAL",
+                "FULL"
+            ])
 
-        cashout = random.choice([
-            "HOLD",
-            "PARTIAL",
-            "FULL"
-        ])
+            stake = random.choice([
+                "1%",
+                "2%",
+                "3%"
+            ])
 
-        stake = random.choice([
-            "1%",
-            "2%",
-            "3%",
-            "5%"
-        ])
+            risk = random.choice([
+                "LOW",
+                "MEDIUM",
+                "HIGH"
+            ])
 
-        risk = random.choice([
-            "LOW",
-            "MEDIUM",
-            "HIGH"
-        ])
+            rows.append({
 
-        row = {
+                "home": home,
+                "away": away,
+                "league": league,
+                "minute": minute,
+                "score": score,
+                "signal": signal,
+                "confidence": confidence,
+                "ev": ev,
+                "value": value,
+                "cashout": cashout,
+                "stake": stake,
+                "risk": risk,
+                "status": "LIVE"
 
-            "home": match["home"],
-            "away": match["away"],
-            "league": match["league"],
-            "minute": minute,
-            "score": f"{home_goals}-{away_goals}",
-            "signal": signal,
-            "confidence": confidence,
-            "ev": ev,
-            "value": value,
-            "cashout": cashout,
-            "stake": stake,
-            "risk": risk,
-            "status": "LIVE",
-            "updated_at": datetime.utcnow()
+            })
 
-        }
+        df = pd.DataFrame(rows)
 
-        rows.append(row)
+        df.to_csv(LIVE_FILE, index=False)
 
-    return pd.DataFrame(rows)
+        print("LIVE UPDATED")
+
+    except Exception as e:
+
+        print("ERROR:", e)
 
 # =========================
 # LOOP
@@ -127,10 +125,6 @@ def generate_live_data():
 
 while True:
 
-    df = generate_live_data()
-
-    df.to_csv(LIVE_FILE, index=False)
-
-    print("LIVE UPDATED")
+    get_live_matches()
 
     time.sleep(60)
