@@ -35,6 +35,7 @@ def load_csv(path):
 
     return pd.DataFrame()
 
+
 live_df = load_csv(LIVE_FILE)
 
 prematch_df = load_csv(PREMATCH_FILE)
