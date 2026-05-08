@@ -1,102 +1,136 @@
-import time
-import requests
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
+import random
+import time
 
-from config import API_FOOTBALL_KEY
-
-print("✅ LIVE_ENGINE IMPORT OK")
-
-HEADERS = {
-    "x-apisports-key": API_FOOTBALL_KEY
-}
+# =========================
+# DATA PATH
+# =========================
 
 DATA_DIR = Path("data")
+
 DATA_DIR.mkdir(exist_ok=True)
 
-CSV_FILE = DATA_DIR / "auto_all_picks.csv"
+LIVE_FILE = DATA_DIR / "live_matches.csv"
 
+# =========================
+# SAMPLE LIVE MATCHES
+# =========================
 
-def get_live_matches():
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
+MATCHES = [
 
-    res = requests.get(url, headers=HEADERS, timeout=20)
-    res.raise_for_status()
+    {
+        "home": "Barcelona",
+        "away": "Real Madrid",
+        "league": "La Liga"
+    },
 
-    data = res.json().get("response", [])
+    {
+        "home": "Liverpool",
+        "away": "Arsenal",
+        "league": "Premier League"
+    },
 
-    matches = []
+    {
+        "home": "Inter",
+        "away": "Milan",
+        "league": "Serie A"
+    },
 
-    for m in data:
-        matches.append({
-            "fixture_id": m["fixture"]["id"],
-            "mecz": f"{m['teams']['home']['name']} vs {m['teams']['away']['name']}",
-            "liga": m["league"]["name"],
-            "minute": m["fixture"]["status"]["elapsed"] or 0,
-        })
-
-    return matches
-
-
-def analyze_match(match):
-    minute = match["minute"]
-
-    if minute >= 70:
-        typ = "OVER 2.5"
-        confidence = 82
-
-    elif minute >= 55:
-        typ = "BTTS"
-        confidence = 76
-
-    else:
-        typ = "OVER 1.5"
-        confidence = 65
-
-    return {
-        "mecz": match["mecz"],
-        "liga": match["liga"],
-        "minute": minute,
-        "typ": typ,
-        "confidence": confidence,
+    {
+        "home": "PSG",
+        "away": "Monaco",
+        "league": "Ligue 1"
     }
 
+]
 
-def save_live_picks(picks):
-    if not picks:
-        return
+# =========================
+# GENERATE LIVE DATA
+# =========================
 
-    df = pd.DataFrame(picks)
+def generate_live_data():
 
-    if CSV_FILE.exists():
-        old = pd.read_csv(CSV_FILE)
-        df = pd.concat([old, df], ignore_index=True)
+    rows = []
 
-    df.to_csv(CSV_FILE, index=False)
+    for match in MATCHES:
 
-    print(f"✅ LIVE PICKS SAVED: {len(picks)}")
+        minute = random.randint(1, 90)
 
+        home_goals = random.randint(0, 4)
+        away_goals = random.randint(0, 4)
 
-def run_live():
-    print("⚽ LIVE ENGINE RUN")
+        signal = random.choice([
+            "OVER 2.5",
+            "BTTS YES",
+            "OVER 3.5",
+            "HOME GOAL",
+            "AWAY GOAL"
+        ])
 
-    matches = get_live_matches()
+        confidence = random.randint(70, 97)
 
-    print(f"📡 LIVE MATCHES: {len(matches)}")
+        ev = round(random.uniform(3, 18), 2)
 
-    picks = []
+        value = random.choice([
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+        ])
 
-    for match in matches[:10]:
-        result = analyze_match(match)
+        cashout = random.choice([
+            "HOLD",
+            "PARTIAL",
+            "FULL"
+        ])
 
-        print(
-            f"🔥 {result['mecz']} | "
-            f"{result['typ']} | "
-            f"{result['confidence']}%"
-        )
+        stake = random.choice([
+            "1%",
+            "2%",
+            "3%",
+            "5%"
+        ])
 
-        picks.append(result)
+        risk = random.choice([
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+        ])
 
-    save_live_picks(picks)
+        row = {
 
-    print("✅ LIVE ENGINE COMPLETE")
+            "home": match["home"],
+            "away": match["away"],
+            "league": match["league"],
+            "minute": minute,
+            "score": f"{home_goals}-{away_goals}",
+            "signal": signal,
+            "confidence": confidence,
+            "ev": ev,
+            "value": value,
+            "cashout": cashout,
+            "stake": stake,
+            "risk": risk,
+            "status": "LIVE",
+            "updated_at": datetime.utcnow()
+
+        }
+
+        rows.append(row)
+
+    return pd.DataFrame(rows)
+
+# =========================
+# LOOP
+# =========================
+
+while True:
+
+    df = generate_live_data()
+
+    df.to_csv(LIVE_FILE, index=False)
+
+    print("LIVE UPDATED")
+
+    time.sleep(60)
