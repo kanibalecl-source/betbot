@@ -1,3 +1,5 @@
+# live_bot.py
+
 import time
 import requests
 import pandas as pd
@@ -15,11 +17,71 @@ DATA_DIR.mkdir(exist_ok=True)
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 
 
+def get_fixture_statistics(fixture_id):
+
+    url = f"https://v3.football.api-sports.io/fixtures/statistics?fixture={fixture_id}"
+
+    try:
+
+        res = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=20
+        )
+
+        data = res.json().get("response", [])
+
+        if len(data) < 2:
+            return {}
+
+        home_stats = data[0]["statistics"]
+        away_stats = data[1]["statistics"]
+
+        stats = {}
+
+        for stat in home_stats:
+
+            stats[f"home_{stat['type']}"] = stat["value"]
+
+        for stat in away_stats:
+
+            stats[f"away_{stat['type']}"] = stat["value"]
+
+        return stats
+
+    except:
+        return {}
+
+
+def pressure_score(stats):
+
+    try:
+
+        home_shots = int(stats.get("home_Shots on Goal") or 0)
+        away_shots = int(stats.get("away_Shots on Goal") or 0)
+
+        home_corners = int(stats.get("home_Corner Kicks") or 0)
+        away_corners = int(stats.get("away_Corner Kicks") or 0)
+
+        total_pressure = (
+            home_shots +
+            away_shots +
+            home_corners +
+            away_corners
+        )
+
+        return total_pressure
+
+    except:
+        return 0
+
+
 def get_live_matches():
 
     url = "https://v3.football.api-sports.io/fixtures?live=all"
 
     try:
+
         res = requests.get(
             url,
             headers=HEADERS,
@@ -34,12 +96,18 @@ def get_live_matches():
 
         for m in data:
 
+            fixture_id = m["fixture"]["id"]
+
             minute = m["fixture"]["status"]["elapsed"] or 0
 
             home_goals = m["goals"]["home"] or 0
             away_goals = m["goals"]["away"] or 0
 
             total_goals = home_goals + away_goals
+
+            stats = get_fixture_statistics(fixture_id)
+
+            pressure = pressure_score(stats)
 
             # =========================
             # LIVE AI SIGNALS
@@ -48,17 +116,20 @@ def get_live_matches():
             live_pick = "NO SIGNAL"
             confidence = 0
 
-            if minute >= 70 and total_goals <= 2:
+            if minute >= 70 and pressure >= 10:
+
                 live_pick = "OVER 2.5"
-                confidence = 82
+                confidence = 86
 
-            elif minute >= 55 and total_goals >= 1:
+            elif minute >= 60 and pressure >= 8:
+
                 live_pick = "BTTS"
-                confidence = 76
+                confidence = 80
 
-            elif minute >= 35 and total_goals == 0:
+            elif minute >= 35 and total_goals == 0 and pressure >= 6:
+
                 live_pick = "OVER 1.5"
-                confidence = 68
+                confidence = 72
 
             matches.append({
 
@@ -67,6 +138,7 @@ def get_live_matches():
                 "league": m["league"]["name"],
                 "minute": minute,
                 "score": f"{home_goals}:{away_goals}",
+                "pressure": pressure,
                 "signal": live_pick,
                 "confidence": confidence,
                 "status": m["fixture"]["status"]["short"]
@@ -82,7 +154,7 @@ def get_live_matches():
         return []
 
 
-print("🚀 LIVE SIGNAL ENGINE STARTED")
+print("🚀 LIVE PRESSURE ENGINE STARTED")
 
 while True:
 
