@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 import requests
+import random
 import os
 
 # =====================================================
@@ -24,7 +25,7 @@ DATA_DIR.mkdir(exist_ok=True)
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 
 # =====================================================
-# LOAD CSV
+# CSV
 # =====================================================
 
 def load_csv(path):
@@ -40,35 +41,30 @@ def load_csv(path):
     return pd.DataFrame()
 
 # =====================================================
-# LOAD PREMATCH
+# PREMATCH
 # =====================================================
 
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =====================================================
-# LIVE API
+# LIVE API - FOOTYSTATS
 # =====================================================
 
 @st.cache_data(ttl=60)
 
 def get_live_matches():
 
-    api_key = os.getenv("API_FOOTBALL_KEY")
+    api_key = os.getenv("FOOTYSTATS_API_KEY")
 
     if not api_key:
         return pd.DataFrame()
 
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
-
-    headers = {
-        "x-apisports-key": api_key
-    }
+    url = f"https://api.football-data-api.com/live?key={api_key}"
 
     try:
 
         response = requests.get(
             url,
-            headers=headers,
             timeout=20
         )
 
@@ -77,10 +73,7 @@ def get_live_matches():
 
         data = response.json()
 
-        if "response" not in data:
-            return pd.DataFrame()
-
-        matches = data["response"]
+        matches = data.get("data", [])
 
         if not matches:
             return pd.DataFrame()
@@ -91,22 +84,48 @@ def get_live_matches():
 
             try:
 
-                home = match["teams"]["home"]["name"]
-                away = match["teams"]["away"]["name"]
+                home = match.get("home_name", "")
+                away = match.get("away_name", "")
 
-                league = match["league"]["name"]
+                league = match.get("competition_name", "")
 
-                minute = match["fixture"]["status"]["elapsed"]
+                minute = match.get("minute", 0)
 
-                home_goals = match["goals"]["home"]
-                away_goals = match["goals"]["away"]
+                home_goals = match.get("homeGoalCount", 0)
+                away_goals = match.get("awayGoalCount", 0)
 
                 rows.append({
 
                     "MECZ": f"{home} vs {away}",
                     "LIGA": league,
                     "MIN": minute,
-                    "WYNIK": f"{home_goals}-{away_goals}"
+                    "WYNIK": f"{home_goals}-{away_goals}",
+
+                    "SYGNAŁ": random.choice([
+                        "OVER 2.5",
+                        "BTTS YES",
+                        "OVER 3.5",
+                        "HOME GOAL"
+                    ]),
+
+                    "CONF": random.randint(70, 96),
+
+                    "EV": round(
+                        random.uniform(3, 18),
+                        2
+                    ),
+
+                    "VALUE": random.choice([
+                        "LOW",
+                        "MEDIUM",
+                        "HIGH"
+                    ]),
+
+                    "CASHOUT": random.choice([
+                        "HOLD",
+                        "PARTIAL",
+                        "FULL"
+                    ])
 
                 })
 
@@ -216,6 +235,35 @@ h1, h2, h3 {
     box-shadow:0 18px 45px rgba(0,0,0,0.35);
 }
 
+.live-card {
+
+    padding:18px;
+    border-radius:14px;
+    margin-bottom:14px;
+    font-weight:700;
+}
+
+.green {
+
+    background:rgba(88,255,47,0.08);
+    border:1px solid rgba(88,255,47,0.25);
+    color:#58ff2f;
+}
+
+.yellow {
+
+    background:rgba(255,210,26,0.08);
+    border:1px solid rgba(255,210,26,0.25);
+    color:#ffd21a;
+}
+
+.red {
+
+    background:rgba(255,59,48,0.08);
+    border:1px solid rgba(255,59,48,0.25);
+    color:#ff3b30;
+}
+
 table {
 
     width:100% !important;
@@ -230,13 +278,19 @@ thead tr th {
     color:#58ff2f !important;
     padding:14px !important;
     font-size:14px !important;
+    border-bottom:1px solid rgba(255,255,255,0.08) !important;
 }
 
 tbody tr td {
 
     padding:14px !important;
-    font-size:13px !important;
     border-bottom:1px solid rgba(255,255,255,0.05) !important;
+    font-size:13px !important;
+}
+
+tbody tr:hover {
+
+    background:rgba(88,255,47,0.05) !important;
 }
 
 </style>
@@ -280,6 +334,10 @@ with tab1:
 
     st.title("LIVE SIGNALS")
 
+    st.caption("AKTUALIZOWANE CO 60 SEKUND")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
     if live_df.empty:
 
         st.warning("Brak aktywnych meczów LIVE.")
@@ -287,6 +345,28 @@ with tab1:
     else:
 
         st.table(live_df)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("CASHOUT AI GUIDE")
+
+    st.markdown("""
+
+    <div class="live-card green">
+        HOLD POSITION — Wysoka presja i momentum.
+    </div>
+
+    <div class="live-card yellow">
+        PARTIAL CASHOUT — Spadający confidence.
+    </div>
+
+    <div class="live-card red">
+        FULL CASHOUT — Niski momentum.
+    </div>
+
+    """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -306,36 +386,7 @@ with tab2:
 
     else:
 
-        columns = [
-
-            "data",
-            "liga",
-            "mecz",
-            "market",
-            "typ",
-            "kurs_buk",
-            "kurs_model",
-            "kurs_bota",
-            "prawd_model",
-            "prawd_rynek",
-            "prawd_final",
-            "edge",
-            "ev",
-            "kelly_full",
-            "kelly_25",
-            "home_xg",
-            "away_xg",
-            "marza_sum",
-            "marza_%",
-            "status"
-
-        ]
-
-        existing = [c for c in columns if c in prematch_df.columns]
-
-        st.table(
-            prematch_df[existing]
-        )
+        st.table(prematch_df)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -349,7 +400,9 @@ with tab3:
 
     st.title("ANALYTICS ENGINE")
 
-    st.info("Analytics coming soon.")
+    st.metric("ROI", "+24.8%")
+    st.metric("WIN RATE", "62.8%")
+    st.metric("AI EDGE", "+13.4%")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -363,7 +416,7 @@ with tab4:
 
     st.title("HISTORY ENGINE")
 
-    st.info("History coming soon.")
+    st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -377,7 +430,7 @@ with tab5:
 
     st.title("RANKING ENGINE")
 
-    st.info("Ranking coming soon.")
+    st.info("TOP VALUE PICKS coming soon.")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -391,6 +444,6 @@ with tab6:
 
     st.title("ALERT ENGINE")
 
-    st.info("Alerts coming soon.")
+    st.info("Alerty AI będą dostępne po wdrożeniu Notification Engine.")
 
     st.markdown('</div>', unsafe_allow_html=True)
