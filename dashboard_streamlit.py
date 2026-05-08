@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
+# =========================
+# CONFIG
+# =========================
+
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
     layout="wide",
@@ -15,6 +19,9 @@ LIVE_FILE = DATA_DIR / "live_matches.csv"
 
 BANNER_FILE = Path("kanibal_banner_pro.webp")
 
+# =========================
+# LOAD DATA
+# =========================
 
 def load_csv(path):
 
@@ -28,9 +35,13 @@ def load_csv(path):
 
     return pd.DataFrame()
 
-
 live_df = load_csv(LIVE_FILE)
+
 prematch_df = load_csv(PREMATCH_FILE)
+
+# =========================
+# CSS
+# =========================
 
 st.markdown(
     """
@@ -47,10 +58,12 @@ st.markdown(
     }
 
     header[data-testid="stHeader"] {
+
         background:transparent;
     }
 
     .block-container {
+
         max-width:100% !important;
         padding-top:0.6rem;
         padding-left:2rem;
@@ -60,6 +73,7 @@ st.markdown(
     .panel {
 
         border:1px solid rgba(255,255,255,0.08);
+
         border-radius:18px;
 
         background:
@@ -70,11 +84,14 @@ st.markdown(
             );
 
         padding:26px;
+
         margin-bottom:22px;
+
         box-shadow:0 18px 45px rgba(0,0,0,0.35);
     }
 
     .panel-title {
+
         display:flex;
         align-items:center;
         gap:12px;
@@ -82,6 +99,7 @@ st.markdown(
     }
 
     .green-dot {
+
         width:14px;
         height:14px;
         border-radius:50%;
@@ -90,6 +108,7 @@ st.markdown(
     }
 
     .subtitle {
+
         color:#8f969d;
         font-size:12px;
         letter-spacing:1px;
@@ -98,10 +117,16 @@ st.markdown(
     }
 
     h1, h2 {
+
         color:white !important;
     }
 
+    /* =========================
+       TABS
+    ========================= */
+
     .stTabs [data-baseweb="tab-list"] {
+
         gap:0;
         background:#090b0d;
         border-radius:14px;
@@ -112,6 +137,7 @@ st.markdown(
     }
 
     .stTabs [data-baseweb="tab"] {
+
         height:68px;
         background:#090b0d;
         color:white;
@@ -131,10 +157,16 @@ st.markdown(
             ) !important;
 
         color:#58ff2f !important;
+
         border-bottom:3px solid #58ff2f !important;
     }
 
+    /* =========================
+       TABLES
+    ========================= */
+
     .custom-table {
+
         width:100%;
         border-collapse:collapse;
         background:#0d1014;
@@ -145,6 +177,7 @@ st.markdown(
     }
 
     .custom-table th {
+
         background:#11161c;
         color:#58ff2f;
         padding:16px;
@@ -153,16 +186,19 @@ st.markdown(
     }
 
     .custom-table td {
+
         padding:14px 16px;
         border-bottom:1px solid rgba(255,255,255,0.05);
         color:#f2f2f2;
     }
 
     .custom-table tr:hover {
+
         background:rgba(88,255,47,0.06);
     }
 
     table {
+
         width:100% !important;
     }
 
@@ -171,6 +207,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# =========================
+# BANNER
+# =========================
+
 if BANNER_FILE.exists():
 
     st.image(
@@ -178,8 +218,11 @@ if BANNER_FILE.exists():
         use_container_width=True
     )
 
+# =========================
+# TABS
+# =========================
 
-live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
     "🚨 LIVE",
     "⚽ PREMATCH",
@@ -190,19 +233,24 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
 
 ])
 
+# =========================
+# LIVE
+# =========================
 
-with live_tab:
+with tab1:
 
     st.markdown(
         """
         <div class="panel">
 
             <div class="panel-title">
+
                 <div class="green-dot"></div>
 
                 <h2 style="margin:0;">
                     LIVE SIGNALS
                 </h2>
+
             </div>
 
             <div class="subtitle">
@@ -228,19 +276,91 @@ with live_tab:
 
         st.warning("Brak danych LIVE")
 
+    st.markdown(
+        """
+        <div class="panel">
 
-with prematch_tab:
+            <h2>
+                CASHOUT AI GUIDE
+            </h2>
+
+            <div style="
+                margin-top:14px;
+                padding:16px;
+                border-radius:12px;
+                border:1px solid rgba(88,255,47,0.35);
+                background:rgba(88,255,47,0.08);
+            ">
+
+                <b style="color:#70ff2f;">
+                    HOLD POSITION
+                </b><br>
+
+                <span style="color:#cfd4d8;">
+                    Wysoka presja i momentum.
+                </span>
+
+            </div>
+
+            <div style="
+                margin-top:12px;
+                padding:16px;
+                border-radius:12px;
+                border:1px solid rgba(255,210,26,0.35);
+                background:rgba(255,210,26,0.08);
+            ">
+
+                <b style="color:#ffd21a;">
+                    PARTIAL CASHOUT
+                </b><br>
+
+                <span style="color:#cfd4d8;">
+                    Rozważ częściowe wyjście.
+                </span>
+
+            </div>
+
+            <div style="
+                margin-top:12px;
+                padding:16px;
+                border-radius:12px;
+                border:1px solid rgba(255,59,48,0.35);
+                background:rgba(255,59,48,0.08);
+            ">
+
+                <b style="color:#ff3b30;">
+                    FULL CASHOUT
+                </b><br>
+
+                <span style="color:#cfd4d8;">
+                    Wyjdź z zakładu.
+                </span>
+
+            </div>
+
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# =========================
+# PREMATCH
+# =========================
+
+with tab2:
 
     st.markdown(
         """
         <div class="panel">
 
             <div class="panel-title">
+
                 <div class="green-dot"></div>
 
                 <h2 style="margin:0;">
                     PREMATCH PICKS
                 </h2>
+
             </div>
 
             <div class="subtitle">
@@ -254,6 +374,38 @@ with prematch_tab:
 
     if not prematch_df.empty:
 
+        wanted_columns = [
+
+            "data",
+            "liga",
+            "mecz",
+            "market",
+            "typ",
+            "kurs_buk",
+            "kurs_model",
+            "kurs_bota",
+            "prawd_model",
+            "prawd_rynek",
+            "prawd_final",
+            "edge",
+            "ev",
+            "kelly_full",
+            "kelly_25",
+            "home_xg",
+            "away_xg",
+            "marza_sum",
+            "marza_%",
+            "status"
+        ]
+
+        existing_columns = [
+
+            col for col in wanted_columns
+            if col in prematch_df.columns
+        ]
+
+        prematch_df = prematch_df[existing_columns]
+
         st.markdown(
             prematch_df.to_html(
                 index=False,
@@ -266,49 +418,77 @@ with prematch_tab:
 
         st.warning("Brak danych PREMATCH")
 
+# =========================
+# ANALYTICS
+# =========================
 
-with analytics_tab:
+with tab3:
 
     st.markdown(
         """
         <div class="panel">
-            <h2>ANALYTICS ENGINE</h2>
+
+            <h2>
+                ANALYTICS ENGINE
+            </h2>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
+# =========================
+# HISTORY
+# =========================
 
-with history_tab:
+with tab4:
 
     st.markdown(
         """
         <div class="panel">
-            <h2>HISTORY ENGINE</h2>
+
+            <h2>
+                HISTORY ENGINE
+            </h2>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
+# =========================
+# RANKING
+# =========================
 
-with ranking_tab:
+with tab5:
 
     st.markdown(
         """
         <div class="panel">
-            <h2>RANKING ENGINE</h2>
+
+            <h2>
+                RANKING ENGINE
+            </h2>
+
         </div>
         """,
         unsafe_allow_html=True
     )
 
+# =========================
+# ALERTS
+# =========================
 
-with alerts_tab:
+with tab6:
 
     st.markdown(
         """
         <div class="panel">
-            <h2>ALERT ENGINE</h2>
+
+            <h2>
+                ALERT ENGINE
+            </h2>
+
         </div>
         """,
         unsafe_allow_html=True
