@@ -161,10 +161,62 @@ st.markdown(
         border-bottom:3px solid #58ff2f !important;
     }
 
-    .stDataFrame {
+    /* =========================
+       TABLES
+    ========================= */
 
+    .custom-table {
+
+        width:100%;
+        border-collapse:collapse;
+        background:#0d1014;
         border-radius:14px;
         overflow:hidden;
+        font-size:14px;
+    }
+
+    .custom-table th {
+
+        background:#11161c;
+        color:#58ff2f;
+        padding:16px;
+        text-align:left;
+        border-bottom:1px solid rgba(255,255,255,0.08);
+        position:sticky;
+        top:0;
+        z-index:2;
+    }
+
+    .custom-table td {
+
+        padding:14px 16px;
+        border-bottom:1px solid rgba(255,255,255,0.05);
+        color:#f2f2f2;
+    }
+
+    .custom-table tr:hover {
+
+        background:rgba(88,255,47,0.06);
+    }
+
+    table {
+
+        width:100% !important;
+    }
+
+    .element-container {
+
+        overflow:visible !important;
+    }
+
+    [data-testid="stTable"] {
+
+        overflow:visible !important;
+    }
+
+    [data-testid="stVerticalBlock"] {
+
+        overflow:visible !important;
     }
 
     </style>
@@ -229,13 +281,14 @@ with tab1:
 
     if not live_df.empty:
 
-        st.dataframe(
-            live_df,
-            use_container_width=True,
-            height=min(
-                900,
-                35 * len(live_df) + 120
-            )
+        st.markdown(
+
+            live_df.to_html(
+                index=False,
+                classes="custom-table"
+            ),
+
+            unsafe_allow_html=True
         )
 
     else:
@@ -376,13 +429,14 @@ with tab2:
 
         prematch_df = prematch_df[existing_columns]
 
-        st.dataframe(
-            prematch_df,
-            use_container_width=True,
-            height=min(
-                900,
-                35 * len(prematch_df) + 120
-            )
+        st.markdown(
+
+            prematch_df.to_html(
+                index=False,
+                classes="custom-table"
+            ),
+
+            unsafe_allow_html=True
         )
 
     else:
