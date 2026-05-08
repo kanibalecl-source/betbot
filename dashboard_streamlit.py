@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 import random
-from datetime import datetime
 
 # =========================
 # CONFIG
@@ -15,14 +14,13 @@ st.set_page_config(
 )
 
 DATA_DIR = Path("data")
+DATA_DIR.mkdir(exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 
-BANNER_FILE = Path("kanibal_banner_pro.webp")
-
 # =========================
-# LOAD DATA
+# LOAD CSV
 # =========================
 
 def load_csv(path):
@@ -38,18 +36,14 @@ def load_csv(path):
     return pd.DataFrame()
 
 # =========================
-# LOAD LIVE
+# LIVE DATA
 # =========================
 
 live_df = load_csv(LIVE_FILE)
 
-# =========================
-# AUTO GENERATE LIVE DATA
-# =========================
-
 if live_df.empty:
 
-    sample_live = pd.DataFrame([
+    live_df = pd.DataFrame([
 
         {
             "home": "Barcelona",
@@ -64,8 +58,7 @@ if live_df.empty:
             "cashout": "HOLD",
             "stake": "3%",
             "risk": "LOW",
-            "status": "LIVE",
-            "updated_at": datetime.utcnow()
+            "status": "LIVE"
         },
 
         {
@@ -81,166 +74,185 @@ if live_df.empty:
             "cashout": "PARTIAL",
             "stake": "2%",
             "risk": "MEDIUM",
-            "status": "LIVE",
-            "updated_at": datetime.utcnow()
+            "status": "LIVE"
         }
 
     ])
 
-    DATA_DIR.mkdir(exist_ok=True)
-
-    sample_live.to_csv(LIVE_FILE, index=False)
-
-    live_df = sample_live
-
 # =========================
-# LOAD PREMATCH
+# PREMATCH
 # =========================
 
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
-# CSS
+# STYLE
 # =========================
 
-st.markdown(
-    """
-    <style>
+st.markdown("""
+<style>
 
-    .stApp {
+.stApp {
 
-        background:
-            radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
-            radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
-            linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
+    background:
+        radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
+        radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
+        linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
 
-        color:white;
-    }
+    color:white;
+}
 
-    header[data-testid="stHeader"] {
+header[data-testid="stHeader"] {
 
-        background:transparent;
-    }
+    background:transparent;
+}
 
-    .block-container {
+.block-container {
 
-        max-width:100% !important;
-        padding-top:0.6rem;
-        padding-left:2rem;
-        padding-right:2rem;
-    }
+    max-width:100% !important;
+    padding-top:1rem;
+    padding-left:2rem;
+    padding-right:2rem;
+}
 
-    .panel {
+h1, h2, h3 {
 
-        border:1px solid rgba(255,255,255,0.08);
+    color:white !important;
+    font-weight:900 !important;
+}
 
-        border-radius:18px;
+.stTabs [data-baseweb="tab-list"] {
 
-        background:
-            linear-gradient(
-                180deg,
-                rgba(255,255,255,0.045),
-                rgba(255,255,255,0.018)
-            );
+    gap:0;
+    background:#090b0d;
+    border-radius:14px;
+    overflow:hidden;
+    border:1px solid rgba(255,255,255,0.08);
+    margin-top:16px;
+    margin-bottom:24px;
+}
 
-        padding:26px;
+.stTabs [data-baseweb="tab"] {
 
-        margin-bottom:22px;
+    height:68px;
+    background:#090b0d;
+    color:white;
+    font-weight:800;
+    font-size:13px;
+    border-right:1px solid rgba(255,255,255,0.06);
+    flex-grow:1;
+}
 
-        box-shadow:0 18px 45px rgba(0,0,0,0.35);
-    }
+.stTabs [aria-selected="true"] {
 
-    h1, h2 {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(88,255,47,0.15),
+            rgba(88,255,47,0.05)
+        ) !important;
 
-        color:white !important;
-    }
+    color:#58ff2f !important;
 
-    .stTabs [data-baseweb="tab-list"] {
+    border-bottom:3px solid #58ff2f !important;
+}
 
-        gap:0;
-        background:#090b0d;
-        border-radius:14px;
-        overflow:hidden;
-        border:1px solid rgba(255,255,255,0.08);
-        margin-top:16px;
-        margin-bottom:24px;
-    }
+.section-box {
 
-    .stTabs [data-baseweb="tab"] {
+    border:1px solid rgba(255,255,255,0.08);
 
-        height:68px;
-        background:#090b0d;
-        color:white;
-        font-weight:800;
-        font-size:13px;
-        border-right:1px solid rgba(255,255,255,0.06);
-        flex-grow:1;
-    }
+    border-radius:18px;
 
-    .stTabs [aria-selected="true"] {
+    background:
+        linear-gradient(
+            180deg,
+            rgba(255,255,255,0.045),
+            rgba(255,255,255,0.018)
+        );
 
-        background:
-            linear-gradient(
-                180deg,
-                rgba(88,255,47,0.15),
-                rgba(88,255,47,0.05)
-            ) !important;
+    padding:24px;
 
-        color:#58ff2f !important;
+    margin-bottom:24px;
 
-        border-bottom:3px solid #58ff2f !important;
-    }
+    box-shadow:0 18px 45px rgba(0,0,0,0.35);
+}
 
-    .custom-table {
+.live-card {
 
-        width:100%;
-        border-collapse:collapse;
-        background:#0d1014;
-        border-radius:14px;
-        overflow:hidden;
-        font-size:14px;
-        margin-top:12px;
-    }
+    padding:18px;
+    border-radius:14px;
+    margin-bottom:14px;
+    font-weight:700;
+}
 
-    .custom-table th {
+.green {
 
-        background:#11161c;
-        color:#58ff2f;
-        padding:16px;
-        text-align:left;
-        border-bottom:1px solid rgba(255,255,255,0.08);
-    }
+    background:rgba(88,255,47,0.08);
+    border:1px solid rgba(88,255,47,0.25);
+    color:#58ff2f;
+}
 
-    .custom-table td {
+.yellow {
 
-        padding:14px 16px;
-        border-bottom:1px solid rgba(255,255,255,0.05);
-        color:#f2f2f2;
-    }
+    background:rgba(255,210,26,0.08);
+    border:1px solid rgba(255,210,26,0.25);
+    color:#ffd21a;
+}
 
-    .custom-table tr:hover {
+.red {
 
-        background:rgba(88,255,47,0.06);
-    }
+    background:rgba(255,59,48,0.08);
+    border:1px solid rgba(255,59,48,0.25);
+    color:#ff3b30;
+}
 
-    table {
+[data-testid="stTable"] {
 
-        width:100% !important;
-    }
+    width:100%;
+}
 
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+table {
+
+    width:100% !important;
+    border-collapse:collapse !important;
+    background:#0d1014 !important;
+    color:#f2f2f2 !important;
+}
+
+thead tr th {
+
+    background:#11161c !important;
+    color:#58ff2f !important;
+    padding:14px !important;
+    font-size:14px !important;
+    border-bottom:1px solid rgba(255,255,255,0.08) !important;
+}
+
+tbody tr td {
+
+    padding:14px !important;
+    border-bottom:1px solid rgba(255,255,255,0.05) !important;
+    font-size:13px !important;
+}
+
+tbody tr:hover {
+
+    background:rgba(88,255,47,0.05) !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
 # BANNER
 # =========================
 
-if BANNER_FILE.exists():
+banner = Path("kanibal_banner_pro.webp")
+
+if banner.exists():
 
     st.image(
-        str(BANNER_FILE),
+        str(banner),
         use_container_width=True
     )
 
@@ -265,125 +277,39 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 with tab1:
 
-    st.markdown(
-        """
-        <div class="panel">
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
 
-            <h2>
-                LIVE SIGNALS
-            </h2>
+    st.title("LIVE SIGNALS")
 
-            <div style="
-                color:#8f969d;
-                font-size:12px;
-                letter-spacing:1px;
-                text-transform:uppercase;
-            ">
-                AKTUALIZOWANE CO 60 SEKUND
-            </div>
+    st.caption("AKTUALIZOWANE CO 60 SEKUND")
 
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown(
-        live_df.to_html(
-            index=False,
-            classes="custom-table"
-        ),
-        unsafe_allow_html=True
-    )
+    st.table(live_df)
 
-    st.markdown(
-        """
-        <div class="panel">
+    st.markdown("<br>", unsafe_allow_html=True)
 
-            <h2 style="margin-bottom:20px;">
-                CASHOUT AI GUIDE
-            </h2>
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
 
-            <div style="
-                padding:18px;
-                border-radius:14px;
-                background:rgba(88,255,47,0.08);
-                border:1px solid rgba(88,255,47,0.25);
-                margin-bottom:14px;
-            ">
+    st.title("CASHOUT AI GUIDE")
 
-                <div style="
-                    display:inline-block;
-                    padding:8px 14px;
-                    border-radius:10px;
-                    background:rgba(88,255,47,0.15);
-                    color:#58ff2f;
-                    font-weight:800;
-                    margin-bottom:10px;
-                ">
-                    HOLD POSITION
-                </div>
+    st.markdown("""
 
-                <div style="color:#cfd4d8;">
-                    Wysoka presja i momentum. Trzymaj zakład.
-                </div>
+    <div class="live-card green">
+        HOLD POSITION — Wysoka presja i momentum. Trzymaj zakład.
+    </div>
 
-            </div>
+    <div class="live-card yellow">
+        PARTIAL CASHOUT — Spadający confidence. Rozważ częściowe wyjście.
+    </div>
 
-            <div style="
-                padding:18px;
-                border-radius:14px;
-                background:rgba(255,210,26,0.08);
-                border:1px solid rgba(255,210,26,0.25);
-                margin-bottom:14px;
-            ">
+    <div class="live-card red">
+        FULL CASHOUT — Niski momentum i presja. Wyjdź z zakładu.
+    </div>
 
-                <div style="
-                    display:inline-block;
-                    padding:8px 14px;
-                    border-radius:10px;
-                    background:rgba(255,210,26,0.15);
-                    color:#ffd21a;
-                    font-weight:800;
-                    margin-bottom:10px;
-                ">
-                    PARTIAL CASHOUT
-                </div>
+    """, unsafe_allow_html=True)
 
-                <div style="color:#cfd4d8;">
-                    Spadający confidence. Rozważ częściowe wyjście.
-                </div>
-
-            </div>
-
-            <div style="
-                padding:18px;
-                border-radius:14px;
-                background:rgba(255,59,48,0.08);
-                border:1px solid rgba(255,59,48,0.25);
-            ">
-
-                <div style="
-                    display:inline-block;
-                    padding:8px 14px;
-                    border-radius:10px;
-                    background:rgba(255,59,48,0.15);
-                    color:#ff3b30;
-                    font-weight:800;
-                    margin-bottom:10px;
-                ">
-                    FULL CASHOUT
-                </div>
-
-                <div style="color:#cfd4d8;">
-                    Niski momentum i presja. Wyjdź z zakładu.
-                </div>
-
-            </div>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # PREMATCH
@@ -391,32 +317,47 @@ with tab1:
 
 with tab2:
 
-    st.markdown(
-        """
-        <div class="panel">
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
 
-            <h2>
-                PREMATCH PICKS
-            </h2>
+    st.title("PREMATCH PICKS")
 
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    if prematch_df.empty:
 
-    if not prematch_df.empty:
-
-        st.markdown(
-            prematch_df.to_html(
-                index=False,
-                classes="custom-table"
-            ),
-            unsafe_allow_html=True
-        )
+        st.warning("Brak danych PREMATCH")
 
     else:
 
-        st.warning("Brak danych PREMATCH")
+        columns = [
+
+            "data",
+            "liga",
+            "mecz",
+            "market",
+            "typ",
+            "kurs_buk",
+            "kurs_model",
+            "kurs_bota",
+            "prawd_model",
+            "prawd_rynek",
+            "prawd_final",
+            "edge",
+            "ev",
+            "kelly_full",
+            "kelly_25",
+            "home_xg",
+            "away_xg",
+            "marza_sum",
+            "marza_%",
+            "status"
+        ]
+
+        existing = [c for c in columns if c in prematch_df.columns]
+
+        st.table(
+            prematch_df[existing]
+        )
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # ANALYTICS
@@ -424,14 +365,17 @@ with tab2:
 
 with tab3:
 
-    st.markdown(
-        """
-        <div class="panel">
-            <h2>ANALYTICS ENGINE</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("ANALYTICS ENGINE")
+
+    st.metric("ROI", "+24.8%")
+
+    st.metric("WIN RATE", "62.8%")
+
+    st.metric("AI EDGE", "+13.4%")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # HISTORY
@@ -439,14 +383,13 @@ with tab3:
 
 with tab4:
 
-    st.markdown(
-        """
-        <div class="panel">
-            <h2>HISTORY ENGINE</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("HISTORY ENGINE")
+
+    st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # RANKING
@@ -454,14 +397,13 @@ with tab4:
 
 with tab5:
 
-    st.markdown(
-        """
-        <div class="panel">
-            <h2>RANKING ENGINE</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("RANKING ENGINE")
+
+    st.info("TOP VALUE PICKS coming soon.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # ALERTS
@@ -469,11 +411,10 @@ with tab5:
 
 with tab6:
 
-    st.markdown(
-        """
-        <div class="panel">
-            <h2>ALERT ENGINE</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+
+    st.title("ALERT ENGINE")
+
+    st.info("Alerty AI będą dostępne po wdrożeniu Notification Engine.")
+
+    st.markdown('</div>', unsafe_allow_html=True)
