@@ -156,6 +156,22 @@ def calculate_value(confidence, odds):
         return 0
 
 
+def calculate_ev(confidence, odds):
+
+    try:
+
+        probability = confidence / 100
+
+        ev = (
+            probability * odds
+        ) - 1
+
+        return round(ev * 100, 2)
+
+    except:
+        return 0
+
+
 def get_live_matches():
 
     url = "https://v3.football.api-sports.io/fixtures?live=all"
@@ -194,7 +210,7 @@ def get_live_matches():
             odds = get_live_odds(fixture_id)
 
             # =========================
-            # LIVE VALUE AI SIGNALS
+            # LIVE EV AI SIGNALS
             # =========================
 
             live_pick = "NO SIGNAL"
@@ -230,6 +246,8 @@ def get_live_matches():
 
             value = calculate_value(confidence, odds) if odds else 0
 
+            ev = calculate_ev(confidence, odds) if odds else 0
+
             matches.append({
 
                 "home": m["teams"]["home"]["name"],
@@ -243,6 +261,7 @@ def get_live_matches():
                 "confidence": confidence,
                 "odds": odds,
                 "value": value,
+                "ev": ev,
                 "status": m["fixture"]["status"]["short"]
 
             })
@@ -256,7 +275,7 @@ def get_live_matches():
         return []
 
 
-print("🚀 LIVE VALUE ENGINE STARTED")
+print("🚀 LIVE EV ENGINE STARTED")
 
 while True:
 
