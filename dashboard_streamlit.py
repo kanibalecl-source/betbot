@@ -5,9 +5,9 @@ import requests
 import random
 import os
 
-# =========================================================
+# =====================================================
 # CONFIG
-# =========================================================
+# =====================================================
 
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
@@ -15,18 +15,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# =========================================================
-# PATHS
-# =========================================================
-
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 
-# =========================================================
-# LOAD CSV
-# =========================================================
+# =====================================================
+# CSV
+# =====================================================
 
 def load_csv(path):
 
@@ -35,40 +31,38 @@ def load_csv(path):
         try:
             return pd.read_csv(path)
 
-        except Exception:
+        except:
             return pd.DataFrame()
 
     return pd.DataFrame()
 
-# =========================================================
-# LOAD PREMATCH
-# =========================================================
-
 prematch_df = load_csv(PREMATCH_FILE)
 
-# =========================================================
-# REAL LIVE FETCH
-# =========================================================
+# =====================================================
+# LIVE API
+# =====================================================
+
+@st.cache_data(ttl=60)
 
 def get_live_matches():
 
+    api_key = os.getenv("API_FOOTBALL_KEY")
+
+    if not api_key:
+        return pd.DataFrame()
+
+    url = "https://v3.football.api-sports.io/fixtures?live=all"
+
+    headers = {
+        "x-apisports-key": api_key
+    }
+
     try:
-
-        api_key = os.getenv("API_FOOTBALL_KEY")
-
-        if not api_key:
-            return pd.DataFrame()
-
-        url = "https://v3.football.api-sports.io/fixtures?live=all"
-
-        headers = {
-            "x-apisports-key": api_key
-        }
 
         response = requests.get(
             url,
             headers=headers,
-            timeout=30
+            timeout=20
         )
 
         if response.status_code != 200:
@@ -76,71 +70,74 @@ def get_live_matches():
 
         data = response.json()
 
-        if "response" not in data:
+        response_data = data.get("response", [])
+
+        if not response_data:
             return pd.DataFrame()
 
         rows = []
 
-        for item in data["response"]:
+        for item in response_data:
 
-            try:
+            home = item["teams"]["home"]["name"]
+            away = item["teams"]["away"]["name"]
 
-                home = item["teams"]["home"]["name"]
-                away = item["teams"]["away"]["name"]
+            league = item["league"]["name"]
 
-                league = item["league"]["name"]
+            minute = item["fixture"]["status"]["elapsed"]
 
-                minute = item["fixture"]["status"]["elapsed"]
+            home_goals = item["goals"]["home"]
+            away_goals = item["goals"]["away"]
 
-                home_goals = item["goals"]["home"]
-                away_goals = item["goals"]["away"]
+            rows.append({
 
-                score = f"{home_goals}-{away_goals}"
+                "MECZ": f"{home} vs {away}",
+                "LIGA": league,
+                "MIN": minute,
+                "WYNIK": f"{home_goals}-{away_goals}",
 
-                rows.append({
+                "SYGNAŁ": random.choice([
+                    "OVER 2.5",
+                    "BTTS YES",
+                    "OVER 3.5",
+                    "HOME GOAL"
+                ]),
 
-                    "MECZ": f"{home} vs {away}",
-                    "LIGA": league,
-                    "MIN": minute,
-                    "WYNIK": score,
-                    "SYGNAŁ": random.choice([
-                        "OVER 2.5",
-                        "BTTS YES",
-                        "HOME GOAL",
-                        "OVER 3.5"
-                    ]),
-                    "CONF": random.randint(70, 96),
-                    "EV": round(random.uniform(3, 18), 2),
-                    "VALUE": random.choice([
-                        "LOW",
-                        "MEDIUM",
-                        "HIGH"
-                    ]),
-                    "CASHOUT": random.choice([
-                        "HOLD",
-                        "PARTIAL",
-                        "FULL"
-                    ])
+                "CONF": random.randint(70, 96),
 
-                })
+                "EV": round(
+                    random.uniform(3, 18),
+                    2
+                ),
 
-            except Exception:
-                pass
+                "VALUE": random.choice([
+                    "LOW",
+                    "MEDIUM",
+                    "HIGH"
+                ]),
+
+                "CASHOUT": random.choice([
+                    "HOLD",
+                    "PARTIAL",
+                    "FULL"
+                ])
+
+            })
 
         return pd.DataFrame(rows)
 
-    except Exception:
+    except:
         return pd.DataFrame()
 
-# =========================================================
-# LIVE DATA
-# =========================================================
+# =====================================================
+# LOAD LIVE
+# =====================================================
 
 live_df = get_live_matches()
 
-# =========================================================
+# =====================================================
 # STYLE
-# =========================================================
+# =====================================================
 
 st.markdown("""
 <style>
@@ -283,17 +280,12 @@ tbody tr td {
     font-size:13px !important;
 }
 
-tbody tr:hover {
-
-    background:rgba(88,255,47,0.05) !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
-# =========================================================
+# =====================================================
 # BANNER
-# =========================================================
+# =====================================================
 
 banner = Path("kanibal_banner_pro.webp")
 
@@ -304,9 +296,9 @@ if banner.exists():
         use_container_width=True
     )
 
-# =========================================================
+# =====================================================
 # TABS
-# =========================================================
+# =====================================================
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
@@ -319,9 +311,9 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 ])
 
-# =========================================================
+# =====================================================
 # LIVE
-# =========================================================
+# =====================================================
 
 with tab1:
 
@@ -335,7 +327,7 @@ with tab1:
 
     if live_df.empty:
 
-        st.warning("Brak danych LIVE lub brak aktywnych meczów.")
+        st.warning("Brak aktywnych danych LIVE z API.")
 
     else:
 
@@ -350,24 +342,24 @@ with tab1:
     st.markdown("""
 
     <div class="live-card green">
-        HOLD POSITION — Wysoka presja i momentum. Trzymaj zakład.
+        HOLD POSITION — Wysoka presja i momentum.
     </div>
 
     <div class="live-card yellow">
-        PARTIAL CASHOUT — Spadający confidence. Rozważ częściowe wyjście.
+        PARTIAL CASHOUT — Spadający confidence.
     </div>
 
     <div class="live-card red">
-        FULL CASHOUT — Niski momentum i presja. Wyjdź z zakładu.
+        FULL CASHOUT — Niski momentum.
     </div>
 
     """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =========================================================
+# =====================================================
 # PREMATCH
-# =========================================================
+# =====================================================
 
 with tab2:
 
@@ -381,93 +373,6 @@ with tab2:
 
     else:
 
-        columns = [
-
-            "data",
-            "liga",
-            "mecz",
-            "market",
-            "typ",
-            "kurs_buk",
-            "kurs_model",
-            "kurs_bota",
-            "prawd_model",
-            "prawd_rynek",
-            "prawd_final",
-            "edge",
-            "ev",
-            "kelly_full",
-            "kelly_25",
-            "home_xg",
-            "away_xg",
-            "marza_sum",
-            "marza_%",
-            "status"
-
-        ]
-
-        existing = [c for c in columns if c in prematch_df.columns]
-
-        st.table(
-            prematch_df[existing]
-        )
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================================================
-# ANALYTICS
-# =========================================================
-
-with tab3:
-
-    st.markdown('<div class="section-box">', unsafe_allow_html=True)
-
-    st.title("ANALYTICS ENGINE")
-
-    st.metric("ROI", "+24.8%")
-    st.metric("WIN RATE", "62.8%")
-    st.metric("AI EDGE", "+13.4%")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================================================
-# HISTORY
-# =========================================================
-
-with tab4:
-
-    st.markdown('<div class="section-box">', unsafe_allow_html=True)
-
-    st.title("HISTORY ENGINE")
-
-    st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================================================
-# RANKING
-# =========================================================
-
-with tab5:
-
-    st.markdown('<div class="section-box">', unsafe_allow_html=True)
-
-    st.title("RANKING ENGINE")
-
-    st.info("TOP VALUE PICKS coming soon.")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================================================
-# ALERTS
-# =========================================================
-
-with tab6:
-
-    st.markdown('<div class="section-box">', unsafe_allow_html=True)
-
-    st.title("ALERT ENGINE")
-
-    st.info("Alerty AI będą dostępne po wdrożeniu Notification Engine.")
+        st.table(prematch_df)
 
     st.markdown('</div>', unsafe_allow_html=True)
