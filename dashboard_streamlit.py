@@ -40,6 +40,10 @@ def load_csv(path):
 
     return pd.DataFrame()
 
+# =====================================================
+# LOAD PREMATCH
+# =====================================================
+
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =====================================================
@@ -74,7 +78,10 @@ def get_live_matches():
 
         data = response.json()
 
-        matches = data.get("response", [])
+        if "response" not in data:
+            return pd.DataFrame()
+
+        matches = data["response"]
 
         if not matches:
             return pd.DataFrame()
@@ -100,33 +107,7 @@ def get_live_matches():
                     "MECZ": f"{home} vs {away}",
                     "LIGA": league,
                     "MIN": minute,
-                    "WYNIK": f"{home_goals}-{away_goals}",
-
-                    "SYGNAŁ": random.choice([
-                        "OVER 2.5",
-                        "BTTS YES",
-                        "OVER 3.5",
-                        "HOME GOAL"
-                    ]),
-
-                    "CONF": random.randint(70, 96),
-
-                    "EV": round(
-                        random.uniform(3, 18),
-                        2
-                    ),
-
-                    "VALUE": random.choice([
-                        "LOW",
-                        "MEDIUM",
-                        "HIGH"
-                    ]),
-
-                    "CASHOUT": random.choice([
-                        "HOLD",
-                        "PARTIAL",
-                        "FULL"
-                    ])
+                    "WYNIK": f"{home_goals}-{away_goals}"
 
                 })
 
@@ -137,6 +118,10 @@ def get_live_matches():
 
     except:
         return pd.DataFrame()
+
+# =====================================================
+# LOAD LIVE
+# =====================================================
 
 live_df = get_live_matches()
 
@@ -232,35 +217,6 @@ h1, h2, h3 {
     box-shadow:0 18px 45px rgba(0,0,0,0.35);
 }
 
-.live-card {
-
-    padding:18px;
-    border-radius:14px;
-    margin-bottom:14px;
-    font-weight:700;
-}
-
-.green {
-
-    background:rgba(88,255,47,0.08);
-    border:1px solid rgba(88,255,47,0.25);
-    color:#58ff2f;
-}
-
-.yellow {
-
-    background:rgba(255,210,26,0.08);
-    border:1px solid rgba(255,210,26,0.25);
-    color:#ffd21a;
-}
-
-.red {
-
-    background:rgba(255,59,48,0.08);
-    border:1px solid rgba(255,59,48,0.25);
-    color:#ff3b30;
-}
-
 table {
 
     width:100% !important;
@@ -275,14 +231,13 @@ thead tr th {
     color:#58ff2f !important;
     padding:14px !important;
     font-size:14px !important;
-    border-bottom:1px solid rgba(255,255,255,0.08) !important;
 }
 
 tbody tr td {
 
     padding:14px !important;
-    border-bottom:1px solid rgba(255,255,255,0.05) !important;
     font-size:13px !important;
+    border-bottom:1px solid rgba(255,255,255,0.05) !important;
 }
 
 </style>
@@ -305,14 +260,10 @@ if banner.exists():
 # TABS
 # =====================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2 = st.tabs([
 
     "🚨 LIVE",
-    "⚽ PREMATCH",
-    "📊 ANALYTICS",
-    "🕘 HISTORY",
-    "🏆 RANKING",
-    "🔔 ALERTS"
+    "⚽ PREMATCH"
 
 ])
 
@@ -326,10 +277,6 @@ with tab1:
 
     st.title("LIVE SIGNALS")
 
-    st.caption("AKTUALIZOWANE CO 60 SEKUND")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
     if live_df.empty:
 
         st.warning("Brak aktywnych meczów LIVE.")
@@ -337,6 +284,8 @@ with tab1:
     else:
 
         st.table(live_df)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =====================================================
 # PREMATCH
