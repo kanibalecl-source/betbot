@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import random
 
 # =========================
 # CONFIG
@@ -36,53 +35,10 @@ def load_csv(path):
     return pd.DataFrame()
 
 # =========================
-# LIVE DATA
+# LOAD DATA
 # =========================
 
 live_df = load_csv(LIVE_FILE)
-
-if live_df.empty:
-
-    live_df = pd.DataFrame([
-
-        {
-            "home": "Barcelona",
-            "away": "Real Madrid",
-            "league": "La Liga",
-            "minute": random.randint(1, 90),
-            "score": "2-1",
-            "signal": "OVER 3.5",
-            "confidence": 92,
-            "ev": 14.2,
-            "value": "HIGH",
-            "cashout": "HOLD",
-            "stake": "3%",
-            "risk": "LOW",
-            "status": "LIVE"
-        },
-
-        {
-            "home": "Liverpool",
-            "away": "Arsenal",
-            "league": "Premier League",
-            "minute": random.randint(1, 90),
-            "score": "1-1",
-            "signal": "BTTS YES",
-            "confidence": 88,
-            "ev": 11.4,
-            "value": "MEDIUM",
-            "cashout": "PARTIAL",
-            "stake": "2%",
-            "risk": "MEDIUM",
-            "status": "LIVE"
-        }
-
-    ])
-
-# =========================
-# PREMATCH
-# =========================
-
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
@@ -285,7 +241,13 @@ with tab1:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.table(live_df)
+    if live_df.empty:
+
+        st.warning("Brak danych LIVE")
+
+    else:
+
+        st.table(live_df)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
