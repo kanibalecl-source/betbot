@@ -49,6 +49,45 @@ def get_fixture_statistics(fixture_id):
         return {}
 
 
+def get_live_odds(fixture_id):
+
+    url = f"https://v3.football.api-sports.io/odds/live?fixture={fixture_id}"
+
+    try:
+
+        res = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=20
+        )
+
+        data = res.json().get("response", [])
+
+        if not data:
+            return None
+
+        bookmakers = data[0].get("bookmakers", [])
+
+        for book in bookmakers:
+
+            bets = book.get("bets", [])
+
+            for bet in bets:
+
+                if bet["name"] == "Goals Over/Under":
+
+                    for value in bet["values"]:
+
+                        if value["value"] == "Over 2.5":
+
+                            return float(value["odd"])
+
+        return None
+
+    except:
+        return None
+
+
 def pressure_score(stats):
 
     try:
@@ -98,6 +137,25 @@ def momentum_score(stats):
         return 0
 
 
+def calculate_value(confidence, odds):
+
+    try:
+
+        implied_probability = 1 / odds
+
+        model_probability = confidence / 100
+
+        value = (
+            model_probability -
+            implied_probability
+        ) * 100
+
+        return round(value, 2)
+
+    except:
+        return 0
+
+
 def get_live_matches():
 
     url = "https://v3.football.api-sports.io/fixtures?live=all"
@@ -133,8 +191,10 @@ def get_live_matches():
 
             momentum = momentum_score(stats)
 
+            odds = get_live_odds(fixture_id)
+
             # =========================
-            # LIVE MOMENTUM AI SIGNALS
+            # LIVE VALUE AI SIGNALS
             # =========================
 
             live_pick = "NO SIGNAL"
@@ -168,6 +228,8 @@ def get_live_matches():
                 live_pick = "OVER 1.5"
                 confidence = 76
 
+            value = calculate_value(confidence, odds) if odds else 0
+
             matches.append({
 
                 "home": m["teams"]["home"]["name"],
@@ -179,6 +241,8 @@ def get_live_matches():
                 "momentum": momentum,
                 "signal": live_pick,
                 "confidence": confidence,
+                "odds": odds,
+                "value": value,
                 "status": m["fixture"]["status"]["short"]
 
             })
@@ -192,7 +256,7 @@ def get_live_matches():
         return []
 
 
-print("🚀 LIVE MOMENTUM ENGINE STARTED")
+print("🚀 LIVE VALUE ENGINE STARTED")
 
 while True:
 
