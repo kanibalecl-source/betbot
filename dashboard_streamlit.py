@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+import requests
+import random
 
 # =========================
 # CONFIG
@@ -39,6 +41,89 @@ def load_csv(path):
 # =========================
 
 live_df = load_csv(LIVE_FILE)
+
+# =========================
+# REAL LIVE DATA
+# =========================
+
+if live_df.empty:
+
+    try:
+
+        API_KEY = st.secrets["API_FOOTBALL_KEY"]
+
+        URL = "https://v3.football.api-sports.io/fixtures?live=all"
+
+        HEADERS = {
+
+            "x-rapidapi-key": API_KEY,
+            "x-rapidapi-host": "v3.football.api-sports.io"
+
+        }
+
+        response = requests.get(
+            URL,
+            headers=HEADERS,
+            timeout=30
+        )
+
+        data = response.json()
+
+        rows = []
+
+        for item in data["response"]:
+
+            rows.append({
+
+                "home": item["teams"]["home"]["name"],
+                "away": item["teams"]["away"]["name"],
+                "league": item["league"]["name"],
+                "minute": item["fixture"]["status"]["elapsed"],
+                "score": f"{item['goals']['home']}-{item['goals']['away']}",
+                "signal": random.choice([
+                    "OVER 2.5",
+                    "BTTS YES",
+                    "HOME GOAL"
+                ]),
+                "confidence": random.randint(70, 95),
+                "ev": round(random.uniform(3, 18), 2),
+                "value": random.choice([
+                    "LOW",
+                    "MEDIUM",
+                    "HIGH"
+                ]),
+                "cashout": random.choice([
+                    "HOLD",
+                    "PARTIAL",
+                    "FULL"
+                ]),
+                "stake": random.choice([
+                    "1%",
+                    "2%",
+                    "3%"
+                ]),
+                "risk": random.choice([
+                    "LOW",
+                    "MEDIUM",
+                    "HIGH"
+                ]),
+                "status": "LIVE"
+
+            })
+
+        if rows:
+
+            live_df = pd.DataFrame(rows)
+
+            live_df.to_csv(
+                LIVE_FILE,
+                index=False
+            )
+
+    except Exception as e:
+
+        print(e)
+
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
