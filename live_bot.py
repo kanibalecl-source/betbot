@@ -16,10 +16,16 @@ LIVE_FILE = DATA_DIR / "live_matches.csv"
 
 
 def get_live_matches():
+
     url = "https://v3.football.api-sports.io/fixtures?live=all"
 
     try:
-        res = requests.get(url, headers=HEADERS, timeout=20)
+        res = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=20
+        )
+
         res.raise_for_status()
 
         data = res.json().get("response", [])
@@ -27,24 +33,56 @@ def get_live_matches():
         matches = []
 
         for m in data:
+
+            minute = m["fixture"]["status"]["elapsed"] or 0
+
+            home_goals = m["goals"]["home"] or 0
+            away_goals = m["goals"]["away"] or 0
+
+            total_goals = home_goals + away_goals
+
+            # =========================
+            # LIVE AI SIGNALS
+            # =========================
+
+            live_pick = "NO SIGNAL"
+            confidence = 0
+
+            if minute >= 70 and total_goals <= 2:
+                live_pick = "OVER 2.5"
+                confidence = 82
+
+            elif minute >= 55 and total_goals >= 1:
+                live_pick = "BTTS"
+                confidence = 76
+
+            elif minute >= 35 and total_goals == 0:
+                live_pick = "OVER 1.5"
+                confidence = 68
+
             matches.append({
-                "fixture_id": m["fixture"]["id"],
+
                 "home": m["teams"]["home"]["name"],
                 "away": m["teams"]["away"]["name"],
                 "league": m["league"]["name"],
-                "minute": m["fixture"]["status"]["elapsed"] or 0,
-                "score": f"{m['goals']['home']}:{m['goals']['away']}",
+                "minute": minute,
+                "score": f"{home_goals}:{away_goals}",
+                "signal": live_pick,
+                "confidence": confidence,
                 "status": m["fixture"]["status"]["short"]
+
             })
 
         return matches
 
     except Exception as e:
+
         print(f"❌ LIVE API ERROR: {e}")
+
         return []
 
 
-print("🚀 LIVE ENGINE STARTED")
+print("🚀 LIVE SIGNAL ENGINE STARTED")
 
 while True:
 
@@ -52,17 +90,16 @@ while True:
 
     live_matches = get_live_matches()
 
-    print(live_matches[:2])
-
     if live_matches:
 
         df = pd.DataFrame(live_matches)
 
         df.to_csv(LIVE_FILE, index=False)
 
-        print("✅ live_matches.csv UPDATED")
+        print(f"✅ LIVE MATCHES UPDATED: {len(df)}")
 
     else:
+
         print("⚠️ NO LIVE MATCHES")
 
     time.sleep(60)
