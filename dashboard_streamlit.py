@@ -207,20 +207,24 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
 # LIVE
 # =========================
 
+st.markdown(
+    """
+    <style>
+
+    section[data-testid="stMain"] div[data-testid="stMetric"] label {
+        color: white !important;
+    }
+
+    section[data-testid="stMain"] div[data-testid="stMetricValue"] {
+        color: white !important;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 with live_tab:
-
-    st.markdown(
-        """
-        <style>
-
-        .live-card * {
-            color: white !important;
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
 
     with st.container(border=True):
 
@@ -327,7 +331,7 @@ with live_tab:
 
                 st.markdown(
                     f"""
-                    <div class="live-card" style="
+                    <div style="
                         margin-top:12px;
                         padding:14px;
                         border-radius:14px;
@@ -335,6 +339,7 @@ with live_tab:
                         border:1px solid rgba(255,255,255,0.08);
                         font-weight:700;
                         font-size:15px;
+                        color:white;
                     ">
                         📈 DYNAMIKA MECZU: {tempo}
                     </div>
