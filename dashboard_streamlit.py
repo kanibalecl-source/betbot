@@ -204,7 +204,7 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
 )
 
 # =========================
-# LIVE
+# LIVE CSS
 # =========================
 
 st.markdown(
@@ -224,6 +224,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# =========================
+# LIVE
+# =========================
+
 with live_tab:
 
     with st.container(border=True):
@@ -241,17 +245,14 @@ with live_tab:
 
             with st.container(border=True):
 
-                match_name = (
-                    row.get("match")
-                    or row.get("mecz")
-                    or "BRAK MECZU"
-                )
+                home_team = row.get("home", "")
+                away_team = row.get("away", "")
 
-                league = (
-                    row.get("league")
-                    or row.get("liga")
-                    or ""
-                )
+                match_name = f"{home_team} vs {away_team}"
+
+                league = row.get("league", "")
+
+                score = row.get("score", "-")
 
                 ev = (
                     row.get("ev")
@@ -264,23 +265,23 @@ with live_tab:
                     or "LIVE"
                 )
 
-                minute = (
-                    row.get("minute")
-                    or row.get("minuta")
-                    or "-"
-                )
+                minute = row.get("minute", "LIVE")
 
-                confidence_raw = (
-                    row.get("confidence")
-                    or row.get("CONFIDENCE")
-                    or row.get("conf")
-                    or 0
-                )
+                confidence_raw = row.get("confidence", 0)
 
                 try:
-                    confidence = f"{float(confidence_raw):.0f}%"
+
+                    confidence_value = float(confidence_raw)
+
+                    if confidence_value <= 1:
+                        confidence_value *= 100
+
+                    confidence = f"{confidence_value:.0f}%"
+
                 except:
                     confidence = "-"
+
+                bet_type = row.get("signal", "BRAK TYPU")
 
                 pressure = (
                     row.get("pressure")
@@ -314,6 +315,34 @@ with live_tab:
                 st.subheader(match_name)
 
                 st.caption(f"🏆 {league}")
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        color:white;
+                        font-size:18px;
+                        font-weight:800;
+                        margin-bottom:8px;
+                    ">
+                        ⚽ WYNIK: {score}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        color:#58ff2f;
+                        font-weight:800;
+                        margin-bottom:14px;
+                        font-size:16px;
+                    ">
+                        🎯 TYP: {bet_type}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
                 col1, col2, col3, col4 = st.columns(4)
 
