@@ -1,7 +1,3 @@
-# =========================
-# LIVE
-# =========================
-
 with live_tab:
 
     with st.container(border=True):
