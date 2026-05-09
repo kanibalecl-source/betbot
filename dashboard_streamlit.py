@@ -55,7 +55,7 @@ live_df = load_csv(LIVE_FILE)
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
-# CSS
+# GLOBAL CSS
 # =========================
 
 st.markdown(
@@ -68,35 +68,6 @@ st.markdown(
                 radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
                 linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
             color: white;
-        }
-
-        p, span, div, label {
-            color: #ffffff !important;
-        }
-
-        .stMetric label {
-            color: #ffffff !important;
-        }
-
-        .stMetric div {
-            color: #ffffff !important;
-        }
-
-        [data-testid="stMetricValue"] {
-            color: #ffffff !important;
-            font-weight: 800 !important;
-        }
-
-        [data-testid="stMetricLabel"] {
-            color: #ffffff !important;
-        }
-
-        .stCaption {
-            color: #d9d9d9 !important;
-        }
-
-        .stMarkdown {
-            color: #ffffff !important;
         }
 
         header[data-testid="stHeader"] {
@@ -189,10 +160,6 @@ st.markdown(
             color: #f2f2f2 !important;
         }
 
-        div[data-testid="stTable"] tr:hover {
-            background: rgba(88,255,47,0.06) !important;
-        }
-
         div[data-testid="stMetric"] {
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.08);
@@ -242,6 +209,19 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
 
 with live_tab:
 
+    st.markdown(
+        """
+        <style>
+
+        .live-card * {
+            color: white !important;
+        }
+
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
     with st.container(border=True):
 
         st.header("🟢 LIVE SIGNALS")
@@ -280,27 +260,87 @@ with live_tab:
                     or "LIVE"
                 )
 
-                confidence = (
+                minute = (
+                    row.get("minute")
+                    or row.get("minuta")
+                    or "-"
+                )
+
+                confidence_raw = (
                     row.get("confidence")
                     or row.get("CONFIDENCE")
                     or row.get("conf")
-                    or "-"
+                    or 0
                 )
+
+                try:
+                    confidence = f"{float(confidence_raw):.0f}%"
+                except:
+                    confidence = "-"
+
+                pressure = (
+                    row.get("pressure")
+                    or 0
+                )
+
+                momentum = (
+                    row.get("momentum")
+                    or 0
+                )
+
+                try:
+
+                    tempo_score = (
+                        float(pressure) +
+                        float(momentum)
+                    ) / 2
+
+                    if tempo_score >= 75:
+                        tempo = "🔥 HIGH TEMPO"
+
+                    elif tempo_score >= 45:
+                        tempo = "⚡ MEDIUM TEMPO"
+
+                    else:
+                        tempo = "🧊 LOW TEMPO"
+
+                except:
+                    tempo = "-"
 
                 st.subheader(match_name)
 
                 st.caption(f"🏆 {league}")
 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
 
                 with col1:
                     st.metric("EV", ev)
 
                 with col2:
-                    st.metric("STATUS", status)
+                    st.metric("CONF", confidence)
 
                 with col3:
-                    st.metric("CONF", confidence)
+                    st.metric("MIN", minute)
+
+                with col4:
+                    st.metric("STATUS", status)
+
+                st.markdown(
+                    f"""
+                    <div class="live-card" style="
+                        margin-top:12px;
+                        padding:14px;
+                        border-radius:14px;
+                        background:rgba(255,255,255,0.04);
+                        border:1px solid rgba(255,255,255,0.08);
+                        font-weight:700;
+                        font-size:15px;
+                    ">
+                        📈 DYNAMIKA MECZU: {tempo}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
 # =========================
 # PREMATCH
