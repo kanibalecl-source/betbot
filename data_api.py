@@ -1,4 +1,3 @@
-
 import requests
 from datetime import datetime
 
@@ -26,14 +25,12 @@ def normalize_fixture(fixture):
         status = fixture.get("fixture", {}).get(
             "status",
             {}
-        ).get("short", "NS")
+        ).get("short", "LIVE")
 
         goals_home = fixture.get("goals", {}).get("home", 0)
         goals_away = fixture.get("goals", {}).get("away", 0)
 
         score = f"{goals_home}-{goals_away}"
-
-        odds = 1.80
 
         return {
             "home": home,
@@ -42,11 +39,11 @@ def normalize_fixture(fixture):
             "minute": minute,
             "status": status,
             "score": score,
-            "signal": "UNDER 2.5",
-            "market": "UNDER 2.5",
-            "confidence": 72,
-            "ev": 6.5,
-            "odds": odds,
+            "signal": "LIVE",
+            "market": "LIVE",
+            "confidence": 55,
+            "ev": 5,
+            "odds": 1.80,
             "pressure": 50,
             "momentum": 50,
             "dangerous_attacks": 0,
@@ -62,9 +59,13 @@ def normalize_fixture(fixture):
         return None
 
 
-def api_request(url):
+def get_matches():
 
     try:
+
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+
+        url = f"https://v3.football.api-sports.io/fixtures?date={today}"
 
         response = requests.get(
             url,
@@ -80,109 +81,24 @@ def api_request(url):
 
         print(f"RAW FIXTURES: {len(fixtures)}")
 
-        return fixtures
+        matches = []
+
+        for fixture in fixtures:
+
+            normalized = normalize_fixture(fixture)
+
+            if normalized:
+                matches.append(normalized)
+
+        print(f"NORMALIZED MATCHES: {len(matches)}")
+
+        return matches
 
     except Exception as e:
 
-        print(f"API REQUEST ERROR: {e}")
+        print(f"FETCH ERROR: {e}")
 
         return []
-
-
-def fetch_live_matches():
-
-    print("FETCH MODE -> LIVE")
-
-    url = "https://v3.football.api-sports.io/fixtures?live=all"
-
-    fixtures = api_request(url)
-
-    matches = []
-
-    for fixture in fixtures:
-
-        normalized = normalize_fixture(fixture)
-
-        if normalized:
-            matches.append(normalized)
-
-    print(f"NORMALIZED MATCHES: {len(matches)}")
-
-    return matches
-
-
-def fetch_today_matches():
-
-    print("FETCH MODE -> TODAY")
-
-    today = datetime.utcnow().strftime("%Y-%m-%d")
-
-    url = f"https://v3.football.api-sports.io/fixtures?date={today}"
-
-    fixtures = api_request(url)
-
-    matches = []
-
-    for fixture in fixtures[:50]:
-
-        normalized = normalize_fixture(fixture)
-
-        if normalized:
-            matches.append(normalized)
-
-    print(f"TODAY MATCHES: {len(matches)}")
-
-    return matches
-
-
-def fetch_next_matches():
-
-    print("FETCH MODE -> NEXT")
-
-    url = "https://v3.football.api-sports.io/fixtures?next=20"
-
-    fixtures = api_request(url)
-
-    matches = []
-
-    for fixture in fixtures:
-
-        normalized = normalize_fixture(fixture)
-
-        if normalized:
-            matches.append(normalized)
-
-    print(f"NEXT MATCHES: {len(matches)}")
-
-    return matches
-
-
-# =========================
-# MAIN HYBRID FETCH
-# =========================
-
-def get_matches():
-
-    # LIVE
-    matches = fetch_live_matches()
-
-    if matches:
-        return matches
-
-    print("NO LIVE MATCHES -> TRY TODAY")
-
-    # TODAY
-    matches = fetch_today_matches()
-
-    if matches:
-        return matches
-
-    print("NO TODAY MATCHES -> TRY NEXT")
-
-    # NEXT
-    matches = fetch_next_matches()
-
-    return matches
 
 
 def get_odds_market_data():
@@ -191,7 +107,6 @@ def get_odds_market_data():
 
 if __name__ == "__main__":
 
-    data = get_matches()
+    matches = get_matches()
 
-    print(f"FINAL MATCHES: {len(data)}")
-    print(data[:3])
+    print(matches[:3])
