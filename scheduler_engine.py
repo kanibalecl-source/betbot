@@ -1,38 +1,34 @@
-import os
 import subprocess
 import time
 import traceback
 from datetime import datetime
 
-print("🚨 SCHEDULER FILE STARTED")
+print("✅ scheduler_engine.py STARTED")
 
 
-BOT_FILE = "main.py"
-
-
-def run_bot():
+def run_live_bot():
     print("🚀 STARTING LIVE BOT")
     print(f"⏰ {datetime.now()}")
 
     process = subprocess.Popen(
-        ["python3", BOT_FILE],
+        ["python3", "main.py"],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
-        bufsize=1,
     )
 
-    return process
-
-
-def stream_logs(process):
     while True:
-        line = process.stdout.readline()
+        output = process.stdout.readline()
 
-        if not line:
+        if output == "" and process.poll() is not None:
             break
 
-        print(line.strip())
+        if output:
+            print(output.strip())
+
+    return_code = process.poll()
+
+    print(f"❌ LIVE BOT STOPPED | CODE={return_code}")
 
 
 def main():
@@ -40,19 +36,14 @@ def main():
         try:
             print("📡 FETCH LOOP START")
 
-            process = run_bot()
-
-            stream_logs(process)
-
-            return_code = process.wait()
-
-            print(f"❌ BOT STOPPED | CODE={return_code}")
+            run_live_bot()
 
         except Exception as e:
             print(f"❌ SCHEDULER ERROR: {e}")
+
             traceback.print_exc()
 
-        print("🔁 RESTART IN 15 SEC")
+        print("🔁 RESTART ZA 15 SEKUND")
 
         time.sleep(15)
 
