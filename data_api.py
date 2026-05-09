@@ -1,6 +1,5 @@
 
 import requests
-from datetime import datetime
 
 API_KEY = "5fa34697895a8e2dc8a46e91bcd6dc81"
 
@@ -98,6 +97,18 @@ def fetch_live_matches():
         print(f"FETCH LIVE ERROR: {e}")
 
         return []
+
+
+# =========================
+# COMPATIBILITY FUNCTIONS
+# =========================
+
+def get_matches():
+    return fetch_live_matches()
+
+
+def get_odds_market_data():
+    return []
 
 
 if __name__ == "__main__":
