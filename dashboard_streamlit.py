@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
-# =========================
+# =====================================
 # CONFIG
-# =========================
+# =====================================
 
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
@@ -15,109 +15,77 @@ st.set_page_config(
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-# FINAL SOURCE
-PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LIVE_FILE = DATA_DIR / "auto_all_picks.csv"
+CSV_FILE = DATA_DIR / "auto_all_picks.csv"
 
 BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 
-# =========================
-# HELPERS
-# =========================
+# =====================================
+# LOAD CSV
+# =====================================
 
-def load_csv(path: Path) -> pd.DataFrame:
+def load_csv():
 
-    if not path.exists():
+    if not CSV_FILE.exists():
         return pd.DataFrame()
 
     try:
-        return pd.read_csv(path)
+        return pd.read_csv(CSV_FILE)
 
     except Exception:
-        return pd.DataFrame()
+
+        try:
+            return pd.read_csv(CSV_FILE, encoding="utf-8")
+
+        except Exception:
+            return pd.DataFrame()
 
 
-def clean_value(value, default="-"):
+df = load_csv()
 
-    try:
-        if pd.isna(value):
-            return default
-    except:
-        pass
+# =====================================
+# HELPERS
+# =====================================
 
-    value = str(value).strip()
+def val(row, cols, default="-"):
 
-    if value == "":
-        return default
+    for c in cols:
 
-    if value.lower() in ["nan", "none", "null"]:
-        return default
+        if c in row:
 
-    return value
+            v = row.get(c)
 
+            try:
+                if pd.isna(v):
+                    continue
+            except:
+                pass
 
-def first_existing(row, columns, default="-"):
+            v = str(v).strip()
 
-    for col in columns:
-
-        if col in row:
-
-            value = clean_value(
-                row.get(col),
-                None
-            )
-
-            if value is not None:
-                return value
+            if v != "" and v.lower() not in ["nan", "none", "null"]:
+                return v
 
     return default
 
 
-def format_confidence(value):
-
-    value = clean_value(value, None)
-
-    if value is None:
-        return "-"
+def confidence_format(v):
 
     try:
 
-        value = float(value)
+        v = float(v)
 
-        if value <= 1:
-            value *= 100
+        if v <= 1:
+            v *= 100
 
-        return f"{value:.0f}%"
+        return f"{v:.0f}%"
 
     except:
         return "-"
 
 
-def only_existing_columns(
-    df: pd.DataFrame,
-    columns: list[str]
-):
-
-    existing = [
-        col for col in columns
-        if col in df.columns
-    ]
-
-    if not existing:
-        return df
-
-    return df[existing]
-
-# =========================
-# LOAD DATA
-# =========================
-
-live_df = load_csv(LIVE_FILE)
-prematch_df = load_csv(PREMATCH_FILE)
-
-# =========================
+# =====================================
 # CSS
-# =========================
+# =====================================
 
 st.markdown(
     """
@@ -236,18 +204,14 @@ st.markdown(
         color: #f2f2f2 !important;
     }
 
-    div[data-testid="stTable"] tr:hover {
-        background: rgba(88,255,47,0.06) !important;
-    }
-
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# =========================
+# =====================================
 # HEADER
-# =========================
+# =====================================
 
 if BANNER_FILE.exists():
 
@@ -259,11 +223,10 @@ if BANNER_FILE.exists():
 else:
 
     st.title("KANIBAL ANALYTICS")
-    st.caption("ANALIZA • PRZEWAGA • ZYSK")
 
-# =========================
+# =====================================
 # TABS
-# =========================
+# =====================================
 
 live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st.tabs(
     [
@@ -276,136 +239,70 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
     ]
 )
 
-# =========================
+# =====================================
 # LIVE
-# =========================
+# =====================================
 
 with live_tab:
 
-    with st.container(border=True):
+    st.header("🟢 LIVE SIGNALS")
+    st.caption("AKTUALIZOWANE CO 60 SEKUND")
 
-        st.header("🟢 LIVE SIGNALS")
-        st.caption("AKTUALIZOWANE CO 60 SEKUND")
-
-    if live_df.empty:
+    if df.empty:
 
         st.warning("Brak danych LIVE")
 
     else:
 
-        for _, row in live_df.iterrows():
+        for _, row in df.iterrows():
 
-            # =========================
-            # MATCH NAME
-            # =========================
-
-            home = first_existing(
+            home = val(
                 row,
-                [
-                    "home",
-                    "home_team",
-                    "gospodarze"
-                ],
+                ["home", "home_team"],
                 ""
             )
 
-            away = first_existing(
+            away = val(
                 row,
-                [
-                    "away",
-                    "away_team",
-                    "goscie"
-                ],
+                ["away", "away_team"],
                 ""
             )
 
-            if home == "" and away == "":
-
-                match_name = first_existing(
-                    row,
-                    [
-                        "match",
-                        "mecz"
-                    ],
-                    "BRAK MECZU"
-                )
-
-            else:
+            if home != "" or away != "":
 
                 match_name = f"{home} vs {away}"
 
-            # =========================
-            # BASIC DATA
-            # =========================
+            else:
 
-            league = first_existing(
+                match_name = val(
+                    row,
+                    ["match", "mecz"],
+                    "BRAK MECZU"
+                )
+
+            league = val(
                 row,
-                [
-                    "league",
-                    "liga"
-                ],
-                "-"
+                ["league", "liga"]
             )
 
-            score = first_existing(
+            signal = val(
                 row,
-                [
-                    "score",
-                    "wynik"
-                ],
-                "-"
-            )
-
-            signal = first_existing(
-                row,
-                [
-                    "signal",
-                    "typ",
-                    "market"
-                ],
+                ["signal", "typ", "market"],
                 "BRAK TYPU"
             )
 
-            ev = first_existing(
+            score = val(
                 row,
-                [
-                    "ev",
-                    "EV"
-                ],
+                ["score"],
                 "-"
             )
 
-            # =========================
-            # CONFIDENCE FIX
-            # =========================
-
-            confidence_raw = first_existing(
-                row,
-                [
-                    "confidence",
-                    "conf",
-                    "prawd_final",
-                    "prawd_model",
-                    "value"
-                ],
-                0
-            )
-
-            confidence = format_confidence(
-                confidence_raw
-            )
-
-            # =========================
-            # MINUTE FIX
-            # =========================
-
-            minute_raw = first_existing(
+            minute_raw = val(
                 row,
                 [
                     "minute",
                     "min",
                     "elapsed",
-                    "match_time",
                     "time"
                 ],
                 ""
@@ -416,82 +313,45 @@ with live_tab:
             else:
                 minute = "LIVE"
 
-            # =========================
-            # STATUS
-            # =========================
+            confidence = confidence_format(
+                val(
+                    row,
+                    [
+                        "confidence",
+                        "conf",
+                        "prawd_final",
+                        "value"
+                    ],
+                    0
+                )
+            )
 
-            status = first_existing(
+            ev = val(
                 row,
-                [
-                    "status"
-                ],
+                ["ev"],
+                "-"
+            )
+
+            status = val(
+                row,
+                ["status"],
                 "LIVE"
             )
 
-            # =========================
-            # TEMPO
-            # =========================
-
-            risk = first_existing(
+            risk = val(
                 row,
-                [
-                    "risk"
-                ],
+                ["risk"],
                 "LOW"
-            )
+            ).upper()
 
-            pressure = first_existing(
-                row,
-                [
-                    "pressure"
-                ],
-                ""
-            )
+            if risk in ["HIGH", "TOP"]:
+                tempo = "🔥 HIGH TEMPO"
 
-            momentum = first_existing(
-                row,
-                [
-                    "momentum"
-                ],
-                ""
-            )
+            elif risk == "MEDIUM":
+                tempo = "⚡ MEDIUM TEMPO"
 
-            tempo = "🧊 LOW TEMPO"
-
-            try:
-
-                if pressure != "" and momentum != "":
-
-                    tempo_score = (
-                        float(pressure) +
-                        float(momentum)
-                    ) / 2
-
-                    if tempo_score >= 75:
-                        tempo = "🔥 HIGH TEMPO"
-
-                    elif tempo_score >= 45:
-                        tempo = "⚡ MEDIUM TEMPO"
-
-                    else:
-                        tempo = "🧊 LOW TEMPO"
-
-                else:
-
-                    risk_upper = str(risk).upper()
-
-                    if risk_upper in ["HIGH", "TOP"]:
-                        tempo = "🔥 HIGH TEMPO"
-
-                    elif risk_upper in ["MEDIUM"]:
-                        tempo = "⚡ MEDIUM TEMPO"
-
-            except:
-                pass
-
-            # =========================
-            # UI
-            # =========================
+            else:
+                tempo = "🧊 LOW TEMPO"
 
             with st.container(border=True):
 
@@ -499,9 +359,7 @@ with live_tab:
 
                 st.caption(f"🏆 {league}")
 
-                st.markdown(
-                    f"### ⚽ WYNIK: {score}"
-                )
+                st.markdown(f"### ⚽ WYNIK: {score}")
 
                 st.markdown(
                     f"""
@@ -517,175 +375,73 @@ with live_tab:
                     unsafe_allow_html=True
                 )
 
-                col1, col2, col3, col4 = st.columns(4)
+                c1, c2, c3, c4 = st.columns(4)
 
-                with col1:
+                with c1:
                     st.metric("EV", ev)
 
-                with col2:
+                with c2:
                     st.metric("CONF", confidence)
 
-                with col3:
+                with c3:
                     st.metric("MIN", minute)
 
-                with col4:
+                with c4:
                     st.metric("STATUS", status)
 
                 st.info(
                     f"📈 DYNAMIKA MECZU: {tempo}"
                 )
 
-# =========================
+# =====================================
 # PREMATCH
-# =========================
+# =====================================
 
 with prematch_tab:
 
-    with st.container(border=True):
+    st.header("🟢 PREMATCH PICKS")
 
-        st.header("🟢 PREMATCH PICKS")
-        st.caption("CORE VALUE ENGINE")
-
-    if prematch_df.empty:
+    if df.empty:
 
         st.warning("Brak danych PREMATCH")
 
     else:
 
-        prematch_columns = [
-            "data",
-            "liga",
-            "mecz",
-            "market",
-            "typ",
-            "kurs_buk",
-            "kurs_model",
-            "kurs_bota",
-            "prawd_model",
-            "prawd_rynek",
-            "prawd_final",
-            "edge",
-            "ev",
-            "kelly_full",
-            "kelly_25",
-            "home_xg",
-            "away_xg",
-            "marza_sum",
-            "marza_%",
-            "status"
-        ]
+        st.table(df)
 
-        prematch_view = only_existing_columns(
-            prematch_df,
-            prematch_columns
-        )
-
-        st.table(prematch_view)
-
-# =========================
+# =====================================
 # ANALYTICS
-# =========================
+# =====================================
 
 with analytics_tab:
 
-    with st.container(border=True):
+    st.header("📊 ANALYTICS")
 
-        st.header("📊 ANALYTICS ENGINE")
-        st.caption("AI PERFORMANCE ANALYTICS")
+    st.metric(
+        "TOTAL SIGNALS",
+        len(df)
+    )
 
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("ROI", "+24.8%")
-
-    with col2:
-        st.metric("WIN RATE", "62.8%")
-
-    with col3:
-        st.metric("AI EDGE", "+13.4%")
-
-    with col4:
-        st.metric(
-            "TOTAL SIGNALS",
-            len(live_df)
-        )
-
-# =========================
+# =====================================
 # HISTORY
-# =========================
+# =====================================
 
 with history_tab:
 
-    with st.container(border=True):
+    st.info("Historia będzie dostępna później.")
 
-        st.header("🕘 HISTORY ENGINE")
-        st.caption("HISTORIA TYPÓW I ROZLICZEŃ")
-
-    st.info(
-        "Historia zakładów będzie dostępna po wdrożeniu Settlement Engine."
-    )
-
-# =========================
+# =====================================
 # RANKING
-# =========================
+# =====================================
 
 with ranking_tab:
 
-    with st.container(border=True):
+    st.info("Ranking będzie dostępny później.")
 
-        st.header("🏆 RANKING ENGINE")
-        st.caption("TOP VALUE PICKS")
-
-    if prematch_df.empty:
-
-        st.warning("Brak danych do rankingu")
-
-    else:
-
-        ranking_df = prematch_df.copy()
-
-        if "ev" in ranking_df.columns:
-
-            ranking_df["ev"] = pd.to_numeric(
-                ranking_df["ev"],
-                errors="coerce"
-            ).fillna(0)
-
-            ranking_df = ranking_df.sort_values(
-                "ev",
-                ascending=False
-            ).head(10)
-
-        ranking_columns = [
-            "data",
-            "liga",
-            "mecz",
-            "market",
-            "typ",
-            "kurs_buk",
-            "ev",
-            "edge",
-            "status"
-        ]
-
-        ranking_view = only_existing_columns(
-            ranking_df,
-            ranking_columns
-        )
-
-        st.table(ranking_view)
-
-# =========================
+# =====================================
 # ALERTS
-# =========================
+# =====================================
 
 with alerts_tab:
 
-    with st.container(border=True):
-
-        st.header("🔔 ALERT ENGINE")
-        st.caption("LIVE ALERTS & NOTIFICATIONS")
-
-    st.info(
-        "Alerty AI będą dostępne po podłączeniu systemu powiadomień."
-    )
+    st.info("Alerty będą dostępne później.")
