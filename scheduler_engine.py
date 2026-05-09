@@ -1,3 +1,4 @@
+import os
 import subprocess
 import time
 import traceback
@@ -6,47 +7,54 @@ from datetime import datetime
 print("🚨 SCHEDULER FILE STARTED")
 
 
-def run_prematch():
+BOT_FILE = "main.py"
+
+
+def run_bot():
+    print("🚀 STARTING LIVE BOT")
+    print(f"⏰ {datetime.now()}")
+
+    process = subprocess.Popen(
+        ["python3", BOT_FILE],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
+
+    return process
+
+
+def stream_logs(process):
     while True:
-        try:
-            print("🚀 START PREMATCH BOT")
-            print(f"⏰ {datetime.now()}")
+        line = process.stdout.readline()
 
-            print("📡 FETCHING MATCHES")
+        if not line:
+            break
 
-            result = subprocess.run(
-                ["python3", "bot.py"],
-                capture_output=True,
-                text=True
-            )
-
-            print("✅ BOT EXECUTED")
-
-            if result.stdout:
-                print("📄 STDOUT:")
-                print(result.stdout)
-
-            if result.stderr:
-                print("❌ STDERR:")
-                print(result.stderr)
-
-            print("✅ LIVE SAVED")
-            print("💓 SCHEDULER LOOP OK")
-
-        except Exception as e:
-            print(f"❌ BŁĄD PREMATCH: {e}")
-            traceback.print_exc()
-
-        print("⏳ Kolejne uruchomienie za 5 minut")
-
-        time.sleep(300)
+        print(line.strip())
 
 
 def main():
-    print("🚀 BETBOT PRODUCTION SCHEDULER")
-    print(f"⏰ {datetime.now()}")
+    while True:
+        try:
+            print("📡 FETCH LOOP START")
 
-    run_prematch()
+            process = run_bot()
+
+            stream_logs(process)
+
+            return_code = process.wait()
+
+            print(f"❌ BOT STOPPED | CODE={return_code}")
+
+        except Exception as e:
+            print(f"❌ SCHEDULER ERROR: {e}")
+            traceback.print_exc()
+
+        print("🔁 RESTART IN 15 SEC")
+
+        time.sleep(15)
 
 
 if __name__ == "__main__":
