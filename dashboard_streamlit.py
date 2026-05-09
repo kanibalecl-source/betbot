@@ -12,10 +12,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-DATA_DIR = Path("data")
+DATA_DIR = Path("/app/data")
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 LIVE_FILE = DATA_DIR / "live_matches.csv"
+
 BANNER_FILE = Path("kanibal_banner_pro.webp")
 
 # =========================
@@ -23,19 +24,31 @@ BANNER_FILE = Path("kanibal_banner_pro.webp")
 # =========================
 
 def load_csv(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        return pd.DataFrame()
-
     try:
-        return pd.read_csv(path)
-    except Exception:
+        print(f"📂 LOADING CSV -> {path}")
+
+        if not path.exists():
+            print(f"❌ FILE NOT FOUND -> {path}")
+            return pd.DataFrame()
+
+        df = pd.read_csv(path)
+
+        print(f"✅ LOADED ROWS -> {len(df)}")
+
+        return df
+
+    except Exception as e:
+        print(f"❌ CSV LOAD ERROR -> {e}")
+
         return pd.DataFrame()
 
 
 def only_existing_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     existing = [col for col in columns if col in df.columns]
+
     if not existing:
         return df
+
     return df[existing]
 
 
@@ -160,7 +173,7 @@ st.markdown(
 # =========================
 
 if BANNER_FILE.exists():
-    st.image(str(BANNER_FILE), use_container_width=True)
+    st.image(str(BANNER_FILE), width="stretch")
 else:
     st.title("KANIBAL ANALYTICS")
     st.caption("ANALIZA • PRZEWAGA • ZYSK")
@@ -215,13 +228,6 @@ with live_tab:
 
         st.table(live_view)
 
-    with st.container(border=True):
-        st.header("CASHOUT AI GUIDE")
-
-        st.success("HOLD POSITION — Wysoka presja i momentum. Trzymaj zakład.")
-        st.warning("PARTIAL CASHOUT — Spadający confidence. Rozważ częściowe wyjście.")
-        st.error("FULL CASHOUT — Niski momentum i presja. Wyjdź z zakładu.")
-
 # =========================
 # PREMATCH
 # =========================
@@ -257,7 +263,10 @@ with prematch_tab:
             "status"
         ]
 
-        prematch_view = only_existing_columns(prematch_df, prematch_columns)
+        prematch_view = only_existing_columns(
+            prematch_df,
+            prematch_columns
+        )
 
         st.table(prematch_view)
 
@@ -289,10 +298,6 @@ with analytics_tab:
 # =========================
 
 with history_tab:
-    with st.container(border=True):
-        st.header("🕘 HISTORY ENGINE")
-        st.caption("HISTORIA TYPÓW I ROZLICZEŃ")
-
     st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
 
 # =========================
@@ -300,42 +305,27 @@ with history_tab:
 # =========================
 
 with ranking_tab:
-    with st.container(border=True):
-        st.header("🏆 RANKING ENGINE")
-        st.caption("TOP VALUE PICKS")
-
     if prematch_df.empty:
         st.warning("Brak danych do rankingu")
     else:
         ranking_df = prematch_df.copy()
 
         if "ev" in ranking_df.columns:
-            ranking_df["ev"] = pd.to_numeric(ranking_df["ev"], errors="coerce").fillna(0)
-            ranking_df = ranking_df.sort_values("ev", ascending=False).head(10)
+            ranking_df["ev"] = pd.to_numeric(
+                ranking_df["ev"],
+                errors="coerce"
+            ).fillna(0)
 
-        ranking_columns = [
-            "data",
-            "liga",
-            "mecz",
-            "market",
-            "typ",
-            "kurs_buk",
-            "ev",
-            "edge",
-            "status"
-        ]
+            ranking_df = ranking_df.sort_values(
+                "ev",
+                ascending=False
+            ).head(10)
 
-        ranking_view = only_existing_columns(ranking_df, ranking_columns)
-
-        st.table(ranking_view)
+        st.table(ranking_df)
 
 # =========================
 # ALERTS
 # =========================
 
 with alerts_tab:
-    with st.container(border=True):
-        st.header("🔔 ALERT ENGINE")
-        st.caption("LIVE ALERTS & NOTIFICATIONS")
-
     st.info("Alerty AI będą dostępne po podłączeniu systemu powiadomień.")
