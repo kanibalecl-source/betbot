@@ -13,7 +13,6 @@ st.set_page_config(
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-
 DATA_DIR = BASE_DIR / "data"
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
@@ -22,7 +21,7 @@ LIVE_FILE = DATA_DIR / "live_matches.csv"
 BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 
 # =========================
-# DATA
+# HELPERS
 # =========================
 
 def load_csv(path: Path):
@@ -33,7 +32,7 @@ def load_csv(path: Path):
     try:
         return pd.read_csv(path)
 
-    except:
+    except Exception:
         return pd.DataFrame()
 
 
@@ -76,9 +75,15 @@ def format_confidence(value):
 
 live_df = load_csv(LIVE_FILE)
 
-if live_df.empty:
+# fallback gdy live pusty
+if live_df.empty or len(live_df.columns) <= 1:
 
     live_df = load_csv(PREMATCH_FILE)
+
+# dodatkowy fallback
+if live_df.empty:
+
+    live_df = pd.DataFrame()
 
 prematch_df = load_csv(PREMATCH_FILE)
 
@@ -149,6 +154,7 @@ st.markdown(
     }
 
     .live-card {
+
         background:
             linear-gradient(
                 180deg,
@@ -309,8 +315,17 @@ with live_tab:
 
         for _, row in live_df.iterrows():
 
-            home = first_existing(row, ["home"])
-            away = first_existing(row, ["away"])
+            home = first_existing(
+                row,
+                ["home", "home_team", "gospodarze"],
+                "HOME"
+            )
+
+            away = first_existing(
+                row,
+                ["away", "away_team", "goscie"],
+                "AWAY"
+            )
 
             match_name = f"{home} vs {away}"
 
@@ -328,7 +343,7 @@ with live_tab:
 
             signal = first_existing(
                 row,
-                ["signal", "typ"],
+                ["signal", "typ", "market"],
                 "BRAK TYPU"
             )
 
