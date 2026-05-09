@@ -383,3 +383,43 @@ while True:
         print("⚠️ NO LIVE MATCHES")
 
     time.sleep(60)
+
+
+# =========================
+# FILTER FINISHED MATCHES
+# =========================
+
+filtered_matches = []
+
+for match in matches:
+
+    status = str(
+        match.get("status", "")
+    ).upper()
+
+    if status in [
+        "FT",
+        "FINISHED",
+        "ENDED",
+        "AFTER PEN.",
+        "AFTER PENALTIES",
+        "FULLTIME",
+        "AET"
+    ]:
+        continue
+
+    minute = match.get("minute", 0)
+
+    try:
+        minute = int(minute)
+    except:
+        minute = 0
+
+    if minute >= 120:
+        continue
+
+    filtered_matches.append(match)
+
+matches = filtered_matches
+
+print(f"✅ ACTIVE LIVE MATCHES: {len(matches)}")
