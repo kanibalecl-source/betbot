@@ -171,35 +171,13 @@ def run_bot():
     matches = get_matches()
     rows = []
 
-    if not matches:
-        print("⚠️ BRAK MECZÓW Z API — sprawdź logi data_api.py powyżej")
-        pd.DataFrame(rows).to_csv(ALL_FILE, index=False)
-        print(f"🧪 SKIP STATS: {skip_stats}")
-    print("✅ GOTOWE")
-        print("📊 0 typów zapisanych")
-        print(f"📁 {ALL_FILE}")
-        return
-
-    skip_stats = {
-        "no_odds": 0,
-        "no_xg": 0,
-        "inactive_market": 0,
-        "no_model_prob": 0,
-        "odds_range": 0,
-        "margin": 0,
-        "edge_ev": 0,
-        "risk_skip": 0,
-    }
-
     for match in matches:
         odds_data = get_odds_market_data(match)
         if not odds_data:
-            skip_stats["no_odds"] += 1
             continue
 
         home_xg, away_xg = get_match_xg(match)
         if home_xg is None or away_xg is None:
-            skip_stats["no_xg"] += 1
             continue
 
         model = build_model(home_xg, away_xg)
@@ -212,24 +190,20 @@ def run_bot():
 
         for market, data in odds_data.items():
             if not active_markets.get(market, True):
-                skip_stats["inactive_market"] += 1
                 continue
 
             model_prob = model.get(market)
             if not model_prob or model_prob <= 0:
-                skip_stats["no_model_prob"] += 1
                 continue
 
             book_odds = data.get("best_odds")
             bookmaker = data.get("bookmaker", data.get("site", ""))
 
             if not book_odds or book_odds < filters["min_book_odds"] or book_odds > filters["max_book_odds"]:
-                skip_stats["odds_range"] += 1
                 continue
 
             margin_sum = calculate_market_margin(odds_data, market)
             if not margin_sum or margin_sum > filters["max_margin_sum"]:
-                skip_stats["margin"] += 1
                 continue
 
             book_prob = 1 / book_odds
@@ -247,12 +221,10 @@ def run_bot():
             ev = (book_odds * final_prob) - 1
 
             if edge < filters["min_edge"] or ev < filters["min_ev"] or edge > filters["max_edge"]:
-                skip_stats["edge_ev"] += 1
                 continue
 
             risk_level = classify_risk(final_prob, edge, ev, margin_sum, thresholds)
             if risk_level == "SKIP":
-                skip_stats["risk_skip"] += 1
                 continue
 
             full_kelly = kelly_fraction(final_prob, book_odds)
@@ -299,22 +271,20 @@ def run_bot():
                 "marza_sum": round(margin_sum, 4),
                 "marza_%": round((margin_sum - 1) * 100, 2),
                 "risk_level": risk_level,
-                "risk": risk_level,
-                "status": "NEW",
-
-                # Dashboard LIVE compatible fields
-                "home": home_team,
-                "away": away_team,
-                "league": league_full,
-                "minute": safe_match_value(match, "minute", "elapsed", default=""),
-                "score": safe_match_value(match, "score", default=""),
-                "signal": format_bet(market),
-                "confidence": round(final_prob, 4),
-                "odds": round(book_odds, 2),
-                "value": round(edge, 4),
-                "cashout": "",
-                "stake": round(quarter_kelly, 4)
+                "status": "NEW"
             })
+
+
+    if not matches:
+        print("⚠️ BRAK MECZÓW Z API — sprawdź logi data_api.py powyżej")
+
+        pd.DataFrame(rows).to_csv(ALL_FILE, index=False)
+
+        print("✅ GOTOWE")
+        print("📊 0 typów zapisanych")
+        print(f"📁 {ALL_FILE}")
+
+        return
 
     df = pd.DataFrame(rows)
 
@@ -333,7 +303,6 @@ def run_bot():
         else:
             df.to_csv(HISTORY_FILE, index=False)
 
-    print(f"🧪 SKIP STATS: {skip_stats}")
     print("✅ GOTOWE")
     print(f"📊 {len(df)} typów zapisanych")
     print(f"📁 {ALL_FILE}")
