@@ -1,8 +1,24 @@
 import time
+import sys
+import traceback
 
 print("🚨🚨🚨 NOWY SCHEDULER DZIAŁA 🚨🚨🚨")
 
-while True:
-    print("💓 LOOP DZIAŁA")
+sys.stdout.flush()
 
-    time.sleep(10)
+while True:
+    try:
+        print("💓 LOOP DZIAŁA")
+
+        sys.stdout.flush()
+
+        time.sleep(10)
+
+    except Exception as e:
+        print(f"❌ SCHEDULER ERROR: {e}")
+
+        traceback.print_exc()
+
+        sys.stdout.flush()
+
+        time.sleep(5)
