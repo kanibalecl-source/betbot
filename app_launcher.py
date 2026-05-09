@@ -3,6 +3,7 @@ import subprocess
 import time
 import signal
 import sys
+import threading
 
 print("🚀 APP LAUNCHER START")
 
@@ -11,17 +12,32 @@ PORT = os.environ.get("PORT", "8080")
 processes = []
 
 
+def stream_output(process, prefix):
+    for line in iter(process.stdout.readline, ''):
+        if line:
+            print(f"{prefix} {line.strip()}")
+
+
 def start_scheduler():
     print("🚀 START scheduler_engine.py")
 
     process = subprocess.Popen(
-        ["python3", "scheduler_engine.py"]
+        ["python3", "scheduler_engine.py"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
     )
+
+    threading.Thread(
+        target=stream_output,
+        args=(process, "[SCHEDULER]"),
+        daemon=True,
+    ).start()
 
     print("✅ scheduler_engine.py STARTED")
 
     return process
-
 
 
 def start_dashboard():
@@ -40,13 +56,22 @@ def start_dashboard():
             "0.0.0.0",
             "--server.headless",
             "true",
-        ]
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
     )
+
+    threading.Thread(
+        target=stream_output,
+        args=(process, "[DASHBOARD]"),
+        daemon=True,
+    ).start()
 
     print("✅ dashboard_streamlit.py STARTED")
 
     return process
-
 
 
 def shutdown(*args):
@@ -66,34 +91,37 @@ def shutdown(*args):
 signal.signal(signal.SIGTERM, shutdown)
 signal.signal(signal.SIGINT, shutdown)
 
+scheduler_process = start_scheduler()
+dashboard_process = start_dashboard()
+
+processes = [scheduler_process, dashboard_process]
 
 while True:
     try:
-        scheduler_process = start_scheduler()
-        dashboard_process = start_dashboard()
+        scheduler_alive = scheduler_process.poll() is None
+        dashboard_alive = dashboard_process.poll() is None
 
-        processes = [scheduler_process, dashboard_process]
+        print(
+            f"💓 HEARTBEAT | scheduler={scheduler_alive} | dashboard={dashboard_alive}"
+        )
 
-        while True:
-            scheduler_alive = scheduler_process.poll() is None
-            dashboard_alive = dashboard_process.poll() is None
+        if not scheduler_alive:
+            print("❌ scheduler_engine.py CRASHED -> RESTART")
 
-            print(
-                f"💓 HEARTBEAT | scheduler={scheduler_alive} | dashboard={dashboard_alive}"
-            )
+            scheduler_process = start_scheduler()
 
-            if not scheduler_alive:
-                print("❌ scheduler_engine.py CRASHED -> RESTART")
-                scheduler_process = start_scheduler()
-                processes[0] = scheduler_process
+            processes[0] = scheduler_process
 
-            if not dashboard_alive:
-                print("❌ dashboard_streamlit.py CRASHED -> RESTART")
-                dashboard_process = start_dashboard()
-                processes[1] = dashboard_process
+        if not dashboard_alive:
+            print("❌ dashboard_streamlit.py CRASHED -> RESTART")
 
-            time.sleep(30)
+            dashboard_process = start_dashboard()
+
+            processes[1] = dashboard_process
+
+        time.sleep(30)
 
     except Exception as e:
         print(f"❌ APP LAUNCHER ERROR: {e}")
+
         time.sleep(15)
