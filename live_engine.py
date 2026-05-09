@@ -1,8 +1,3 @@
-# PLIK 1 — live_engine.py
-
-SKOPIUJ CAŁY PLIK I NADPISZ.
-
-```python
 from pathlib import Path
 import pandas as pd
 import os
