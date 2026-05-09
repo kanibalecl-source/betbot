@@ -1,51 +1,37 @@
 import subprocess
 import time
-import traceback
 from datetime import datetime
 
-print("✅ scheduler_engine.py STARTED")
 
-
-def run_live_bot():
-    print("🚀 STARTING LIVE BOT")
-    print(f"⏰ {datetime.now()}")
-
-    process = subprocess.Popen(
-        ["python3", "main.py"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-
+def run_prematch():
     while True:
-        output = process.stdout.readline()
+        try:
+            print("🚀 START PREMATCH BOT")
 
-        if output == "" and process.poll() is not None:
-            break
+            result = subprocess.run(
+                ["python", "bot.py"],
+                capture_output=True,
+                text=True
+            )
 
-        if output:
-            print(output.strip())
+            print(result.stdout)
 
-    return_code = process.poll()
+            if result.stderr:
+                print("❌ STDERR:")
+                print(result.stderr)
 
-    print(f"❌ LIVE BOT STOPPED | CODE={return_code}")
+        except Exception as e:
+            print(f"❌ BŁĄD PREMATCH: {e}")
+
+        print("⏳ Kolejne uruchomienie za 5 minut")
+        time.sleep(300)
 
 
 def main():
-    while True:
-        try:
-            print("📡 FETCH LOOP START")
+    print("🚀 BETBOT PRODUCTION SCHEDULER")
+    print(f"⏰ {datetime.now()}")
 
-            run_live_bot()
-
-        except Exception as e:
-            print(f"❌ SCHEDULER ERROR: {e}")
-
-            traceback.print_exc()
-
-        print("🔁 RESTART ZA 15 SEKUND")
-
-        time.sleep(15)
+    run_prematch()
 
 
 if __name__ == "__main__":
