@@ -55,7 +55,7 @@ live_df = load_csv(LIVE_FILE)
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
-# SAFE CSS ONLY
+# CSS
 # =========================
 
 st.markdown(
@@ -175,7 +175,7 @@ st.markdown(
 )
 
 # =========================
-# HEADER / BANNER
+# HEADER
 # =========================
 
 if BANNER_FILE.exists():
@@ -226,22 +226,50 @@ with live_tab:
 
             with st.container(border=True):
 
-                match_name = row.get("match", "BRAK MECZU")
-                league = row.get("league", "")
-                ev = row.get("ev", "-")
-                status = row.get("status", "-")
+                match_name = (
+                    row.get("match")
+                    or row.get("mecz")
+                    or "BRAK MECZU"
+                )
+
+                league = (
+                    row.get("league")
+                    or row.get("liga")
+                    or ""
+                )
+
+                ev = (
+                    row.get("ev")
+                    or row.get("EV")
+                    or "-"
+                )
+
+                status = (
+                    row.get("status")
+                    or "LIVE"
+                )
+
+                confidence = (
+                    row.get("confidence")
+                    or row.get("CONFIDENCE")
+                    or row.get("conf")
+                    or "-"
+                )
 
                 st.subheader(match_name)
 
                 st.caption(f"🏆 {league}")
 
-                col1, col2 = st.columns(2)
+                col1, col2, col3 = st.columns(3)
 
                 with col1:
                     st.metric("EV", ev)
 
                 with col2:
                     st.metric("STATUS", status)
+
+                with col3:
+                    st.metric("CONF", confidence)
 
                 st.divider()
 
