@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
+import os
 
 # =========================
 # CONFIG
@@ -12,12 +13,31 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-DATA_DIR = Path("/app/data")
+# =========================
+# AUTO CSV DETECTION
+# =========================
 
-PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LIVE_FILE = DATA_DIR / "auto_all_picks.csv"
+POSSIBLE_PATHS = [
+    Path("/app/data/auto_all_picks.csv"),
+    Path("data/auto_all_picks.csv"),
+    Path("auto_all_picks.csv"),
+]
+
+LIVE_FILE = None
+
+for path in POSSIBLE_PATHS:
+    if path.exists():
+        LIVE_FILE = path
+        break
+
+if LIVE_FILE is None:
+    LIVE_FILE = POSSIBLE_PATHS[0]
+
+PREMATCH_FILE = LIVE_FILE
 
 BANNER_FILE = Path("kanibal_banner_pro.webp")
+
+print(f"📂 LIVE FILE -> {LIVE_FILE}")
 
 # =========================
 # DATA
@@ -25,7 +45,7 @@ BANNER_FILE = Path("kanibal_banner_pro.webp")
 
 def load_csv(path: Path) -> pd.DataFrame:
     try:
-        print(f"📂 LOADING CSV -> {path}")
+        print(f"📡 LOADING -> {path}")
 
         if not path.exists():
             print(f"❌ FILE NOT FOUND -> {path}")
@@ -33,18 +53,29 @@ def load_csv(path: Path) -> pd.DataFrame:
 
         df = pd.read_csv(path)
 
-        print(f"✅ LOADED ROWS -> {len(df)}")
+        print(f"✅ ROWS LOADED -> {len(df)}")
 
         return df
 
     except Exception as e:
-        print(f"❌ CSV LOAD ERROR -> {e}")
+        print(f"❌ CSV ERROR -> {e}")
 
         return pd.DataFrame()
 
 
 live_df = load_csv(LIVE_FILE)
+
+if live_df.empty:
+    print("❌ LIVE EMPTY")
+else:
+    print(f"✅ LIVE ROWS -> {len(live_df)}")
+
 prematch_df = load_csv(PREMATCH_FILE)
+
+if prematch_df.empty:
+    print("❌ PREMATCH EMPTY")
+else:
+    print(f"✅ PREMATCH ROWS -> {len(prematch_df)}")
 
 # =========================
 # CSS
@@ -53,6 +84,7 @@ prematch_df = load_csv(PREMATCH_FILE)
 st.markdown(
     """
     <style>
+
         .stApp {
             background:
                 radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
@@ -138,6 +170,7 @@ st.markdown(
 
             box-shadow: 0 18px 45px rgba(0,0,0,0.35);
         }
+
     </style>
     """,
     unsafe_allow_html=True
