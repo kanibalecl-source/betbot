@@ -321,7 +321,11 @@ with ranking_tab:
                 ascending=False
             ).head(10)
 
-        st.table(ranking_df)
+        st.dataframe(
+    live_df,
+    use_container_width=True,
+    height=700
+)
 
 # =========================
 # ALERTS
