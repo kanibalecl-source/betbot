@@ -15,7 +15,7 @@ st.set_page_config(
 DATA_DIR = Path("/app/data")
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LIVE_FILE = DATA_DIR / "live_matches.csv"
+LIVE_FILE = DATA_DIR / "auto_all_picks.csv"
 
 BANNER_FILE = Path("kanibal_banner_pro.webp")
 
