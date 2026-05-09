@@ -15,8 +15,10 @@ st.set_page_config(
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
+# LIVE i PREMATCH czytają ten sam plik
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LIVE_FILE = DATA_DIR / "live_matches.csv"
+LIVE_FILE = DATA_DIR / "auto_all_picks.csv"
+
 BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 
 # =========================
@@ -24,16 +26,19 @@ BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 # =========================
 
 def load_csv(path: Path) -> pd.DataFrame:
+
     if not path.exists():
         return pd.DataFrame()
 
     try:
         return pd.read_csv(path)
+
     except Exception:
         return pd.DataFrame()
 
 
 def clean_value(value, default="-"):
+
     try:
         if pd.isna(value):
             return default
@@ -49,9 +54,13 @@ def clean_value(value, default="-"):
 
 
 def first_existing(row, columns, default="-"):
+
     for col in columns:
+
         if col in row:
+
             value = clean_value(row.get(col), None)
+
             if value is not None:
                 return value
 
@@ -59,24 +68,34 @@ def first_existing(row, columns, default="-"):
 
 
 def format_confidence(value):
+
     value = clean_value(value, None)
 
     if value is None:
         return "-"
 
     try:
+
         number = float(value)
 
         if number <= 1:
             number *= 100
 
         return f"{number:.0f}%"
+
     except Exception:
         return "-"
 
 
-def only_existing_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    existing = [col for col in columns if col in df.columns]
+def only_existing_columns(
+    df: pd.DataFrame,
+    columns: list[str]
+) -> pd.DataFrame:
+
+    existing = [
+        col for col in columns
+        if col in df.columns
+    ]
 
     if not existing:
         return df
@@ -84,20 +103,11 @@ def only_existing_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return df[existing]
 
 
-def live_dataframe() -> pd.DataFrame:
-    live = load_csv(LIVE_FILE)
-
-    if not live.empty:
-        return live
-
-    return pd.DataFrame()
-
-
 # =========================
 # LOAD DATA
 # =========================
 
-live_df = live_dataframe()
+live_df = load_csv(LIVE_FILE)
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
@@ -107,6 +117,7 @@ prematch_df = load_csv(PREMATCH_FILE)
 st.markdown(
     """
     <style>
+
         .stApp {
             background:
                 radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
@@ -159,7 +170,9 @@ st.markdown(
                     rgba(88,255,47,0.15),
                     rgba(88,255,47,0.05)
                 ) !important;
+
             color: #58ff2f !important;
+
             border-bottom: 3px solid #58ff2f !important;
         }
 
@@ -170,9 +183,13 @@ st.markdown(
                     rgba(255,255,255,0.045),
                     rgba(255,255,255,0.018)
                 );
+
             border: 1px solid rgba(255,255,255,0.08);
+
             border-radius: 18px;
+
             box-shadow: 0 18px 45px rgba(0,0,0,0.35);
+
             margin-bottom: 18px;
         }
 
@@ -217,18 +234,25 @@ st.markdown(
         div[data-testid="stTable"] tr:hover {
             background: rgba(88,255,47,0.06) !important;
         }
+
     </style>
     """,
     unsafe_allow_html=True
 )
 
 # =========================
-# HEADER / BANNER
+# HEADER
 # =========================
 
 if BANNER_FILE.exists():
-    st.image(str(BANNER_FILE), use_container_width=True)
+
+    st.image(
+        str(BANNER_FILE),
+        use_container_width=True
+    )
+
 else:
+
     st.title("KANIBAL ANALYTICS")
     st.caption("ANALIZA • PRZEWAGA • ZYSK")
 
@@ -252,44 +276,118 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
 # =========================
 
 with live_tab:
+
     with st.container(border=True):
+
         st.header("🟢 LIVE SIGNALS")
         st.caption("AKTUALIZOWANE CO 60 SEKUND")
 
     if live_df.empty:
+
         st.warning("Brak danych LIVE")
+
     else:
+
         for _, row in live_df.iterrows():
-            home = first_existing(row, ["home", "home_team"], "")
-            away = first_existing(row, ["away", "away_team"], "")
 
-            if home or away:
-                match_name = f"{home} vs {away}"
-            else:
-                match_name = first_existing(row, ["match", "mecz"], "BRAK MECZU")
+            home = first_existing(
+                row,
+                ["home", "home_team"],
+                "HOME"
+            )
 
-            league = first_existing(row, ["league", "liga"], "-")
-            score = first_existing(row, ["score", "wynik"], "-")
-            signal = first_existing(row, ["signal", "typ", "market"], "BRAK TYPU")
-            ev = first_existing(row, ["ev", "EV"], "-")
-            confidence = format_confidence(first_existing(row, ["confidence", "conf"], "-"))
-            minute = first_existing(row, ["minute", "minuta"], "LIVE")
-            status = first_existing(row, ["status"], "LIVE")
-            risk = first_existing(row, ["risk"], "LOW").upper()
+            away = first_existing(
+                row,
+                ["away", "away_team"],
+                "AWAY"
+            )
 
-            if risk in ["HIGH", "TOP"]:
+            match_name = f"{home} vs {away}"
+
+            league = first_existing(
+                row,
+                ["league", "liga"],
+                "-"
+            )
+
+            score = first_existing(
+                row,
+                ["score"],
+                "-"
+            )
+
+            signal = first_existing(
+                row,
+                ["signal", "typ", "market"],
+                "BRAK TYPU"
+            )
+
+            ev = first_existing(
+                row,
+                ["ev"],
+                "-"
+            )
+
+            confidence = format_confidence(
+                first_existing(
+                    row,
+                    ["confidence"],
+                    0
+                )
+            )
+
+            minute = first_existing(
+                row,
+                ["minute"],
+                "LIVE"
+            )
+
+            status = first_existing(
+                row,
+                ["status"],
+                "LIVE"
+            )
+
+            risk = first_existing(
+                row,
+                ["risk"],
+                "LOW"
+            )
+
+            risk_upper = str(risk).upper()
+
+            if risk_upper in ["HIGH", "TOP"]:
                 tempo = "🔥 HIGH TEMPO"
-            elif risk == "MEDIUM":
+
+            elif risk_upper in ["MEDIUM"]:
                 tempo = "⚡ MEDIUM TEMPO"
+
             else:
                 tempo = "🧊 LOW TEMPO"
 
             with st.container(border=True):
+
                 st.subheader(match_name)
+
                 st.caption(f"🏆 {league}")
 
-                st.markdown(f"**⚽ WYNIK:** {score}")
-                st.markdown(f"**🎯 TYP:** {signal}")
+                st.markdown(
+                    f"### ⚽ WYNIK: {score}"
+                )
+
+                st.markdown(
+                    f"""
+                    <div style="
+                        color:#58ff2f;
+                        font-size:22px;
+                        font-weight:900;
+                        margin-bottom:14px;
+                    ">
+                        🎯 TYP: {signal}
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
 
                 col1, col2, col3, col4 = st.columns(4)
 
@@ -305,20 +403,27 @@ with live_tab:
                 with col4:
                     st.metric("STATUS", status)
 
-                st.info(f"📈 DYNAMIKA MECZU: {tempo}")
+                st.info(
+                    f"📈 DYNAMIKA MECZU: {tempo}"
+                )
 
 # =========================
-# PREMATCH — POPRZEDNIA WERSJA TABELI
+# PREMATCH
 # =========================
 
 with prematch_tab:
+
     with st.container(border=True):
+
         st.header("🟢 PREMATCH PICKS")
         st.caption("CORE VALUE ENGINE")
 
     if prematch_df.empty:
+
         st.warning("Brak danych PREMATCH")
+
     else:
+
         prematch_columns = [
             "data",
             "liga",
@@ -342,7 +447,10 @@ with prematch_tab:
             "status"
         ]
 
-        prematch_view = only_existing_columns(prematch_df, prematch_columns)
+        prematch_view = only_existing_columns(
+            prematch_df,
+            prematch_columns
+        )
 
         st.table(prematch_view)
 
@@ -351,7 +459,9 @@ with prematch_tab:
 # =========================
 
 with analytics_tab:
+
     with st.container(border=True):
+
         st.header("📊 ANALYTICS ENGINE")
         st.caption("AI PERFORMANCE ANALYTICS")
 
@@ -367,40 +477,56 @@ with analytics_tab:
         st.metric("AI EDGE", "+13.4%")
 
     with col4:
-        st.metric("TOTAL SIGNALS", len(live_df) + len(prematch_df))
+        st.metric(
+            "TOTAL SIGNALS",
+            len(live_df)
+        )
 
 # =========================
 # HISTORY
 # =========================
 
 with history_tab:
+
     with st.container(border=True):
+
         st.header("🕘 HISTORY ENGINE")
         st.caption("HISTORIA TYPÓW I ROZLICZEŃ")
 
-    st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
+    st.info(
+        "Historia zakładów będzie dostępna po wdrożeniu Settlement Engine."
+    )
 
 # =========================
 # RANKING
 # =========================
 
 with ranking_tab:
+
     with st.container(border=True):
+
         st.header("🏆 RANKING ENGINE")
         st.caption("TOP VALUE PICKS")
 
     if prematch_df.empty:
+
         st.warning("Brak danych do rankingu")
+
     else:
+
         ranking_df = prematch_df.copy()
 
         if "ev" in ranking_df.columns:
+
             ranking_df["ev"] = pd.to_numeric(
                 ranking_df["ev"],
                 errors="coerce"
             ).fillna(0)
 
-            ranking_df = ranking_df.sort_values("ev", ascending=False).head(10)
+            ranking_df = ranking_df.sort_values(
+                "ev",
+                ascending=False
+            ).head(10)
 
         ranking_columns = [
             "data",
@@ -414,7 +540,10 @@ with ranking_tab:
             "status"
         ]
 
-        ranking_view = only_existing_columns(ranking_df, ranking_columns)
+        ranking_view = only_existing_columns(
+            ranking_df,
+            ranking_columns
+        )
 
         st.table(ranking_view)
 
@@ -423,8 +552,12 @@ with ranking_tab:
 # =========================
 
 with alerts_tab:
+
     with st.container(border=True):
+
         st.header("🔔 ALERT ENGINE")
         st.caption("LIVE ALERTS & NOTIFICATIONS")
 
-    st.info("Alerty AI będą dostępne po podłączeniu systemu powiadomień.")
+    st.info(
+        "Alerty AI będą dostępne po podłączeniu systemu powiadomień."
+    )
