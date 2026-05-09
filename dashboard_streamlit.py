@@ -15,7 +15,7 @@ st.set_page_config(
 DATA_DIR = Path("data")
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LIVE_FILE = DATA_DIR / "live_matches.csv"
+LIVE_FILE = DATA_DIR / "auto_all_picks.csv"
 
 BANNER_FILE = Path("kanibal_banner_pro.webp")
 
@@ -55,7 +55,7 @@ live_df = load_csv(LIVE_FILE)
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
-# CSS
+# SAFE CSS ONLY
 # =========================
 
 st.markdown(
@@ -135,13 +135,47 @@ st.markdown(
             box-shadow: 0 18px 45px rgba(0,0,0,0.35);
         }
 
+        div[data-testid="stTable"] table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            background: #0d1014 !important;
+            color: #f2f2f2 !important;
+            font-size: 14px !important;
+        }
+
+        div[data-testid="stTable"] th {
+            background: #11161c !important;
+            color: #58ff2f !important;
+            padding: 14px 12px !important;
+            text-align: left !important;
+            border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+            font-weight: 900 !important;
+        }
+
+        div[data-testid="stTable"] td {
+            padding: 13px 12px !important;
+            border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+            color: #f2f2f2 !important;
+        }
+
+        div[data-testid="stTable"] tr:hover {
+            background: rgba(88,255,47,0.06) !important;
+        }
+
+        div[data-testid="stMetric"] {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 18px;
+        }
+
     </style>
     """,
     unsafe_allow_html=True
 )
 
 # =========================
-# HEADER
+# HEADER / BANNER
 # =========================
 
 if BANNER_FILE.exists():
@@ -188,107 +222,28 @@ with live_tab:
 
     else:
 
-        live_columns = [
-            "home",
-            "away",
-            "league",
-            "minute",
-            "score",
-            "pressure",
-            "momentum",
-            "signal",
-            "confidence",
-            "odds",
-            "value",
-            "ev",
-            "cashout",
-            "stake",
-            "risk",
-            "status"
-        ]
-
-        live_view = only_existing_columns(
-            live_df,
-            live_columns
-        )
-
-        for _, row in live_view.iterrows():
+        for _, row in live_df.iterrows():
 
             with st.container(border=True):
 
-                col1, col2, col3 = st.columns([3, 1, 1])
+                match_name = row.get("match", "BRAK MECZU")
+                league = row.get("league", "")
+                ev = row.get("ev", "-")
+                status = row.get("status", "-")
+
+                st.subheader(match_name)
+
+                st.caption(f"🏆 {league}")
+
+                col1, col2 = st.columns(2)
 
                 with col1:
-
-                    home = row.get("home", "")
-                    away = row.get("away", "")
-                    league = row.get("league", "")
-
-                    st.subheader(f"{home} vs {away}")
-
-                    st.caption(f"{league}")
+                    st.metric("EV", ev)
 
                 with col2:
+                    st.metric("STATUS", status)
 
-                    st.metric(
-                        "ODDS",
-                        row.get("odds", "-")
-                    )
-
-                with col3:
-
-                    st.metric(
-                        "CONF",
-                        row.get("confidence", "-")
-                    )
-
-                st.write(
-                    f"📡 SIGNAL: {row.get('signal', '-')}"
-                )
-
-                st.write(
-                    f"⚡ MOMENTUM: {row.get('momentum', '-')}"
-                )
-
-                st.write(
-                    f"🔥 PRESSURE: {row.get('pressure', '-')}"
-                )
-
-                st.write(
-                    f"💰 VALUE: {row.get('value', '-')}"
-                )
-
-                st.write(
-                    f"📈 EV: {row.get('ev', '-')}"
-                )
-
-                st.write(
-                    f"⏱️ MINUTE: {row.get('minute', '-')}"
-                )
-
-                st.write(
-                    f"⚽ SCORE: {row.get('score', '-')}"
-                )
-
-                st.write(
-                    f"🟢 STATUS: {row.get('status', '-')}"
-                )
-
-    with st.container(border=True):
-
-        st.header("CASHOUT AI GUIDE")
-
-        st.success(
-            "HOLD POSITION — Wysoka presja i momentum. Trzymaj zakład."
-        )
-
-        st.warning(
-            "PARTIAL CASHOUT — Spadający confidence. Rozważ częściowe wyjście."
-        )
-
-        st.error(
-            "FULL CASHOUT — Niski momentum i presja. Wyjdź z zakładu."
-        )
+                st.divider()
 
 # =========================
 # PREMATCH
@@ -307,12 +262,35 @@ with prematch_tab:
 
     else:
 
-        st.dataframe(
+        prematch_columns = [
+            "data",
+            "liga",
+            "mecz",
+            "market",
+            "typ",
+            "kurs_buk",
+            "kurs_model",
+            "kurs_bota",
+            "prawd_model",
+            "prawd_rynek",
+            "prawd_final",
+            "edge",
+            "ev",
+            "kelly_full",
+            "kelly_25",
+            "home_xg",
+            "away_xg",
+            "marza_sum",
+            "marza_%",
+            "status"
+        ]
+
+        prematch_view = only_existing_columns(
             prematch_df,
-            use_container_width=True,
-            height=700,
-            hide_index=True
+            prematch_columns
         )
+
+        st.table(prematch_view)
 
 # =========================
 # ANALYTICS
@@ -388,12 +366,24 @@ with ranking_tab:
                 ascending=False
             ).head(10)
 
-        st.dataframe(
+        ranking_columns = [
+            "data",
+            "liga",
+            "mecz",
+            "market",
+            "typ",
+            "kurs_buk",
+            "ev",
+            "edge",
+            "status"
+        ]
+
+        ranking_view = only_existing_columns(
             ranking_df,
-            use_container_width=True,
-            height=500,
-            hide_index=True
+            ranking_columns
         )
+
+        st.table(ranking_view)
 
 # =========================
 # ALERTS
