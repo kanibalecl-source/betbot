@@ -70,6 +70,35 @@ st.markdown(
             color: white;
         }
 
+        p, span, div, label {
+            color: #ffffff !important;
+        }
+
+        .stMetric label {
+            color: #ffffff !important;
+        }
+
+        .stMetric div {
+            color: #ffffff !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            color: #ffffff !important;
+            font-weight: 800 !important;
+        }
+
+        [data-testid="stMetricLabel"] {
+            color: #ffffff !important;
+        }
+
+        .stCaption {
+            color: #d9d9d9 !important;
+        }
+
+        .stMarkdown {
+            color: #ffffff !important;
+        }
+
         header[data-testid="stHeader"] {
             background: transparent;
         }
@@ -133,6 +162,8 @@ st.markdown(
             border-radius: 18px;
 
             box-shadow: 0 18px 45px rgba(0,0,0,0.35);
+
+            margin-bottom: 18px;
         }
 
         div[data-testid="stTable"] table {
@@ -270,8 +301,6 @@ with live_tab:
 
                 with col3:
                     st.metric("CONF", confidence)
-
-                st.divider()
 
 # =========================
 # PREMATCH
