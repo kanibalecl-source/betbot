@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime, timedelta
 
-API_KEY = "YOUR_API_KEY"
+API_KEY = "5fa34697895a8e2dc8a46e91bcd6dc81"
 
 HEADERS = {
     "x-apisports-key": API_KEY
