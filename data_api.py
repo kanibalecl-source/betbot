@@ -1,7 +1,7 @@
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
-API_KEY = "5fa34697895a8e2dc8a46e91bcd6dc81"
+API_KEY = "YOUR_API_KEY"
 
 HEADERS = {
     "x-apisports-key": API_KEY
@@ -63,7 +63,12 @@ def get_matches():
 
     try:
 
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        # FIX TIMEZONE
+        today = (
+            datetime.utcnow() + timedelta(hours=2)
+        ).strftime("%Y-%m-%d")
+
+        print(f"FETCH DATE: {today}")
 
         url = f"https://v3.football.api-sports.io/fixtures?date={today}"
 
