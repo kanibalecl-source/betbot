@@ -15,7 +15,7 @@ st.set_page_config(
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
-# LIVE i PREMATCH czytają ten sam plik
+# FINAL SOURCE
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 LIVE_FILE = DATA_DIR / "auto_all_picks.csv"
 
@@ -42,12 +42,15 @@ def clean_value(value, default="-"):
     try:
         if pd.isna(value):
             return default
-    except Exception:
+    except:
         pass
 
     value = str(value).strip()
 
-    if value == "" or value.lower() in ["nan", "none", "null"]:
+    if value == "":
+        return default
+
+    if value.lower() in ["nan", "none", "null"]:
         return default
 
     return value
@@ -59,7 +62,10 @@ def first_existing(row, columns, default="-"):
 
         if col in row:
 
-            value = clean_value(row.get(col), None)
+            value = clean_value(
+                row.get(col),
+                None
+            )
 
             if value is not None:
                 return value
@@ -76,21 +82,21 @@ def format_confidence(value):
 
     try:
 
-        number = float(value)
+        value = float(value)
 
-        if number <= 1:
-            number *= 100
+        if value <= 1:
+            value *= 100
 
-        return f"{number:.0f}%"
+        return f"{value:.0f}%"
 
-    except Exception:
+    except:
         return "-"
 
 
 def only_existing_columns(
     df: pd.DataFrame,
     columns: list[str]
-) -> pd.DataFrame:
+):
 
     existing = [
         col for col in columns
@@ -101,7 +107,6 @@ def only_existing_columns(
         return df
 
     return df[existing]
-
 
 # =========================
 # LOAD DATA
@@ -118,122 +123,122 @@ st.markdown(
     """
     <style>
 
-        .stApp {
-            background:
-                radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
-                radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
-                linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
-            color: white;
-        }
+    .stApp {
+        background:
+            radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
+            radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
+            linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
+        color: white;
+    }
 
-        header[data-testid="stHeader"] {
-            background: transparent;
-        }
+    header[data-testid="stHeader"] {
+        background: transparent;
+    }
 
-        .block-container {
-            max-width: 100% !important;
-            padding-top: 0.6rem;
-            padding-left: 2rem;
-            padding-right: 2rem;
-        }
+    .block-container {
+        max-width: 100% !important;
+        padding-top: 0.6rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
 
-        h1, h2, h3 {
-            color: white !important;
-            font-weight: 900 !important;
-        }
+    h1, h2, h3 {
+        color: white !important;
+        font-weight: 900 !important;
+    }
 
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 0;
-            background: #090b0d;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.08);
-            margin-top: 16px;
-            margin-bottom: 24px;
-            width: 100%;
-        }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0;
+        background: #090b0d;
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.08);
+        margin-top: 16px;
+        margin-bottom: 24px;
+        width: 100%;
+    }
 
-        .stTabs [data-baseweb="tab"] {
-            height: 68px;
-            background: #090b0d;
-            color: white;
-            font-weight: 800;
-            font-size: 13px;
-            border-right: 1px solid rgba(255,255,255,0.06);
-            flex-grow: 1;
-        }
+    .stTabs [data-baseweb="tab"] {
+        height: 68px;
+        background: #090b0d;
+        color: white;
+        font-weight: 800;
+        font-size: 13px;
+        border-right: 1px solid rgba(255,255,255,0.06);
+        flex-grow: 1;
+    }
 
-        .stTabs [aria-selected="true"] {
-            background:
-                linear-gradient(
-                    180deg,
-                    rgba(88,255,47,0.15),
-                    rgba(88,255,47,0.05)
-                ) !important;
+    .stTabs [aria-selected="true"] {
+        background:
+            linear-gradient(
+                180deg,
+                rgba(88,255,47,0.15),
+                rgba(88,255,47,0.05)
+            ) !important;
 
-            color: #58ff2f !important;
+        color: #58ff2f !important;
 
-            border-bottom: 3px solid #58ff2f !important;
-        }
+        border-bottom: 3px solid #58ff2f !important;
+    }
 
-        div[data-testid="stVerticalBlockBorderWrapper"] {
-            background:
-                linear-gradient(
-                    180deg,
-                    rgba(255,255,255,0.045),
-                    rgba(255,255,255,0.018)
-                );
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background:
+            linear-gradient(
+                180deg,
+                rgba(255,255,255,0.045),
+                rgba(255,255,255,0.018)
+            );
 
-            border: 1px solid rgba(255,255,255,0.08);
+        border: 1px solid rgba(255,255,255,0.08);
 
-            border-radius: 18px;
+        border-radius: 18px;
 
-            box-shadow: 0 18px 45px rgba(0,0,0,0.35);
+        box-shadow: 0 18px 45px rgba(0,0,0,0.35);
 
-            margin-bottom: 18px;
-        }
+        margin-bottom: 18px;
+    }
 
-        div[data-testid="stMetric"] {
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 16px;
-            padding: 18px;
-        }
+    div[data-testid="stMetric"] {
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 18px;
+    }
 
-        div[data-testid="stMetricLabel"] {
-            color: #ffffff !important;
-        }
+    div[data-testid="stMetricLabel"] {
+        color: #ffffff !important;
+    }
 
-        div[data-testid="stMetricValue"] {
-            color: #ffffff !important;
-        }
+    div[data-testid="stMetricValue"] {
+        color: #ffffff !important;
+    }
 
-        div[data-testid="stTable"] table {
-            width: 100% !important;
-            border-collapse: collapse !important;
-            background: #0d1014 !important;
-            color: #f2f2f2 !important;
-            font-size: 14px !important;
-        }
+    div[data-testid="stTable"] table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        background: #0d1014 !important;
+        color: #f2f2f2 !important;
+        font-size: 14px !important;
+    }
 
-        div[data-testid="stTable"] th {
-            background: #11161c !important;
-            color: #58ff2f !important;
-            padding: 14px 12px !important;
-            text-align: left !important;
-            border-bottom: 1px solid rgba(255,255,255,0.08) !important;
-            font-weight: 900 !important;
-        }
+    div[data-testid="stTable"] th {
+        background: #11161c !important;
+        color: #58ff2f !important;
+        padding: 14px 12px !important;
+        text-align: left !important;
+        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+        font-weight: 900 !important;
+    }
 
-        div[data-testid="stTable"] td {
-            padding: 13px 12px !important;
-            border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-            color: #f2f2f2 !important;
-        }
+    div[data-testid="stTable"] td {
+        padding: 13px 12px !important;
+        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+        color: #f2f2f2 !important;
+    }
 
-        div[data-testid="stTable"] tr:hover {
-            background: rgba(88,255,47,0.06) !important;
-        }
+    div[data-testid="stTable"] tr:hover {
+        background: rgba(88,255,47,0.06) !important;
+    }
 
     </style>
     """,
@@ -290,80 +295,203 @@ with live_tab:
 
         for _, row in live_df.iterrows():
 
+            # =========================
+            # MATCH NAME
+            # =========================
+
             home = first_existing(
                 row,
-                ["home", "home_team"],
-                "HOME"
+                [
+                    "home",
+                    "home_team",
+                    "gospodarze"
+                ],
+                ""
             )
 
             away = first_existing(
                 row,
-                ["away", "away_team"],
-                "AWAY"
+                [
+                    "away",
+                    "away_team",
+                    "goscie"
+                ],
+                ""
             )
 
-            match_name = f"{home} vs {away}"
+            if home == "" and away == "":
+
+                match_name = first_existing(
+                    row,
+                    [
+                        "match",
+                        "mecz"
+                    ],
+                    "BRAK MECZU"
+                )
+
+            else:
+
+                match_name = f"{home} vs {away}"
+
+            # =========================
+            # BASIC DATA
+            # =========================
 
             league = first_existing(
                 row,
-                ["league", "liga"],
+                [
+                    "league",
+                    "liga"
+                ],
                 "-"
             )
 
             score = first_existing(
                 row,
-                ["score"],
+                [
+                    "score",
+                    "wynik"
+                ],
                 "-"
             )
 
             signal = first_existing(
                 row,
-                ["signal", "typ", "market"],
+                [
+                    "signal",
+                    "typ",
+                    "market"
+                ],
                 "BRAK TYPU"
             )
 
             ev = first_existing(
                 row,
-                ["ev"],
+                [
+                    "ev",
+                    "EV"
+                ],
                 "-"
             )
 
-            confidence = format_confidence(
-                first_existing(
-                    row,
-                    ["confidence"],
-                    0
-                )
+            # =========================
+            # CONFIDENCE FIX
+            # =========================
+
+            confidence_raw = first_existing(
+                row,
+                [
+                    "confidence",
+                    "conf",
+                    "prawd_final",
+                    "prawd_model",
+                    "value"
+                ],
+                0
             )
 
-            minute = first_existing(
-                row,
-                ["minute"],
-                "LIVE"
+            confidence = format_confidence(
+                confidence_raw
             )
+
+            # =========================
+            # MINUTE FIX
+            # =========================
+
+            minute_raw = first_existing(
+                row,
+                [
+                    "minute",
+                    "min",
+                    "elapsed",
+                    "match_time",
+                    "time"
+                ],
+                ""
+            )
+
+            if minute_raw != "":
+                minute = f"{minute_raw}'"
+            else:
+                minute = "LIVE"
+
+            # =========================
+            # STATUS
+            # =========================
 
             status = first_existing(
                 row,
-                ["status"],
+                [
+                    "status"
+                ],
                 "LIVE"
             )
 
+            # =========================
+            # TEMPO
+            # =========================
+
             risk = first_existing(
                 row,
-                ["risk"],
+                [
+                    "risk"
+                ],
                 "LOW"
             )
 
-            risk_upper = str(risk).upper()
+            pressure = first_existing(
+                row,
+                [
+                    "pressure"
+                ],
+                ""
+            )
 
-            if risk_upper in ["HIGH", "TOP"]:
-                tempo = "🔥 HIGH TEMPO"
+            momentum = first_existing(
+                row,
+                [
+                    "momentum"
+                ],
+                ""
+            )
 
-            elif risk_upper in ["MEDIUM"]:
-                tempo = "⚡ MEDIUM TEMPO"
+            tempo = "🧊 LOW TEMPO"
 
-            else:
-                tempo = "🧊 LOW TEMPO"
+            try:
+
+                if pressure != "" and momentum != "":
+
+                    tempo_score = (
+                        float(pressure) +
+                        float(momentum)
+                    ) / 2
+
+                    if tempo_score >= 75:
+                        tempo = "🔥 HIGH TEMPO"
+
+                    elif tempo_score >= 45:
+                        tempo = "⚡ MEDIUM TEMPO"
+
+                    else:
+                        tempo = "🧊 LOW TEMPO"
+
+                else:
+
+                    risk_upper = str(risk).upper()
+
+                    if risk_upper in ["HIGH", "TOP"]:
+                        tempo = "🔥 HIGH TEMPO"
+
+                    elif risk_upper in ["MEDIUM"]:
+                        tempo = "⚡ MEDIUM TEMPO"
+
+            except:
+                pass
+
+            # =========================
+            # UI
+            # =========================
 
             with st.container(border=True):
 
