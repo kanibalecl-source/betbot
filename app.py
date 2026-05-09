@@ -1,5 +1,5 @@
 from pathlib import Path
-import pandas as pd
+import os
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 
 from database import init_db, save_bet, list_bets
