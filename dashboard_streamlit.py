@@ -12,38 +12,52 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-DATA_DIR = Path("data")
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LIVE_FILE = DATA_DIR / "auto_all_picks.csv"
-
-BANNER_FILE = Path("kanibal_banner_pro.webp")
+LIVE_FILE = DATA_DIR / "live_matches.csv"
+BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 
 # =========================
 # DATA
 # =========================
 
 def load_csv(path: Path) -> pd.DataFrame:
-
     if not path.exists():
         return pd.DataFrame()
 
     try:
         return pd.read_csv(path)
-
     except Exception:
         return pd.DataFrame()
 
 
-def only_existing_columns(
-    df: pd.DataFrame,
-    columns: list[str]
-) -> pd.DataFrame:
+def is_empty_value(value) -> bool:
+    if value is None:
+        return True
 
-    existing = [
-        col for col in columns
-        if col in df.columns
-    ]
+    try:
+        if pd.isna(value):
+            return True
+    except Exception:
+        pass
+
+    value = str(value).strip()
+
+    return value == "" or value.lower() in ["nan", "none", "null"]
+
+
+def first_value(row, keys, default="-"):
+    for key in keys:
+        if key in row and not is_empty_value(row.get(key)):
+            return row.get(key)
+
+    return default
+
+
+def only_existing_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    existing = [col for col in columns if col in df.columns]
 
     if not existing:
         return df
@@ -51,17 +65,91 @@ def only_existing_columns(
     return df[existing]
 
 
-live_df = load_csv(LIVE_FILE)
+def has_real_live_data(df: pd.DataFrame) -> bool:
+    if df.empty:
+        return False
+
+    useful_columns = [
+        "home",
+        "away",
+        "league",
+        "minute",
+        "score",
+        "signal",
+        "confidence",
+        "ev",
+        "value",
+        "cashout",
+        "stake",
+        "risk",
+        "status"
+    ]
+
+    existing = [col for col in useful_columns if col in df.columns]
+
+    if not existing:
+        return False
+
+    useful_df = df[existing].fillna("").astype(str)
+
+    return useful_df.apply(
+        lambda row: any(cell.strip() for cell in row),
+        axis=1
+    ).any()
+
+
+def format_percent(value):
+    if is_empty_value(value):
+        return "-"
+
+    try:
+        numeric = float(value)
+
+        if numeric <= 1:
+            numeric *= 100
+
+        return f"{numeric:.0f}%"
+
+    except Exception:
+        return "-"
+
+
+def parse_match(row):
+    home = first_value(row, ["home", "home_team"], "")
+    away = first_value(row, ["away", "away_team"], "")
+
+    if not is_empty_value(home) or not is_empty_value(away):
+        return f"{home} vs {away}".strip()
+
+    match_name = first_value(row, ["match", "mecz"], "")
+
+    if not is_empty_value(match_name):
+        return match_name
+
+    return "BRAK MECZU"
+
+
+def get_live_source():
+    live_df_raw = load_csv(LIVE_FILE)
+
+    if has_real_live_data(live_df_raw):
+        return live_df_raw
+
+    prematch_df_raw = load_csv(PREMATCH_FILE)
+
+    return prematch_df_raw
+
+
+live_df = get_live_source()
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
-# GLOBAL CSS
+# SAFE CSS ONLY
 # =========================
 
 st.markdown(
     """
     <style>
-
         .stApp {
             background:
                 radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
@@ -114,9 +202,7 @@ st.markdown(
                     rgba(88,255,47,0.15),
                     rgba(88,255,47,0.05)
                 ) !important;
-
             color: #58ff2f !important;
-
             border-bottom: 3px solid #58ff2f !important;
         }
 
@@ -127,13 +213,9 @@ st.markdown(
                     rgba(255,255,255,0.045),
                     rgba(255,255,255,0.018)
                 );
-
             border: 1px solid rgba(255,255,255,0.08);
-
             border-radius: 18px;
-
             box-shadow: 0 18px 45px rgba(0,0,0,0.35);
-
             margin-bottom: 18px;
         }
 
@@ -160,6 +242,10 @@ st.markdown(
             color: #f2f2f2 !important;
         }
 
+        div[data-testid="stTable"] tr:hover {
+            background: rgba(88,255,47,0.06) !important;
+        }
+
         div[data-testid="stMetric"] {
             background: rgba(255,255,255,0.04);
             border: 1px solid rgba(255,255,255,0.08);
@@ -167,24 +253,97 @@ st.markdown(
             padding: 18px;
         }
 
+        .kanibal-live-card {
+            color: #ffffff !important;
+            padding: 18px;
+            border-radius: 18px;
+            background:
+                linear-gradient(
+                    180deg,
+                    rgba(255,255,255,0.045),
+                    rgba(255,255,255,0.018)
+                );
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 18px 45px rgba(0,0,0,0.35);
+            margin-bottom: 18px;
+        }
+
+        .kanibal-live-card * {
+            color: #ffffff !important;
+        }
+
+        .kanibal-live-title {
+            font-size: 26px;
+            font-weight: 900;
+            margin-bottom: 6px;
+        }
+
+        .kanibal-live-league {
+            font-size: 14px;
+            opacity: 0.85;
+            margin-bottom: 12px;
+        }
+
+        .kanibal-live-score {
+            font-size: 17px;
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .kanibal-live-type {
+            color: #58ff2f !important;
+            font-size: 16px;
+            font-weight: 900;
+            margin-bottom: 14px;
+        }
+
+        .kanibal-live-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 14px;
+            margin-top: 12px;
+        }
+
+        .kanibal-live-box {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 16px;
+        }
+
+        .kanibal-live-label {
+            font-size: 12px;
+            font-weight: 800;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+
+        .kanibal-live-value {
+            font-size: 28px;
+            font-weight: 900;
+        }
+
+        .kanibal-live-dynamics {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-weight: 800;
+            font-size: 15px;
+        }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 # =========================
-# HEADER
+# HEADER / BANNER
 # =========================
 
 if BANNER_FILE.exists():
-
-    st.image(
-        str(BANNER_FILE),
-        use_container_width=True
-    )
-
+    st.image(str(BANNER_FILE), use_container_width=True)
 else:
-
     st.title("KANIBAL ANALYTICS")
     st.caption("ANALIZA • PRZEWAGA • ZYSK")
 
@@ -204,195 +363,142 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
 )
 
 # =========================
-# LIVE CSS
-# =========================
-
-st.markdown(
-    """
-    <style>
-
-    section[data-testid="stMain"] div[data-testid="stMetric"] label {
-        color: white !important;
-    }
-
-    section[data-testid="stMain"] div[data-testid="stMetricValue"] {
-        color: white !important;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# =========================
 # LIVE
 # =========================
 
 with live_tab:
-
     with st.container(border=True):
-
         st.header("🟢 LIVE SIGNALS")
         st.caption("AKTUALIZOWANE CO 60 SEKUND")
 
     if live_df.empty:
-
         st.warning("Brak danych LIVE")
-
     else:
-
         for _, row in live_df.iterrows():
+            match_name = parse_match(row)
 
-            with st.container(border=True):
+            league = first_value(
+                row,
+                ["league", "liga"],
+                "-"
+            )
 
-                home_team = row.get("home", "")
-                away_team = row.get("away", "")
+            score = first_value(
+                row,
+                ["score", "wynik"],
+                "-"
+            )
 
-                match_name = f"{home_team} vs {away_team}"
+            bet_type = first_value(
+                row,
+                ["signal", "typ", "market"],
+                "BRAK TYPU"
+            )
 
-                league = row.get("league", "")
+            ev = first_value(
+                row,
+                ["ev", "EV"],
+                "-"
+            )
 
-                score = row.get("score", "-")
-
-                ev = (
-                    row.get("ev")
-                    or row.get("EV")
-                    or "-"
+            confidence = format_percent(
+                first_value(
+                    row,
+                    ["confidence", "CONFIDENCE", "conf", "prawd_final", "prawd_model"],
+                    "-"
                 )
+            )
 
-                status = (
-                    row.get("status")
-                    or "LIVE"
-                )
+            minute = first_value(
+                row,
+                ["minute", "minuta", "time", "match_time"],
+                "LIVE"
+            )
 
-                minute = row.get("minute", "LIVE")
+            status = first_value(
+                row,
+                ["status"],
+                "LIVE"
+            )
 
-                confidence_raw = row.get("confidence", 0)
+            pressure = first_value(row, ["pressure"], "")
+            momentum = first_value(row, ["momentum"], "")
 
-                try:
+            tempo = "-"
 
-                    confidence_value = float(confidence_raw)
-
-                    if confidence_value <= 1:
-                        confidence_value *= 100
-
-                    confidence = f"{confidence_value:.0f}%"
-
-                except:
-                    confidence = "-"
-
-                bet_type = row.get("signal", "BRAK TYPU")
-
-                pressure = (
-                    row.get("pressure")
-                    or 0
-                )
-
-                momentum = (
-                    row.get("momentum")
-                    or 0
-                )
-
-                try:
-
-                    tempo_score = (
-                        float(pressure) +
-                        float(momentum)
-                    ) / 2
+            try:
+                if not is_empty_value(pressure) and not is_empty_value(momentum):
+                    tempo_score = (float(pressure) + float(momentum)) / 2
 
                     if tempo_score >= 75:
                         tempo = "🔥 HIGH TEMPO"
-
                     elif tempo_score >= 45:
                         tempo = "⚡ MEDIUM TEMPO"
-
                     else:
                         tempo = "🧊 LOW TEMPO"
+                else:
+                    risk = str(first_value(row, ["risk", "risk_level"], "")).upper()
+                    value = str(first_value(row, ["value"], "")).upper()
 
-                except:
-                    tempo = "-"
+                    if risk in ["HIGH", "TOP"] or value == "HIGH":
+                        tempo = "🔥 HIGH TEMPO"
+                    elif risk in ["MEDIUM", "LOW"] or value == "MEDIUM":
+                        tempo = "⚡ MEDIUM TEMPO"
+                    else:
+                        tempo = "🧊 LOW TEMPO"
+            except Exception:
+                tempo = "-"
 
-                st.subheader(match_name)
+            st.markdown(
+                f"""
+                <div class="kanibal-live-card">
+                    <div class="kanibal-live-title">{match_name}</div>
+                    <div class="kanibal-live-league">🏆 {league}</div>
+                    <div class="kanibal-live-score">⚽ WYNIK: {score}</div>
+                    <div class="kanibal-live-type">🎯 TYP: {bet_type}</div>
 
-                st.caption(f"🏆 {league}")
+                    <div class="kanibal-live-grid">
+                        <div class="kanibal-live-box">
+                            <div class="kanibal-live-label">EV</div>
+                            <div class="kanibal-live-value">{ev}</div>
+                        </div>
 
-                st.markdown(
-                    f"""
-                    <div style="
-                        color:white;
-                        font-size:18px;
-                        font-weight:800;
-                        margin-bottom:8px;
-                    ">
-                        ⚽ WYNIK: {score}
+                        <div class="kanibal-live-box">
+                            <div class="kanibal-live-label">CONF</div>
+                            <div class="kanibal-live-value">{confidence}</div>
+                        </div>
+
+                        <div class="kanibal-live-box">
+                            <div class="kanibal-live-label">MIN</div>
+                            <div class="kanibal-live-value">{minute}</div>
+                        </div>
+
+                        <div class="kanibal-live-box">
+                            <div class="kanibal-live-label">STATUS</div>
+                            <div class="kanibal-live-value">{status}</div>
+                        </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True
-                )
 
-                st.markdown(
-                    f"""
-                    <div style="
-                        color:#58ff2f;
-                        font-weight:800;
-                        margin-bottom:14px;
-                        font-size:16px;
-                    ">
-                        🎯 TYP: {bet_type}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                col1, col2, col3, col4 = st.columns(4)
-
-                with col1:
-                    st.metric("EV", ev)
-
-                with col2:
-                    st.metric("CONF", confidence)
-
-                with col3:
-                    st.metric("MIN", minute)
-
-                with col4:
-                    st.metric("STATUS", status)
-
-                st.markdown(
-                    f"""
-                    <div style="
-                        margin-top:12px;
-                        padding:14px;
-                        border-radius:14px;
-                        background:rgba(255,255,255,0.04);
-                        border:1px solid rgba(255,255,255,0.08);
-                        font-weight:700;
-                        font-size:15px;
-                        color:white;
-                    ">
+                    <div class="kanibal-live-dynamics">
                         📈 DYNAMIKA MECZU: {tempo}
                     </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
 # =========================
 # PREMATCH
 # =========================
 
 with prematch_tab:
-
     with st.container(border=True):
-
         st.header("🟢 PREMATCH PICKS")
         st.caption("CORE VALUE ENGINE")
 
     if prematch_df.empty:
-
         st.warning("Brak danych PREMATCH")
-
     else:
-
         prematch_columns = [
             "data",
             "liga",
@@ -416,10 +522,7 @@ with prematch_tab:
             "status"
         ]
 
-        prematch_view = only_existing_columns(
-            prematch_df,
-            prematch_columns
-        )
+        prematch_view = only_existing_columns(prematch_df, prematch_columns)
 
         st.table(prematch_view)
 
@@ -428,9 +531,7 @@ with prematch_tab:
 # =========================
 
 with analytics_tab:
-
     with st.container(border=True):
-
         st.header("📊 ANALYTICS ENGINE")
         st.caption("AI PERFORMANCE ANALYTICS")
 
@@ -446,47 +547,34 @@ with analytics_tab:
         st.metric("AI EDGE", "+13.4%")
 
     with col4:
-        st.metric(
-            "TOTAL SIGNALS",
-            len(live_df) + len(prematch_df)
-        )
+        st.metric("TOTAL SIGNALS", len(live_df) + len(prematch_df))
 
 # =========================
 # HISTORY
 # =========================
 
 with history_tab:
-
     with st.container(border=True):
-
         st.header("🕘 HISTORY ENGINE")
         st.caption("HISTORIA TYPÓW I ROZLICZEŃ")
 
-    st.info(
-        "Historia zakładów będzie dostępna po wdrożeniu Settlement Engine."
-    )
+    st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
 
 # =========================
 # RANKING
 # =========================
 
 with ranking_tab:
-
     with st.container(border=True):
-
         st.header("🏆 RANKING ENGINE")
         st.caption("TOP VALUE PICKS")
 
     if prematch_df.empty:
-
         st.warning("Brak danych do rankingu")
-
     else:
-
         ranking_df = prematch_df.copy()
 
         if "ev" in ranking_df.columns:
-
             ranking_df["ev"] = pd.to_numeric(
                 ranking_df["ev"],
                 errors="coerce"
@@ -509,10 +597,7 @@ with ranking_tab:
             "status"
         ]
 
-        ranking_view = only_existing_columns(
-            ranking_df,
-            ranking_columns
-        )
+        ranking_view = only_existing_columns(ranking_df, ranking_columns)
 
         st.table(ranking_view)
 
@@ -521,12 +606,8 @@ with ranking_tab:
 # =========================
 
 with alerts_tab:
-
     with st.container(border=True):
-
         st.header("🔔 ALERT ENGINE")
         st.caption("LIVE ALERTS & NOTIFICATIONS")
 
-    st.info(
-        "Alerty AI będą dostępne po podłączeniu systemu powiadomień."
-    )
+    st.info("Alerty AI będą dostępne po podłączeniu systemu powiadomień.")
