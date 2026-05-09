@@ -43,20 +43,11 @@ def load_csv(path: Path) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def only_existing_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    existing = [col for col in columns if col in df.columns]
-
-    if not existing:
-        return df
-
-    return df[existing]
-
-
 live_df = load_csv(LIVE_FILE)
 prematch_df = load_csv(PREMATCH_FILE)
 
 # =========================
-# SAFE CSS ONLY
+# CSS
 # =========================
 
 st.markdown(
@@ -77,8 +68,8 @@ st.markdown(
         .block-container {
             max-width: 100% !important;
             padding-top: 0.6rem;
-            padding-left: 2rem;
-            padding-right: 2rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
         }
 
         h1, h2, h3 {
@@ -114,8 +105,23 @@ st.markdown(
                     rgba(88,255,47,0.15),
                     rgba(88,255,47,0.05)
                 ) !important;
+
             color: #58ff2f !important;
+
             border-bottom: 3px solid #58ff2f !important;
+        }
+
+        .stDataFrame {
+            width: 100% !important;
+            overflow-x: auto !important;
+        }
+
+        .stDataFrame table {
+            min-width: 2800px !important;
+        }
+
+        iframe {
+            width: 100% !important;
         }
 
         div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -125,43 +131,12 @@ st.markdown(
                     rgba(255,255,255,0.045),
                     rgba(255,255,255,0.018)
                 );
+
             border: 1px solid rgba(255,255,255,0.08);
+
             border-radius: 18px;
+
             box-shadow: 0 18px 45px rgba(0,0,0,0.35);
-        }
-
-        div[data-testid="stTable"] table {
-            width: 100% !important;
-            border-collapse: collapse !important;
-            background: #0d1014 !important;
-            color: #f2f2f2 !important;
-            font-size: 14px !important;
-        }
-
-        div[data-testid="stTable"] th {
-            background: #11161c !important;
-            color: #58ff2f !important;
-            padding: 14px 12px !important;
-            text-align: left !important;
-            border-bottom: 1px solid rgba(255,255,255,0.08) !important;
-            font-weight: 900 !important;
-        }
-
-        div[data-testid="stTable"] td {
-            padding: 13px 12px !important;
-            border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-            color: #f2f2f2 !important;
-        }
-
-        div[data-testid="stTable"] tr:hover {
-            background: rgba(88,255,47,0.06) !important;
-        }
-
-        div[data-testid="stMetric"] {
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 16px;
-            padding: 18px;
         }
     </style>
     """,
@@ -169,7 +144,7 @@ st.markdown(
 )
 
 # =========================
-# HEADER / BANNER
+# HEADER
 # =========================
 
 if BANNER_FILE.exists():
@@ -198,83 +173,53 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
 # =========================
 
 with live_tab:
+
     with st.container(border=True):
         st.header("🟢 LIVE SIGNALS")
         st.caption("AKTUALIZOWANE CO 60 SEKUND")
 
     if live_df.empty:
+
         st.warning("Brak danych LIVE")
+
     else:
-        live_columns = [
-            "home",
-            "away",
-            "league",
-            "minute",
-            "score",
-            "pressure",
-            "momentum",
-            "signal",
-            "confidence",
-            "odds",
-            "value",
-            "ev",
-            "cashout",
-            "stake",
-            "risk",
-            "status"
-        ]
 
-        live_view = only_existing_columns(live_df, live_columns)
-
-        st.table(live_view)
+        st.dataframe(
+            live_df,
+            width=3000,
+            height=900,
+            hide_index=True
+        )
 
 # =========================
 # PREMATCH
 # =========================
 
 with prematch_tab:
+
     with st.container(border=True):
         st.header("🟢 PREMATCH PICKS")
         st.caption("CORE VALUE ENGINE")
 
     if prematch_df.empty:
+
         st.warning("Brak danych PREMATCH")
+
     else:
-        prematch_columns = [
-            "data",
-            "liga",
-            "mecz",
-            "market",
-            "typ",
-            "kurs_buk",
-            "kurs_model",
-            "kurs_bota",
-            "prawd_model",
-            "prawd_rynek",
-            "prawd_final",
-            "edge",
-            "ev",
-            "kelly_full",
-            "kelly_25",
-            "home_xg",
-            "away_xg",
-            "marza_sum",
-            "marza_%",
-            "status"
-        ]
 
-        prematch_view = only_existing_columns(
+        st.dataframe(
             prematch_df,
-            prematch_columns
+            width=3000,
+            height=900,
+            hide_index=True
         )
-
-        st.table(prematch_view)
 
 # =========================
 # ANALYTICS
 # =========================
 
 with analytics_tab:
+
     with st.container(border=True):
         st.header("📊 ANALYTICS ENGINE")
         st.caption("AI PERFORMANCE ANALYTICS")
@@ -298,6 +243,7 @@ with analytics_tab:
 # =========================
 
 with history_tab:
+
     st.info("Historia zakładów będzie dostępna po wdrożeniu Settlement Engine.")
 
 # =========================
@@ -305,12 +251,17 @@ with history_tab:
 # =========================
 
 with ranking_tab:
+
     if prematch_df.empty:
+
         st.warning("Brak danych do rankingu")
+
     else:
+
         ranking_df = prematch_df.copy()
 
         if "ev" in ranking_df.columns:
+
             ranking_df["ev"] = pd.to_numeric(
                 ranking_df["ev"],
                 errors="coerce"
@@ -322,14 +273,16 @@ with ranking_tab:
             ).head(10)
 
         st.dataframe(
-    live_df,
-    use_container_width=True,
-    height=700
-)
+            ranking_df,
+            width=3000,
+            height=700,
+            hide_index=True
+        )
 
 # =========================
 # ALERTS
 # =========================
 
 with alerts_tab:
+
     st.info("Alerty AI będą dostępne po podłączeniu systemu powiadomień.")
