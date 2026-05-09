@@ -83,6 +83,21 @@ def confidence_format(v):
         return "-"
 
 
+def only_existing_columns(
+    dataframe,
+    columns
+):
+
+    existing = [
+        c for c in columns
+        if c in dataframe.columns
+    ]
+
+    if not existing:
+        return dataframe
+
+    return dataframe[existing]
+
 # =====================================
 # CSS
 # =====================================
@@ -407,7 +422,35 @@ with prematch_tab:
 
     else:
 
-        st.table(df)
+        prematch_columns = [
+            "data",
+            "liga",
+            "mecz",
+            "market",
+            "typ",
+            "kurs_buk",
+            "kurs_model",
+            "kurs_bota",
+            "prawd_model",
+            "prawd_rynek",
+            "prawd_final",
+            "edge",
+            "ev",
+            "kelly_full",
+            "kelly_25",
+            "home_xg",
+            "away_xg",
+            "marza_sum",
+            "marza_%",
+            "status"
+        ]
+
+        prematch_view = only_existing_columns(
+            df,
+            prematch_columns
+        )
+
+        st.table(prematch_view)
 
 # =====================================
 # ANALYTICS
