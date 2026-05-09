@@ -2,7 +2,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 
-API_KEY = os.getenv("API_FOOTBALL_KEY", "5fa34697895a8e2dc8a46e91bcd6dc81")
+API_KEY = os.getenv("API_FOOTBALL_KEY", "YOUR_API_KEY")
 
 BASE_URL = "https://v3.football.api-sports.io"
 
@@ -13,12 +13,16 @@ HEADERS = {
 MAX_MATCHES = 100
 
 TOP_LEAGUE_IDS = [
-    39, 140, 135, 78, 61, 88, 94, 203, 106,
-    2, 3, 71, 128, 235, 218, 119, 103, 113
+    39, 140, 135, 78, 61,
+    88, 94, 203, 106,
+    2, 3, 71, 128,
+    235, 218, 119,
+    103, 113
 ]
 
 
 def _request(endpoint, params):
+
     url = f"{BASE_URL}/{endpoint}"
 
     response = requests.get(
@@ -48,6 +52,7 @@ def _request(endpoint, params):
 
 
 def is_real_match(f):
+
     try:
         league_name = f["league"]["name"].lower()
         home = f["teams"]["home"]["name"].lower()
@@ -56,14 +61,22 @@ def is_real_match(f):
         return False
 
     bad_words = [
-        "women", "u19", "u20", "u21", "youth",
-        "reserve", "ii", "iii"
+        "women",
+        "u19",
+        "u20",
+        "u21",
+        "youth",
+        "reserve",
+        "ii",
+        "iii"
     ]
 
     if any(b in league_name for b in bad_words):
         return False
+
     if any(b in home for b in bad_words):
         return False
+
     if any(b in away for b in bad_words):
         return False
 
@@ -71,6 +84,7 @@ def is_real_match(f):
 
 
 def _normalize_match(f):
+
     league_id = f["league"]["id"]
 
     return {
@@ -94,15 +108,39 @@ def _normalize_match(f):
 
 
 def _filter_and_normalize(fixtures):
+
     matches = []
 
     for f in fixtures:
+
         if len(matches) >= MAX_MATCHES:
             break
 
         try:
             league_id = f["league"]["id"]
+
+            status = f.get(
+                "fixture",
+                {}
+            ).get(
+                "status",
+                {}
+            ).get(
+                "short",
+                ""
+            )
+
         except Exception:
+            continue
+
+        # POMIŃ ZAKOŃCZONE MECZE
+        if status in [
+            "FT",
+            "AET",
+            "PEN",
+            "CANC",
+            "PST"
+        ]:
             continue
 
         if league_id not in TOP_LEAGUE_IDS:
@@ -117,32 +155,36 @@ def _filter_and_normalize(fixtures):
 
 
 def get_matches():
-    """
-    Przywrócony stary fetcher + bezpieczne fallbacki dat.
-
-    Najważniejsza poprawka:
-    - NIE używamy wymuszonego UTC+2 jako jedynej daty.
-    - Railway działa w UTC, a poprzednia wersja działała na dacie UTC.
-    - Teraz próbujemy kilka dat, ale zaczynamy od UTC, żeby nie pytać API o zły dzień po północy CEST.
-    """
 
     if not API_KEY or API_KEY == "YOUR_API_KEY":
-        print("⚠️ BRAK API_FOOTBALL_KEY — ustaw zmienną Railway albo wpisz klucz w data_api.py")
+        print("⚠️ BRAK API_FOOTBALL_KEY")
         return []
 
     date_candidates = []
 
     utc_today = datetime.utcnow().strftime("%Y-%m-%d")
-    server_today = datetime.now().strftime("%Y-%m-%d")
-    cest_today = (datetime.utcnow() + timedelta(hours=2)).strftime("%Y-%m-%d")
-    utc_yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
-    utc_tomorrow = (datetime.utcnow() + timedelta(days=1)).strftime("%Y-%m-%d")
 
-    for d in [utc_today, server_today, cest_today, utc_yesterday, utc_tomorrow]:
+    server_today = datetime.now().strftime("%Y-%m-%d")
+
+    cest_today = (
+        datetime.utcnow() + timedelta(hours=2)
+    ).strftime("%Y-%m-%d")
+
+    utc_tomorrow = (
+        datetime.utcnow() + timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+
+    for d in [
+        utc_today,
+        server_today,
+        cest_today,
+        utc_tomorrow
+    ]:
         if d not in date_candidates:
             date_candidates.append(d)
 
     for day in date_candidates:
+
         print(f"FETCH DATE TRY: {day}")
 
         fixtures = _request(
@@ -176,15 +218,20 @@ def get_matches():
 
 
 def get_odds_market_data(match):
+
     fixture_id = match.get("fixture_id")
 
     if not fixture_id:
         return None
 
     url = f"{BASE_URL}/odds"
-    params = {"fixture": fixture_id}
+
+    params = {
+        "fixture": fixture_id
+    }
 
     try:
+
         response = requests.get(
             url,
             headers=HEADERS,
@@ -205,38 +252,49 @@ def get_odds_market_data(match):
             return None
 
         bookmakers = response_data[0].get("bookmakers", [])
+
         markets = {}
 
         for bookmaker in bookmakers:
+
             bookmaker_name = bookmaker.get("name", "")
 
             for bet in bookmaker.get("bets", []):
+
                 market_name = bet.get("name")
 
                 for value in bet.get("values", []):
+
                     try:
                         odd = float(value.get("odd", 0))
                     except Exception:
                         continue
 
                     outcome = value.get("value")
+
                     key = None
 
                     if market_name == "Match Winner":
+
                         if outcome == "Home":
                             key = "HOME_WIN"
+
                         elif outcome == "Draw":
                             key = "DRAW"
+
                         elif outcome == "Away":
                             key = "AWAY_WIN"
 
                     elif market_name == "Both Teams Score":
+
                         if outcome == "Yes":
                             key = "BTTS_YES"
+
                         elif outcome == "No":
                             key = "BTTS_NO"
 
                     elif market_name and "Over/Under" in market_name:
+
                         try:
                             line = outcome.split(" ")[-1]
                         except Exception:
@@ -244,17 +302,23 @@ def get_odds_market_data(match):
 
                         if "Over" in outcome:
                             key = f"OVER_{line}"
+
                         elif "Under" in outcome:
                             key = f"UNDER_{line}"
 
                     if key:
+
                         if key not in markets:
+
                             markets[key] = {
                                 "best_odds": odd,
                                 "bookmaker": bookmaker_name
                             }
+
                         else:
+
                             if odd > markets[key]["best_odds"]:
+
                                 markets[key] = {
                                     "best_odds": odd,
                                     "bookmaker": bookmaker_name
@@ -263,11 +327,15 @@ def get_odds_market_data(match):
         return markets
 
     except Exception as e:
+
         print("❌ ODDS ERROR:", e)
+
         return None
 
 
 if __name__ == "__main__":
+
     matches = get_matches()
+
     print(f"FINAL MATCHES: {len(matches)}")
     print(matches[:3])
