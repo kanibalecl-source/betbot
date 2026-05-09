@@ -1,24 +1,78 @@
+import subprocess
 import time
-import sys
 import traceback
+import sys
+from datetime import datetime
 
-print("🚨🚨🚨 NOWY SCHEDULER DZIAŁA 🚨🚨🚨")
+print("🚨 SCHEDULER FILE STARTED")
 
 sys.stdout.flush()
 
-while True:
-    try:
-        print("💓 LOOP DZIAŁA")
+
+def run_prematch():
+    while True:
+        try:
+            print("🚀 START PREMATCH BOT")
+            print(f"⏰ {datetime.now()}")
+
+            sys.stdout.flush()
+
+            print("📡 FETCHING MATCHES")
+
+            sys.stdout.flush()
+
+            process = subprocess.Popen(
+                ["python3", "bot.py"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+
+            while True:
+                output = process.stdout.readline()
+
+                if output == "" and process.poll() is not None:
+                    break
+
+                if output:
+                    print(f"[BOT] {output.strip()}")
+
+                    sys.stdout.flush()
+
+            return_code = process.poll()
+
+            print(f"✅ BOT EXECUTED | CODE={return_code}")
+
+            sys.stdout.flush()
+
+            print("✅ LIVE SAVED")
+            print("💓 SCHEDULER LOOP OK")
+
+            sys.stdout.flush()
+
+        except Exception as e:
+            print(f"❌ BŁĄD PREMATCH: {e}")
+
+            traceback.print_exc()
+
+            sys.stdout.flush()
+
+        print("⏳ Kolejne uruchomienie za 5 minut")
 
         sys.stdout.flush()
 
-        time.sleep(10)
+        time.sleep(300)
 
-    except Exception as e:
-        print(f"❌ SCHEDULER ERROR: {e}")
 
-        traceback.print_exc()
+def main():
+    print("🚀 BETBOT PRODUCTION SCHEDULER")
+    print(f"⏰ {datetime.now()}")
 
-        sys.stdout.flush()
+    sys.stdout.flush()
 
-        time.sleep(5)
+    run_prematch()
+
+
+if __name__ == "__main__":
+    main()
