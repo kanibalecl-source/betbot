@@ -290,3 +290,6 @@ with ranking_tab:
 
 with alerts_tab:
     st.header("🔔 ALERTS")
+
+
+# META AI ENGINE ENABLED

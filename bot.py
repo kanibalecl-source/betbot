@@ -1,3 +1,5 @@
+from stage_a_value_layer import StageAValueLayer
+from stage_b_model_layer import StageBModelLayer
 from stage_c_meta_layer import StageCMetaLayer
 import json
 import hashlib
@@ -506,6 +508,10 @@ def run_bot():
 
     engines = build_stage_engines()
 
+    stage_a = StageAValueLayer()
+    stage_b = StageBModelLayer()
+    stage_c = StageCMetaLayer()
+
     print("✅ STAGE ENGINES:")
     for name, engine in engines.items():
         print(f" - {name}: {'ON' if engine else 'OFF'}")
@@ -617,6 +623,34 @@ def run_bot():
             )
 
             final_prob = probability_data["final_probability"]
+
+            stage_a_data = stage_a.enrich_pick(
+                pick={},
+                probability=final_prob,
+                league=match.get("league", ""),
+                market=market,
+                opening_odds=data.get("opening_odds"),
+                current_odds=book_odds,
+                market_avg_odds=data.get("market_avg_odds"),
+                pinnacle_odds=data.get("pinnacle_odds"),
+                betfair_odds=data.get("betfair_odds")
+            )
+
+            stage_b_data = stage_b.enrich_pick(
+                pick={},
+                probability=final_prob,
+                home_xg=home_xg,
+                away_xg=away_xg,
+                minute=match.get("minute", 0),
+                shots_on_target=match.get("shots_on_target", 0),
+                dangerous_attacks=match.get("dangerous_attacks", 0),
+                possession=match.get("possession", 50),
+                pressure=pressure,
+                corners=match.get("corners", 0),
+                sharp_score=stage_a_data.get("sharp_score", 0),
+                clv_score=0
+            )
+
             fair_odds_model = probability_data["fair_odds_model"]
             fair_odds_final = probability_data["fair_odds_final"]
 
@@ -671,7 +705,24 @@ def run_bot():
                 book_odds
             )
 
-            movement = stage_movement(
+                        stage_c_data = stage_c.enrich_pick(
+                pick={},
+                market=market,
+                model_prob=model_prob,
+                market_prob=true_book_prob,
+                xg_prob=stage_b_data.get("advanced_over25_prob"),
+                momentum_prob=stage_b_data.get("confidence_calibrated_v2"),
+                sharp_prob=stage_a_data.get("stage_a_probability"),
+                base_stake=recommended_stake,
+                confidence=confidence_percent,
+                ev=ev_percent,
+                risk_label=risk_level,
+                sharp_score=stage_a_data.get("sharp_score", 0),
+                clv_percent=0,
+                momentum_score=stage_b_data.get("momentum_score", 0)
+            )
+
+movement = stage_movement(
                 engines,
                 book_odds,
                 data.get("opening_odds")
@@ -761,6 +812,25 @@ def run_bot():
                 "risk_level": risk_level,
                 "ai_risk": ai_risk,
                 "risk": ai_risk,
+                "sharp_score": stage_a_data.get("sharp_score"),
+                "sharp_label": stage_a_data.get("sharp_label"),
+                "sharp_signals": stage_a_data.get("sharp_signals"),
+                "stage_a_probability": stage_a_data.get("stage_a_probability"),
+
+                "advanced_total_xg": stage_b_data.get("advanced_total_xg"),
+                "advanced_over25_prob": stage_b_data.get("advanced_over25_prob"),
+                "momentum_score": stage_b_data.get("momentum_score"),
+                "momentum_label": stage_b_data.get("momentum_label"),
+                "confidence_calibrated_v2": stage_b_data.get("confidence_calibrated_v2"),
+
+                "meta_probability": stage_c_data.get("meta_probability"),
+                "meta_weight_model": stage_c_data.get("meta_weight_model"),
+                "meta_weight_market": stage_c_data.get("meta_weight_market"),
+                "meta_weight_xg": stage_c_data.get("meta_weight_xg"),
+                "meta_weight_momentum": stage_c_data.get("meta_weight_momentum"),
+                "meta_weight_sharp": stage_c_data.get("meta_weight_sharp"),
+                "dynamic_stake": stage_c_data.get("dynamic_stake"),
+
                 "status": match_status if match_status else "NEW"
             })
 
@@ -789,7 +859,7 @@ def run_bot():
     print("✅ GOTOWE")
     print(f"📊 {len(df)} typów zapisanych")
     print(f"📁 {ALL_FILE}")
-    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv")
+    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv, stage_a, stage_b, stage_c")
 
 
 if __name__ == "__main__":
