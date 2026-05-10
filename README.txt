@@ -1,19 +1,22 @@
-FINAL ALL BADGES PATCH
 
-Nadpisz:
-dashboard_streamlit.py
+NADPISANIE BLOKU BADGE
 
-NAPRAWIA:
-- każdy mecz pokazuje badge rankingowy
-- STANDARD też jest widoczny
-- poprawiona kolorystyka
-- lepszy glow i widoczność
-- ULTRA ELITE / TOP PICK / BEST PICK / VALUE PICK / STANDARD
+1. Otwórz dashboard_streamlit.py
 
-Badge pojawia się:
-PREMATCH -> kliknięcie meczu -> nad AI DETAILS
+2. Znajdź:
+with st.expander(f"📊 {match_name}"):
 
-Deploy:
+3. POD TYM wklej zawartość:
+dashboard_badge_block.py
+
+4. Usuń stare uszkodzone badge block jeśli istnieją.
+
+5. Deploy:
 git add .
-git commit -m "final all badges fix"
+git commit -m "safe dashboard render fix"
 git push
+
+Ta wersja:
+- nie psuje renderowania,
+- pokazuje badge dla każdego meczu,
+- zachowuje obecną kolorystykę.
