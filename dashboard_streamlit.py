@@ -29,6 +29,14 @@ def load_csv():
 
 df = load_csv()
 
+# =========================
+# DISPLAY FILTER: ODDS 1.00–2.50
+# =========================
+if not df.empty and "kurs_buk" in df.columns:
+    df["_kurs_buk_num"] = pd.to_numeric(df["kurs_buk"], errors="coerce")
+    df = df[(df["_kurs_buk_num"] >= 1.00) & (df["_kurs_buk_num"] <= 2.50)].copy()
+
+
 def only_existing_columns(dataframe, columns):
     existing = [c for c in columns if c in dataframe.columns]
     if not existing:
@@ -204,53 +212,57 @@ with prematch_tab:
             match_name = row.get("mecz", row.get("match", "BRAK MECZU"))
 
             with st.expander(f"📊 {match_name}"):
+
                 # =========================
-                # BEST PICK VISUAL BOX
+                # PROFESSIONAL PICK BADGE
                 # =========================
                 pick_label = str(row.get("best_pick_label", "STANDARD")).upper()
-                ai_score = row.get("ai_pick_score", "-")
+
+                badge_colors = {
+                    "TOP PICK": "#58ff2f",
+                    "BEST PICK": "#2ecc71",
+                    "VALUE PICK": "#f1c40f",
+                    "STANDARD": "#888888"
+                }
+
+                badge_color = badge_colors.get(pick_label, "#888888")
 
                 if pick_label != "STANDARD":
-
-                    badge_colors = {
-                        "TOP PICK": "#00ff66",
-                        "BEST PICK": "#2ecc71",
-                        "VALUE PICK": "#f1c40f"
-                    }
-
-                    badge_color = badge_colors.get(pick_label, "#00ff66")
-
                     st.markdown(
                         f"""
                         <div style="
-                            background:{badge_color}22;
-                            border:3px solid {badge_color};
-                            border-radius:18px;
-                            padding:18px;
-                            margin-bottom:20px;
-                            text-align:center;
-                            box-shadow:0 0 25px {badge_color}55;
+                            background: linear-gradient(90deg, {badge_color}33, rgba(255,255,255,0.02));
+                            border: 3px solid {badge_color};
+                            border-radius: 18px;
+                            padding: 18px;
+                            margin-bottom: 20px;
+                            text-align: center;
+                            box-shadow: 0 0 25px {badge_color}55;
                         ">
                             <div style="
-                                color:{badge_color};
-                                font-size:30px;
-                                font-weight:900;
+                                color: {badge_color};
+                                font-size: 30px;
+                                font-weight: 900;
                             ">
                                 {pick_label}
                             </div>
-
                             <div style="
-                                color:white;
-                                font-size:18px;
-                                margin-top:8px;
+                                color: white;
+                                font-size: 18px;
+                                margin-top: 8px;
                             ">
-                                AI SCORE: {ai_score}
+                                AI SCORE: {row.get("ai_pick_score", "-")}
+                                |
+                                EV: {row.get("ev", "-")}
+                                |
+                                CONFIDENCE: {row.get("confidence", "-")}
+                                |
+                                ODDS: {row.get("kurs_buk", "-")}
                             </div>
                         </div>
                         """,
                         unsafe_allow_html=True
                     )
-
 
 
                 c1, c2, c3 = st.columns(3)
@@ -278,9 +290,7 @@ with prematch_tab:
                         <b>EV:</b> {row.get("ev", "-")}<br>
                         <b>EDGE:</b> {row.get("edge", "-")}<br>
                         <b>KELLY:</b> {row.get("kelly_25", "-")}<br>
-                        <b>RISK:</b> {row.get("risk",
-            "best_pick_label",
-            "ai_pick_score", "-")}<br>
+                        <b>RISK:</b> {row.get("risk", "-")}<br>
                         </div>
                         ''',
                         unsafe_allow_html=True

@@ -591,7 +591,10 @@ def run_bot():
             book_odds = data.get("best_odds")
             bookmaker = data.get("bookmaker", data.get("site", ""))
 
-            if not book_odds or book_odds < filters["min_book_odds"] or book_odds > filters["max_book_odds"]:
+            # =========================
+            # ODDS RANGE FILTER 1.00–2.50
+            # =========================
+            if not book_odds or book_odds < 1.00 or book_odds > 2.50:
                 skip_stats["odds_range"] += 1
                 continue
 
@@ -722,6 +725,45 @@ def run_bot():
                 momentum_score=stage_b_data.get("momentum_score", 0)
             )
 
+            # =========================
+            # PROFESSIONAL PICK SCORE
+            # =========================
+            meta_prob_score = safe_float(stage_c_data.get("meta_probability", 0), 0)
+            sharp_score_ai = safe_float(stage_a_data.get("sharp_score", 0), 0)
+            momentum_score_ai = safe_float(stage_b_data.get("momentum_score", 0), 0)
+            calibrated_score_ai = safe_float(
+                stage_b_data.get("confidence_calibrated_v2", confidence_percent),
+                confidence_percent
+            )
+
+            ai_pick_score = round(
+                (confidence_percent * 0.25)
+                + (calibrated_score_ai * 0.20)
+                + (ev_percent * 0.20)
+                + (edge * 100 * 0.15)
+                + (meta_prob_score * 0.10)
+                + (sharp_score_ai * 0.05)
+                + (momentum_score_ai * 0.05),
+                2
+            )
+
+            # =========================
+            # PROFESSIONAL PICK RANKING
+            # =========================
+            if ai_pick_score >= 75:
+                best_pick_label = "TOP PICK"
+
+            elif ai_pick_score >= 65:
+                best_pick_label = "BEST PICK"
+
+            elif ai_pick_score >= 50:
+                best_pick_label = "VALUE PICK"
+
+            else:
+                best_pick_label = "STANDARD"
+
+            best_pick = best_pick_label != "STANDARD"
+
             movement = stage_movement(
                 engines,
                 book_odds,
@@ -831,8 +873,9 @@ def run_bot():
                 "meta_weight_sharp": stage_c_data.get("meta_weight_sharp"),
                 "dynamic_stake": stage_c_data.get("dynamic_stake"),
 
-                "best_pick_label": best_pick_label,
                 "ai_pick_score": ai_pick_score,
+                "best_pick": best_pick,
+                "best_pick_label": best_pick_label,
                 "status": match_status if match_status else "NEW"
             })
 
@@ -861,7 +904,7 @@ def run_bot():
     print("✅ GOTOWE")
     print(f"📊 {len(df)} typów zapisanych")
     print(f"📁 {ALL_FILE}")
-    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv, stage_a, stage_b, stage_c")
+    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv, stage_a, stage_b, stage_c, odds_1_250, best_pick_ranking")
 
 
 if __name__ == "__main__":
