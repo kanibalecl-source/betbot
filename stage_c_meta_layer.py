@@ -1,4 +1,3 @@
-
 class StageCMetaLayer:
 
     def enrich_pick(
