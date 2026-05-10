@@ -1,490 +1,341 @@
-import streamlit as st
-import pandas as pd
-from pathlib import Path
+import os
+import requests
+from datetime import datetime, timedelta
 
-# =====================================
-# CONFIG
-# =====================================
+API_KEY = os.getenv("API_FOOTBALL_KEY", "5fa34697895a8e2dc8a46e91bcd6dc81")
 
-st.set_page_config(
-    page_title="KANIBAL ANALYTICS",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+BASE_URL = "https://v3.football.api-sports.io"
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+HEADERS = {
+    "x-apisports-key": API_KEY
+}
 
-CSV_FILE = DATA_DIR / "auto_all_picks.csv"
+MAX_MATCHES = 100
 
-BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
+TOP_LEAGUE_IDS = [
+    39, 140, 135, 78, 61,
+    88, 94, 203, 106,
+    2, 3, 71, 128,
+    235, 218, 119,
+    103, 113
+]
 
-# =====================================
-# LOAD CSV
-# =====================================
 
-def load_csv():
+def _request(endpoint, params):
 
-    if not CSV_FILE.exists():
-        return pd.DataFrame()
+    url = f"{BASE_URL}/{endpoint}"
+
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        params=params,
+        timeout=25
+    )
+
+    print(f"STATUS: {response.status_code}")
+    print(f"URL PARAMS: {params}")
 
     try:
-        return pd.read_csv(CSV_FILE)
-
+        data = response.json()
     except Exception:
+        print(f"RAW RESPONSE: {response.text[:500]}")
+        return []
+
+    if data.get("errors"):
+        print(f"API ERRORS: {data.get('errors')}")
+
+    fixtures = data.get("response", [])
+
+    print(f"RAW FIXTURES: {len(fixtures)}")
+
+    return fixtures
+
+
+def is_real_match(f):
+
+    try:
+        league_name = f["league"]["name"].lower()
+        home = f["teams"]["home"]["name"].lower()
+        away = f["teams"]["away"]["name"].lower()
+    except Exception:
+        return False
+
+    bad_words = [
+        "women",
+        "u19",
+        "u20",
+        "u21",
+        "youth",
+        "reserve",
+        "ii",
+        "iii"
+    ]
+
+    if any(b in league_name for b in bad_words):
+        return False
+
+    if any(b in home for b in bad_words):
+        return False
+
+    if any(b in away for b in bad_words):
+        return False
+
+    return True
+
+
+def _normalize_match(f):
+
+    league_id = f["league"]["id"]
+
+    return {
+        "match": f"{f['teams']['home']['name']} vs {f['teams']['away']['name']}",
+        "home": f["teams"]["home"]["name"],
+        "away": f["teams"]["away"]["name"],
+        "home_team": f["teams"]["home"]["name"],
+        "away_team": f["teams"]["away"]["name"],
+        "league": f["league"]["name"],
+        "country": f["league"].get("country", ""),
+        "fixture_id": f["fixture"]["id"],
+        "home_id": f["teams"]["home"]["id"],
+        "away_id": f["teams"]["away"]["id"],
+        "league_id": league_id,
+        "match_date": f["fixture"].get("date", ""),
+        "date": f["fixture"].get("date", ""),
+        "minute": f.get("fixture", {}).get("status", {}).get("elapsed") or "",
+        "status": f.get("fixture", {}).get("status", {}).get("short") or "NS",
+        "score": f"{f.get('goals', {}).get('home', '')}-{f.get('goals', {}).get('away', '')}",
+    }
+
+
+def _filter_and_normalize(fixtures):
+
+    matches = []
+
+    for f in fixtures:
+
+        if len(matches) >= MAX_MATCHES:
+            break
 
         try:
-            return pd.read_csv(CSV_FILE, encoding="utf-8")
+            league_id = f["league"]["id"]
+
+            status = f.get(
+                "fixture",
+                {}
+            ).get(
+                "status",
+                {}
+            ).get(
+                "short",
+                ""
+            )
 
         except Exception:
-            return pd.DataFrame()
+            continue
+
+        # POMIŃ ZAKOŃCZONE MECZE
+        if status in [
+            "FT",
+            "AET",
+            "PEN",
+            "CANC",
+            "PST"
+        ]:
+            continue
+
+        if league_id not in TOP_LEAGUE_IDS:
+            continue
+
+        if not is_real_match(f):
+            continue
+
+        matches.append(_normalize_match(f))
+
+    return matches
 
 
-df = load_csv()
+def get_matches():
 
-# =====================================
-# HELPERS
-# =====================================
+    if not API_KEY or API_KEY == "YOUR_API_KEY":
+        print("⚠️ BRAK API_FOOTBALL_KEY")
+        return []
 
-def val(row, cols, default="-"):
+    date_candidates = []
 
-    for c in cols:
+    utc_today = datetime.utcnow().strftime("%Y-%m-%d")
 
-        if c in row:
+    server_today = datetime.now().strftime("%Y-%m-%d")
 
-            v = row.get(c)
+    cest_today = (
+        datetime.utcnow() + timedelta(hours=2)
+    ).strftime("%Y-%m-%d")
 
-            try:
-                if pd.isna(v):
-                    continue
-            except:
-                pass
+    utc_tomorrow = (
+        datetime.utcnow() + timedelta(days=1)
+    ).strftime("%Y-%m-%d")
 
-            v = str(v).strip()
+    for d in [
+        utc_today,
+        server_today,
+        cest_today,
+        utc_tomorrow
+    ]:
+        if d not in date_candidates:
+            date_candidates.append(d)
 
-            if v != "" and v.lower() not in ["nan", "none", "null"]:
-                return v
+    for day in date_candidates:
 
-    return default
+        print(f"FETCH DATE TRY: {day}")
+
+        fixtures = _request(
+            "fixtures",
+            {"date": day}
+        )
+
+        print(f"📅 DATE {day} -> {len(fixtures)}")
+
+        matches = _filter_and_normalize(fixtures)
+
+        print(f"✅ FILTERED MATCHES: {len(matches)}")
+        print("🔎 SAMPLE:", matches[:3])
+
+        if matches:
+            return matches
+
+    print("NO DATE MATCHES -> TRY NEXT=100")
+
+    fixtures = _request(
+        "fixtures",
+        {"next": 100}
+    )
+
+    matches = _filter_and_normalize(fixtures)
+
+    print(f"✅ NEXT FILTERED MATCHES: {len(matches)}")
+    print("🔎 SAMPLE:", matches[:3])
+
+    return matches
 
 
-def confidence_format(v):
+def get_odds_market_data(match):
+
+    fixture_id = match.get("fixture_id")
+
+    if not fixture_id:
+        return None
+
+    url = f"{BASE_URL}/odds"
+
+    params = {
+        "fixture": fixture_id
+    }
 
     try:
 
-        v = float(v)
-
-        if v <= 1:
-            v *= 100
-
-        return f"{v:.0f}%"
-
-    except:
-        return "-"
-
-
-def only_existing_columns(
-    dataframe,
-    columns
-):
-
-    existing = [
-        c for c in columns
-        if c in dataframe.columns
-    ]
-
-    if not existing:
-        return dataframe
-
-    return dataframe[existing]
-
-# =====================================
-# CSS
-# =====================================
-
-st.markdown(
-    """
-    <style>
-
-    .stApp {
-        background:
-            radial-gradient(circle at top right, rgba(81,255,0,0.12), transparent 28%),
-            radial-gradient(circle at top left, rgba(255,80,0,0.08), transparent 26%),
-            linear-gradient(180deg, #050607 0%, #090b0d 45%, #050607 100%);
-        color: white;
-    }
-
-    header[data-testid="stHeader"] {
-        background: transparent;
-    }
-
-    .block-container {
-        max-width: 100% !important;
-        padding-top: 0.6rem;
-        padding-left: 2rem;
-        padding-right: 2rem;
-    }
-
-    h1, h2, h3 {
-        color: white !important;
-        font-weight: 900 !important;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
-        background: #090b0d;
-        border-radius: 14px;
-        overflow: hidden;
-        border: 1px solid rgba(255,255,255,0.08);
-        margin-top: 16px;
-        margin-bottom: 24px;
-        width: 100%;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        height: 68px;
-        background: #090b0d;
-        color: white;
-        font-weight: 800;
-        font-size: 13px;
-        border-right: 1px solid rgba(255,255,255,0.06);
-        flex-grow: 1;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background:
-            linear-gradient(
-                180deg,
-                rgba(88,255,47,0.15),
-                rgba(88,255,47,0.05)
-            ) !important;
-
-        color: #58ff2f !important;
-
-        border-bottom: 3px solid #58ff2f !important;
-    }
-
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background:
-            linear-gradient(
-                180deg,
-                rgba(255,255,255,0.045),
-                rgba(255,255,255,0.018)
-            );
-
-        border: 1px solid rgba(255,255,255,0.08);
-
-        border-radius: 18px;
-
-        box-shadow: 0 18px 45px rgba(0,0,0,0.35);
-
-        margin-bottom: 18px;
-    }
-
-    div[data-testid="stMetric"] {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 16px;
-        padding: 18px;
-    }
-
-    div[data-testid="stMetricLabel"] {
-        color: #ffffff !important;
-    }
-
-    div[data-testid="stMetricValue"] {
-        color: #ffffff !important;
-    }
-
-    div[data-testid="stTable"] table {
-        width: 100% !important;
-        border-collapse: collapse !important;
-        background: #0d1014 !important;
-        color: #f2f2f2 !important;
-        font-size: 14px !important;
-    }
-
-    div[data-testid="stTable"] th {
-        background: #11161c !important;
-        color: #58ff2f !important;
-        padding: 14px 12px !important;
-        text-align: left !important;
-        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
-        font-weight: 900 !important;
-    }
-
-    div[data-testid="stTable"] td {
-        padding: 13px 12px !important;
-        border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-        color: #f2f2f2 !important;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# =====================================
-# HEADER
-# =====================================
-
-if BANNER_FILE.exists():
-
-    st.image(
-        str(BANNER_FILE),
-        use_container_width=True
-    )
-
-else:
-
-    st.title("KANIBAL ANALYTICS")
-
-# =====================================
-# TABS
-# =====================================
-
-live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st.tabs(
-    [
-        "🚨 LIVE",
-        "⚽ PREMATCH",
-        "📊 ANALYTICS",
-        "🕘 HISTORY",
-        "🏆 RANKING",
-        "🔔 ALERTS"
-    ]
-)
-
-# =====================================
-# LIVE
-# =====================================
-
-with live_tab:
-
-    st.header("🟢 LIVE SIGNALS")
-    st.caption("AKTUALIZOWANE CO 60 SEKUND")
-
-    if df.empty:
-
-        st.warning("Brak danych LIVE")
-
-    else:
-
-        for _, row in df.iterrows():
-
-            home = val(
-                row,
-                ["home", "home_team"],
-                ""
-            )
-
-            away = val(
-                row,
-                ["away", "away_team"],
-                ""
-            )
-
-            if home != "" or away != "":
-
-                match_name = f"{home} vs {away}"
-
-            else:
-
-                match_name = val(
-                    row,
-                    ["match", "mecz"],
-                    "BRAK MECZU"
-                )
-
-            league = val(
-                row,
-                ["league", "liga"]
-            )
-
-            signal = val(
-                row,
-                ["signal", "typ", "market"],
-                "BRAK TYPU"
-            )
-
-            score = val(
-                row,
-                ["score"],
-                "-"
-            )
-
-            minute_raw = val(
-                row,
-                [
-                    "minute",
-                    "min",
-                    "elapsed",
-                    "time"
-                ],
-                ""
-            )
-
-            if minute_raw != "":
-                minute = f"{minute_raw}'"
-            else:
-                minute = "LIVE"
-
-            confidence = confidence_format(
-                val(
-                    row,
-                    [
-                        "confidence",
-                        "conf",
-                        "prawd_final",
-                        "value"
-                    ],
-                    0
-                )
-            )
-
-            ev = val(
-                row,
-                ["ev"],
-                "-"
-            )
-
-            status = val(
-                row,
-                ["status"],
-                "LIVE"
-            )
-
-            risk = val(
-                row,
-                ["risk"],
-                "LOW"
-            ).upper()
-
-            if risk in ["HIGH", "TOP"]:
-                tempo = "🔥 HIGH TEMPO"
-
-            elif risk == "MEDIUM":
-                tempo = "⚡ MEDIUM TEMPO"
-
-            else:
-                tempo = "🧊 LOW TEMPO"
-
-            with st.container(border=True):
-
-                st.subheader(match_name)
-
-                st.caption(f"🏆 {league}")
-
-                st.markdown(f"### ⚽ WYNIK: {score}")
-
-                st.markdown(
-                    f"""
-                    <div style="
-                        color:#58ff2f;
-                        font-size:22px;
-                        font-weight:900;
-                        margin-bottom:14px;
-                    ">
-                        🎯 TYP: {signal}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                c1, c2, c3, c4 = st.columns(4)
-
-                with c1:
-                    st.metric("EV", ev)
-
-                with c2:
-                    st.metric("CONF", confidence)
-
-                with c3:
-                    st.metric("MIN", minute)
-
-                with c4:
-                    st.metric("STATUS", status)
-
-                st.info(
-                    f"📈 DYNAMIKA MECZU: {tempo}"
-                )
-
-# =====================================
-# PREMATCH
-# =====================================
-
-with prematch_tab:
-
-    st.header("🟢 PREMATCH PICKS")
-
-    if df.empty:
-
-        st.warning("Brak danych PREMATCH")
-
-    else:
-
-        prematch_columns = [
-            "data",
-            "liga",
-            "mecz",
-            "market",
-            "typ",
-            "kurs_buk",
-            "kurs_model",
-            "kurs_bota",
-            "prawd_model",
-            "prawd_rynek",
-            "prawd_final",
-            "edge",
-            "ev",
-            "kelly_full",
-            "kelly_25",
-            "home_xg",
-            "away_xg",
-            "marza_sum",
-            "marza_%",
-            "status"
-        ]
-
-        prematch_view = only_existing_columns(
-            df,
-            prematch_columns
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            params=params,
+            timeout=25
         )
 
-        st.table(prematch_view)
+        print(f"ODDS STATUS: {response.status_code} | fixture={fixture_id}")
 
-# =====================================
-# ANALYTICS
-# =====================================
+        data = response.json()
 
-with analytics_tab:
+        if data.get("errors"):
+            print(f"ODDS API ERRORS: {data.get('errors')}")
 
-    st.header("📊 ANALYTICS")
+        response_data = data.get("response")
 
-    st.metric(
-        "TOTAL SIGNALS",
-        len(df)
-    )
+        if not response_data:
+            return None
 
-# =====================================
-# HISTORY
-# =====================================
+        bookmakers = response_data[0].get("bookmakers", [])
 
-with history_tab:
+        markets = {}
 
-    st.info("Historia będzie dostępna później.")
+        for bookmaker in bookmakers:
 
-# =====================================
-# RANKING
-# =====================================
+            bookmaker_name = bookmaker.get("name", "")
 
-with ranking_tab:
+            for bet in bookmaker.get("bets", []):
 
-    st.info("Ranking będzie dostępny później.")
+                market_name = bet.get("name")
 
-# =====================================
-# ALERTS
-# =====================================
+                for value in bet.get("values", []):
 
-with alerts_tab:
+                    try:
+                        odd = float(value.get("odd", 0))
+                    except Exception:
+                        continue
 
-    st.info("Alerty będą dostępne później.")
+                    outcome = value.get("value")
+
+                    key = None
+
+                    if market_name == "Match Winner":
+
+                        if outcome == "Home":
+                            key = "HOME_WIN"
+
+                        elif outcome == "Draw":
+                            key = "DRAW"
+
+                        elif outcome == "Away":
+                            key = "AWAY_WIN"
+
+                    elif market_name == "Both Teams Score":
+
+                        if outcome == "Yes":
+                            key = "BTTS_YES"
+
+                        elif outcome == "No":
+                            key = "BTTS_NO"
+
+                    elif market_name and "Over/Under" in market_name:
+
+                        try:
+                            line = outcome.split(" ")[-1]
+                        except Exception:
+                            line = ""
+
+                        if "Over" in outcome:
+                            key = f"OVER_{line}"
+
+                        elif "Under" in outcome:
+                            key = f"UNDER_{line}"
+
+                    if key:
+
+                        if key not in markets:
+
+                            markets[key] = {
+                                "best_odds": odd,
+                                "bookmaker": bookmaker_name
+                            }
+
+                        else:
+
+                            if odd > markets[key]["best_odds"]:
+
+                                markets[key] = {
+                                    "best_odds": odd,
+                                    "bookmaker": bookmaker_name
+                                }
+
+        return markets
+
+    except Exception as e:
+
+        print("❌ ODDS ERROR:", e)
+
+        return None
+
+
+if __name__ == "__main__":
+
+    matches = get_matches()
+
+    print(f"FINAL MATCHES: {len(matches)}")
+    print(matches[:3])
