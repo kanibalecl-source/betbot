@@ -578,28 +578,20 @@ def run_bot():
         tempo_level = tempo_data.get("tempo_level", "LOW")
 
         for market, data in odds_data.items():
+
             # =========================
-            # FULL OVER/UNDER MARKETS
+            # SAFE MARKET FILTER
             # =========================
-            allowed_markets = [
-                "Over 0.5",
-                "Over 1.5",
-                "Over 2.5",
-                "Over 3.5",
-                "Over 4.5",
+            market_lower = str(market).lower()
 
-                "Under 0.5",
-                "Under 1.5",
-                "Under 2.5",
-                "Under 3.5",
-                "Under 4.5",
+            allowed = (
+                "over" in market_lower
+                or "under" in market_lower
+                or "btts" in market_lower
+            )
 
-                "BTTS"
-            ]
-
-            if market not in allowed_markets:
+            if not allowed:
                 continue
-
 
             if not active_markets.get(market, True):
                 skip_stats["inactive_market"] += 1
