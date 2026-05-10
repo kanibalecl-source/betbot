@@ -52,7 +52,11 @@ class SharpMoneyDetector:
             else:
                 label = "NEUTRAL"
 
-            return {"sharp_score": round(score, 2), "sharp_label": label, "sharp_signals": "|".join(signals)}
+            return {
+                "sharp_score": round(score, 2),
+                "sharp_label": label,
+                "sharp_signals": "|".join(signals),
+            }
         except Exception as e:
             print(f"SHARP MONEY DETECTOR ERROR: {e}")
             return {"sharp_score": 0, "sharp_label": "UNKNOWN", "sharp_signals": "ERROR"}

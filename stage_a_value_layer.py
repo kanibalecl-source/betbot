@@ -1,7 +1,6 @@
 from sharp_money_detector import SharpMoneyDetector
 from league_profile_engine import LeagueProfileEngine
 
-
 class StageAValueLayer:
     def __init__(self):
         self.sharp = SharpMoneyDetector()
@@ -15,7 +14,13 @@ class StageAValueLayer:
             pinnacle_odds=pinnacle_odds,
             betfair_odds=betfair_odds,
         )
-        adjusted_probability = self.league_profiles.adjust_probability(probability, league, market)
+
+        adjusted_probability = self.league_profiles.adjust_probability(
+            probability=probability,
+            league_name=league,
+            market=market,
+        )
+
         result = dict(pick)
         result.update({
             "stage_a_probability": adjusted_probability,
