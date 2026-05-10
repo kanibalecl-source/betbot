@@ -728,7 +728,7 @@ movement = stage_movement(
                 data.get("opening_odds")
             )
 
-closing_odds = data.get("closing_odds")
+            closing_odds = data.get("closing_odds")
             clv_percent, clv_status = stage_clv(
                 engines,
                 book_odds,
