@@ -188,7 +188,9 @@ with prematch_tab:
             "confidence",
             "ev",
             "edge",
-            "risk"
+            "risk",
+            "best_pick_label",
+            "ai_pick_score"
         ]
 
         compact_view = only_existing_columns(df, compact_columns)
@@ -202,6 +204,54 @@ with prematch_tab:
             match_name = row.get("mecz", row.get("match", "BRAK MECZU"))
 
             with st.expander(f"📊 {match_name}"):
+                # =========================
+                # BEST PICK VISUAL BOX
+                # =========================
+                pick_label = str(row.get("best_pick_label", "STANDARD")).upper()
+                ai_score = row.get("ai_pick_score", "-")
+
+                if pick_label != "STANDARD":
+
+                    badge_colors = {
+                        "TOP PICK": "#00ff66",
+                        "BEST PICK": "#2ecc71",
+                        "VALUE PICK": "#f1c40f"
+                    }
+
+                    badge_color = badge_colors.get(pick_label, "#00ff66")
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background:{badge_color}22;
+                            border:3px solid {badge_color};
+                            border-radius:18px;
+                            padding:18px;
+                            margin-bottom:20px;
+                            text-align:center;
+                            box-shadow:0 0 25px {badge_color}55;
+                        ">
+                            <div style="
+                                color:{badge_color};
+                                font-size:30px;
+                                font-weight:900;
+                            ">
+                                {pick_label}
+                            </div>
+
+                            <div style="
+                                color:white;
+                                font-size:18px;
+                                margin-top:8px;
+                            ">
+                                AI SCORE: {ai_score}
+                            </div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+
 
                 c1, c2, c3 = st.columns(3)
 
@@ -228,7 +278,9 @@ with prematch_tab:
                         <b>EV:</b> {row.get("ev", "-")}<br>
                         <b>EDGE:</b> {row.get("edge", "-")}<br>
                         <b>KELLY:</b> {row.get("kelly_25", "-")}<br>
-                        <b>RISK:</b> {row.get("risk", "-")}<br>
+                        <b>RISK:</b> {row.get("risk",
+            "best_pick_label",
+            "ai_pick_score", "-")}<br>
                         </div>
                         ''',
                         unsafe_allow_html=True

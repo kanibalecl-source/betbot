@@ -831,6 +831,8 @@ def run_bot():
                 "meta_weight_sharp": stage_c_data.get("meta_weight_sharp"),
                 "dynamic_stake": stage_c_data.get("dynamic_stake"),
 
+                "best_pick_label": best_pick_label,
+                "ai_pick_score": ai_pick_score,
                 "status": match_status if match_status else "NEW"
             })
 
