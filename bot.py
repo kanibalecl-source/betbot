@@ -1,3 +1,4 @@
+from stage_b_model_layer import StageBModelLayer
 import json
 import hashlib
 import pandas as pd
@@ -7,7 +8,6 @@ from pathlib import Path
 from data_api import get_matches, get_odds_market_data
 from model_goals import build_model
 from team_stats import get_match_xg
-from stage_a_value_layer import StageAValueLayer
 
 # =========================
 # OPTIONAL STAGE IMPORTS
@@ -505,7 +505,6 @@ def run_bot():
     bankroll_size = safe_float(cfg.get("bankroll", 1000), 1000)
 
     engines = build_stage_engines()
-    stage_a = StageAValueLayer()
 
     print("✅ STAGE ENGINES:")
     for name, engine in engines.items():
@@ -621,18 +620,6 @@ def run_bot():
             fair_odds_model = probability_data["fair_odds_model"]
             fair_odds_final = probability_data["fair_odds_final"]
 
-            stage_a_data = stage_a.enrich_pick(
-                pick={},
-                probability=final_prob,
-                league=match.get("league", ""),
-                market=market,
-                opening_odds=data.get("opening_odds"),
-                current_odds=book_odds,
-                market_avg_odds=data.get("market_avg_odds"),
-                pinnacle_odds=data.get("pinnacle_odds"),
-                betfair_odds=data.get("betfair_odds")
-            )
-
             edge = (final_prob / true_book_prob) - 1
             ev = stage_ev(engines, final_prob, book_odds)
 
@@ -737,11 +724,6 @@ def run_bot():
                 "prawd_final": round(final_prob, 4),
                 "confidence": confidence_percent,
 
-                "sharp_score": stage_a_data.get("sharp_score"),
-                "sharp_label": stage_a_data.get("sharp_label"),
-                "sharp_signals": stage_a_data.get("sharp_signals"),
-                "stage_a_probability": stage_a_data.get("stage_a_probability"),
-
                 "xg_probability": probability_data["xg_probability"],
                 "bayesian_probability": probability_data["bayesian_probability"],
                 "ensemble_probability": probability_data["ensemble_probability"],
@@ -807,7 +789,7 @@ def run_bot():
     print("✅ GOTOWE")
     print(f"📊 {len(df)} typów zapisanych")
     print(f"📁 {ALL_FILE}")
-    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv, STAGE_A")
+    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv")
 
 
 if __name__ == "__main__":
