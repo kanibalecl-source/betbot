@@ -722,7 +722,7 @@ def run_bot():
                 momentum_score=stage_b_data.get("momentum_score", 0)
             )
 
-movement = stage_movement(
+            movement = stage_movement(
                 engines,
                 book_odds,
                 data.get("opening_odds")
