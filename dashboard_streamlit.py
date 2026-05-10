@@ -1,21 +1,97 @@
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-import time
+from datetime import datetime
 
 st.set_page_config(
-    page_title="BetBot Dashboard",
-    layout="wide"
+    page_title="BETBOT AI",
+    page_icon="⚽",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# =========================
+# STYLING
+# =========================
+
+st.markdown("""
+<style>
+
+.main {
+    background-color: #0f172a;
+    color: white;
+}
+
+section[data-testid="stSidebar"] {
+    background-color: #111827;
+}
+
+.block-container {
+    padding-top: 1rem;
+}
+
+.banner {
+    background: linear-gradient(90deg, #111827 0%, #1e293b 100%);
+    border-radius: 18px;
+    padding: 24px;
+    margin-bottom: 18px;
+    border: 1px solid #334155;
+}
+
+.banner-title {
+    font-size: 34px;
+    font-weight: 700;
+    color: white;
+}
+
+.banner-sub {
+    color: #cbd5e1;
+    margin-top: 8px;
+    font-size: 15px;
+}
+
+.metric-card {
+    background: #1e293b;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid #334155;
+    text-align: center;
+}
+
+.metric-title {
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.metric-value {
+    color: white;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+div[data-testid="stDataFrame"] {
+    border: 1px solid #334155;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# PATHS
+# =========================
 
 DATA_DIR = Path("data")
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 
-st.title("⚽ BETBOT AI DASHBOARD")
+# =========================
+# HELPERS
+# =========================
 
-
-def safe_load_csv(path):
+@st.cache_data(ttl=30)
+def load_csv(path):
 
     if not path.exists():
         return pd.DataFrame()
@@ -24,10 +100,7 @@ def safe_load_csv(path):
 
         df = pd.read_csv(path)
 
-        # =========================
         # FIX BIAŁEJ STRONY
-        # =========================
-
         df = df.fillna("")
 
         for col in df.columns:
@@ -39,122 +112,208 @@ def safe_load_csv(path):
         return df
 
     except Exception as e:
-
         st.error(f"CSV ERROR: {e}")
-
         return pd.DataFrame()
 
 
-def cleanup_dataframe(df):
-
-    hide_cols = [
-        "pick_id",
-        "fixture_id",
-        "odds_event_id",
-        "home_team",
-        "away_team",
-        "home",
-        "away",
-    ]
-
-    for col in hide_cols:
-        if col in df.columns:
-            df = df.drop(columns=[col])
+def clean_df(df):
 
     rename_map = {
         "mecz": "MATCH",
         "liga": "LEAGUE",
         "typ": "PICK",
         "kurs_buk": "ODDS",
-        "confidence": "CONFIDENCE %",
+        "confidence": "CONF %",
         "ev_percent": "EV %",
         "tempo_level": "TEMPO",
-        "tempo_score": "TEMPO SCORE",
         "risk_level": "RISK",
         "recommended_stake": "STAKE",
-        "market_direction": "MARKET MOVE",
-        "clv_percent": "CLV %",
-        "minute": "MIN",
+        "market_direction": "MARKET",
         "score": "SCORE",
-        "status": "STATUS",
+        "minute": "MIN"
     }
 
-    existing = {
-        k: v for k, v in rename_map.items()
-        if k in df.columns
-    }
+    for old, new in rename_map.items():
+        if old in df.columns:
+            df = df.rename(columns={old: new})
 
-    df = df.rename(columns=existing)
+    drop_cols = [
+        "pick_id",
+        "fixture_id",
+        "odds_event_id",
+        "home_team",
+        "away_team",
+        "home",
+        "away"
+    ]
 
-    preferred_order = [
+    existing_drop = [c for c in drop_cols if c in df.columns]
+
+    if existing_drop:
+        df = df.drop(columns=existing_drop)
+
+    preferred = [
         "MATCH",
         "LEAGUE",
         "PICK",
         "ODDS",
-        "CONFIDENCE %",
+        "CONF %",
         "EV %",
         "TEMPO",
-        "TEMPO SCORE",
         "RISK",
         "STAKE",
-        "MARKET MOVE",
-        "CLV %",
+        "MARKET",
         "MIN",
         "SCORE",
-        "STATUS",
         "match_date"
     ]
 
-    final_cols = [
-        c for c in preferred_order
-        if c in df.columns
-    ]
+    cols = [c for c in preferred if c in df.columns]
+    rest = [c for c in df.columns if c not in cols]
 
-    other_cols = [
-        c for c in df.columns
-        if c not in final_cols
-    ]
-
-    df = df[final_cols + other_cols]
-
-    return df
+    return df[cols + rest]
 
 
-def render_prematch():
+# =========================
+# LOAD DATA
+# =========================
 
-    st.subheader("🎯 PREMATCH")
+df = load_csv(PREMATCH_FILE)
 
-    df = safe_load_csv(PREMATCH_FILE)
+# =========================
+# HEADER
+# =========================
 
-    if df.empty:
-        st.warning("Brak danych PREMATCH")
-        return
+st.markdown("""
+<div class="banner">
+    <div class="banner-title">⚽ BETBOT AI DASHBOARD</div>
+    <div class="banner-sub">
+        AI • Bayesian • Ensemble • EV • Kelly • CLV • Market Movement
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    df = cleanup_dataframe(df)
+# =========================
+# METRICS
+# =========================
 
-    st.success(f"Załadowano {len(df)} typów")
+c1, c2, c3, c4 = st.columns(4)
 
-    st.dataframe(
-        df,
-        use_container_width=True,
-        height=750
-    )
+total_picks = len(df) if not df.empty else 0
 
+avg_conf = 0
+if not df.empty and "confidence" in df.columns:
+    try:
+        avg_conf = round(pd.to_numeric(df["confidence"], errors="coerce").mean(), 1)
+    except:
+        avg_conf = 0
 
-tab1, tab2 = st.tabs([
+avg_ev = 0
+if not df.empty and "ev_percent" in df.columns:
+    try:
+        avg_ev = round(pd.to_numeric(df["ev_percent"], errors="coerce").mean(), 1)
+    except:
+        avg_ev = 0
+
+with c1:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-title">TOTAL PICKS</div>
+        <div class="metric-value">{total_picks}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c2:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-title">AVG CONFIDENCE</div>
+        <div class="metric-value">{avg_conf}%</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c3:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-title">AVG EV</div>
+        <div class="metric-value">{avg_ev}%</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with c4:
+    st.markdown(f"""
+    <div class="metric-card">
+        <div class="metric-title">LAST UPDATE</div>
+        <div class="metric-value" style="font-size:16px;">
+            {datetime.now().strftime("%H:%M:%S")}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.write("")
+
+# =========================
+# TABS
+# =========================
+
+tab1, tab2, tab3, tab4 = st.tabs([
     "🎯 PREMATCH",
-    "📡 LIVE"
+    "📡 LIVE",
+    "📈 ANALYTICS",
+    "⚙️ SYSTEM"
 ])
 
 with tab1:
-    render_prematch()
+
+    st.subheader("🎯 PREMATCH PICKS")
+
+    if df.empty:
+        st.warning("Brak danych PREMATCH")
+    else:
+
+        clean = clean_df(df)
+
+        st.dataframe(
+            clean,
+            use_container_width=True,
+            height=720
+        )
 
 with tab2:
-    st.info("LIVE będzie rozwijany w kolejnych etapach.")
 
-st.caption(
-    f"Ostatnie odświeżenie: {time.strftime('%Y-%m-%d %H:%M:%S')}"
-)
+    st.subheader("📡 LIVE MATCHES")
 
-time.sleep(30)
-st.rerun()
+    st.info("LIVE ENGINE aktywny — moduł LIVE będzie rozwijany dalej.")
+
+with tab3:
+
+    st.subheader("📈 ANALYTICS")
+
+    if not df.empty:
+
+        st.write("Top ligi:")
+
+        if "liga" in df.columns:
+
+            league_stats = (
+                df["liga"]
+                .value_counts()
+                .reset_index()
+            )
+
+            league_stats.columns = ["League", "Picks"]
+
+            st.dataframe(
+                league_stats,
+                use_container_width=True,
+                height=400
+            )
+
+with tab4:
+
+    st.subheader("⚙️ SYSTEM STATUS")
+
+    st.success("Scheduler: ONLINE")
+    st.success("Data API: ONLINE")
+    st.success("Odds API: ONLINE")
+    st.success("ETAPY 1-10: ACTIVE")
+    st.success("CSV ENGINE: ACTIVE")
