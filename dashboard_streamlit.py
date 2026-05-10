@@ -1,10 +1,7 @@
+
 import streamlit as st
 import pandas as pd
 from pathlib import Path
-
-# =====================================
-# CONFIG
-# =====================================
 
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
@@ -16,166 +13,30 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
 CSV_FILE = DATA_DIR / "auto_all_picks.csv"
-
 BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 
-# =====================================
-# LOAD CSV
-# =====================================
-
 def load_csv():
-
     if not CSV_FILE.exists():
         return pd.DataFrame()
 
     try:
-        df = pd.read_csv(CSV_FILE)
-
+        return pd.read_csv(CSV_FILE)
     except Exception:
-
         try:
-            df = pd.read_csv(CSV_FILE, encoding="utf-8")
-
+            return pd.read_csv(CSV_FILE, encoding="utf-8")
         except Exception:
             return pd.DataFrame()
 
-    # FIX BIAŁEJ STRONY / ARROW / MIXED TYPES
-    df = df.fillna("")
-
-    for col in df.columns:
-        try:
-            df[col] = df[col].astype(str)
-        except:
-            pass
-
-    return df
-
-
 df = load_csv()
 
-# =====================================
-# HELPERS
-# =====================================
-
-def val(row, cols, default="-"):
-
-    for c in cols:
-
-        if c in row:
-
-            v = row.get(c)
-
-            try:
-                if pd.isna(v):
-                    continue
-            except:
-                pass
-
-            v = str(v).strip()
-
-            if v != "" and v.lower() not in ["nan", "none", "null"]:
-                return v
-
-    return default
-
-
-def confidence_format(v):
-
-    try:
-
-        v = float(str(v).replace(",", "."))
-
-        if v <= 1:
-            v *= 100
-
-        return f"{v:.0f}%"
-
-    except:
-        return "-"
-
-
-def percent_format(v):
-
-    try:
-
-        v = float(str(v).replace(",", "."))
-
-        if abs(v) <= 1:
-            v *= 100
-
-        return f"{v:.2f}%"
-
-    except:
-        return "-"
-
-
-def only_existing_columns(
-    dataframe,
-    columns
-):
-
-    existing = [
-        c for c in columns
-        if c in dataframe.columns
-    ]
-
+def only_existing_columns(dataframe, columns):
+    existing = [c for c in columns if c in dataframe.columns]
     if not existing:
         return dataframe
-
     return dataframe[existing]
 
-
-def get_live_df(dataframe):
-
-    if dataframe.empty:
-        return pd.DataFrame()
-
-    if "minute" in dataframe.columns:
-
-        try:
-            minute_num = pd.to_numeric(
-                dataframe["minute"],
-                errors="coerce"
-            ).fillna(0)
-
-            live_by_minute = dataframe[minute_num > 0]
-
-            if not live_by_minute.empty:
-                return live_by_minute
-
-        except:
-            pass
-
-    if "status" in dataframe.columns:
-
-        try:
-            status = dataframe["status"].astype(str).str.upper()
-
-            live_statuses = [
-                "LIVE",
-                "1H",
-                "2H",
-                "HT",
-                "ET",
-                "BT"
-            ]
-
-            return dataframe[status.isin(live_statuses)]
-
-        except:
-            pass
-
-    return pd.DataFrame()
-
-
-live_df = get_live_df(df)
-
-# =====================================
-# CSS — STARA SZATA GRAFICZNA 1:1
-# =====================================
-
 st.markdown(
-    """
+    '''
     <style>
 
     .stApp {
@@ -253,21 +114,6 @@ st.markdown(
         margin-bottom: 18px;
     }
 
-    div[data-testid="stMetric"] {
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 16px;
-        padding: 18px;
-    }
-
-    div[data-testid="stMetricLabel"] {
-        color: #ffffff !important;
-    }
-
-    div[data-testid="stMetricValue"] {
-        color: #ffffff !important;
-    }
-
     div[data-testid="stTable"] table {
         width: 100% !important;
         border-collapse: collapse !important;
@@ -291,37 +137,23 @@ st.markdown(
         color: #f2f2f2 !important;
     }
 
-    /* dodatkowe zabezpieczenie dla dataframe, ale bez zmiany szaty */
-    div[data-testid="stDataFrame"] {
-        border-radius: 18px !important;
-        overflow: hidden !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        background: #0d1014 !important;
+    .ai-box {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(88,255,47,0.15);
+        border-radius: 12px;
+        padding: 12px;
+        margin-bottom: 10px;
     }
 
     </style>
-    """,
+    ''',
     unsafe_allow_html=True
 )
 
-# =====================================
-# HEADER
-# =====================================
-
 if BANNER_FILE.exists():
-
-    st.image(
-        str(BANNER_FILE),
-        use_container_width=True
-    )
-
+    st.image(str(BANNER_FILE), use_container_width=True)
 else:
-
     st.title("KANIBAL ANALYTICS")
-
-# =====================================
-# TABS
-# =====================================
 
 live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st.tabs(
     [
@@ -334,305 +166,123 @@ live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st
     ]
 )
 
-# =====================================
-# LIVE — STARY WYGLĄD, POPRAWIONE FILTROWANIE
-# =====================================
-
 with live_tab:
-
     st.header("🟢 LIVE SIGNALS")
-    st.caption("AKTUALIZOWANE CO 60 SEKUND")
-
-    if live_df.empty:
-
-        st.warning("Brak danych LIVE")
-
-    else:
-
-        for _, row in live_df.iterrows():
-
-            home = val(
-                row,
-                ["home", "home_team"],
-                ""
-            )
-
-            away = val(
-                row,
-                ["away", "away_team"],
-                ""
-            )
-
-            if home != "" or away != "":
-
-                match_name = f"{home} vs {away}"
-
-            else:
-
-                match_name = val(
-                    row,
-                    ["match", "mecz"],
-                    "BRAK MECZU"
-                )
-
-            league = val(
-                row,
-                ["league", "liga"]
-            )
-
-            signal = val(
-                row,
-                ["signal", "typ", "market"],
-                "BRAK TYPU"
-            )
-
-            score = val(
-                row,
-                ["score"],
-                "-"
-            )
-
-            minute_raw = val(
-                row,
-                [
-                    "minute",
-                    "min",
-                    "elapsed",
-                    "time"
-                ],
-                ""
-            )
-
-            if minute_raw != "":
-                minute = f"{minute_raw}'"
-            else:
-                minute = "LIVE"
-
-            confidence = confidence_format(
-                val(
-                    row,
-                    [
-                        "confidence",
-                        "conf",
-                        "prawd_final",
-                        "value"
-                    ],
-                    0
-                )
-            )
-
-            ev = percent_format(
-                val(
-                    row,
-                    ["ev_percent", "ev"],
-                    "-"
-                )
-            )
-
-            status = val(
-                row,
-                ["status"],
-                "LIVE"
-            )
-
-            risk = val(
-                row,
-                ["risk", "risk_level", "ai_risk"],
-                "LOW"
-            ).upper()
-
-            tempo_raw = val(
-                row,
-                ["tempo_level"],
-                ""
-            ).upper()
-
-            if tempo_raw in ["HIGH", "TOP"]:
-                tempo = "🔥 HIGH TEMPO"
-
-            elif tempo_raw == "MEDIUM":
-                tempo = "⚡ MEDIUM TEMPO"
-
-            elif risk in ["HIGH", "TOP"]:
-                tempo = "🔥 HIGH TEMPO"
-
-            elif risk == "MEDIUM":
-                tempo = "⚡ MEDIUM TEMPO"
-
-            else:
-                tempo = "🧊 LOW TEMPO"
-
-            with st.container(border=True):
-
-                st.subheader(match_name)
-
-                st.caption(f"🏆 {league}")
-
-                st.markdown(f"### ⚽ WYNIK: {score}")
-
-                st.markdown(
-                    f"""
-                    <div style="
-                        color:#58ff2f;
-                        font-size:22px;
-                        font-weight:900;
-                        margin-bottom:14px;
-                    ">
-                        🎯 TYP: {signal}
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-                c1, c2, c3, c4 = st.columns(4)
-
-                with c1:
-                    st.metric("EV", ev)
-
-                with c2:
-                    st.metric("CONF", confidence)
-
-                with c3:
-                    st.metric("MIN", minute)
-
-                with c4:
-                    st.metric("STATUS", status)
-
-                st.info(
-                    f"📈 DYNAMIKA MECZU: {tempo}"
-                )
-
-# =====================================
-# PREMATCH — STARY WYGLĄD TABELI + CONFIDENCE
-# =====================================
+    st.info("LIVE ENGINE ACTIVE")
 
 with prematch_tab:
 
     st.header("🟢 PREMATCH PICKS")
 
     if df.empty:
-
         st.warning("Brak danych PREMATCH")
 
     else:
 
-        prematch_columns = [
-            "data",
+        compact_columns = [
             "liga",
             "mecz",
             "market",
             "typ",
-            "confidence",
-            "prawd_final",
             "kurs_buk",
-            "kurs_model",
-            "kurs_bota",
-            "prawd_model",
-            "prawd_rynek",
-            "edge",
+            "confidence",
             "ev",
-            "ev_percent",
-            "kelly_full",
-            "kelly_25",
-            "home_xg",
-            "away_xg",
-            "marza_sum",
-            "marza_%",
-            "status"
+            "edge",
+            "risk"
         ]
 
-        prematch_view = only_existing_columns(
-            df,
-            prematch_columns
-        )
+        compact_view = only_existing_columns(df, compact_columns)
 
-        st.table(prematch_view)
+        st.table(compact_view)
 
-# =====================================
-# ANALYTICS
-# =====================================
+        st.markdown("## 🔍 AI DETAILS")
+
+        for idx, row in df.iterrows():
+
+            match_name = row.get("mecz", row.get("match", "BRAK MECZU"))
+
+            with st.expander(f"📊 {match_name}"):
+
+                c1, c2, c3 = st.columns(3)
+
+                with c1:
+                    st.markdown(
+                        f'''
+                        <div class="ai-box">
+                        <h4 style="color:#58ff2f;">MODEL AI</h4>
+                        <b>CONFIDENCE:</b> {row.get("confidence", "-")}<br>
+                        <b>MODEL PROB:</b> {row.get("prawd_model", "-")}<br>
+                        <b>FINAL PROB:</b> {row.get("prawd_final", "-")}<br>
+                        <b>STAGE A PROB:</b> {row.get("stage_a_probability", "-")}<br>
+                        </div>
+                        ''',
+                        unsafe_allow_html=True
+                    )
+
+                with c2:
+                    st.markdown(
+                        f'''
+                        <div class="ai-box">
+                        <h4 style="color:#58ff2f;">VALUE</h4>
+                        <b>EV:</b> {row.get("ev", "-")}<br>
+                        <b>EDGE:</b> {row.get("edge", "-")}<br>
+                        <b>KELLY:</b> {row.get("kelly_25", "-")}<br>
+                        <b>RISK:</b> {row.get("risk", "-")}<br>
+                        </div>
+                        ''',
+                        unsafe_allow_html=True
+                    )
+
+                with c3:
+                    st.markdown(
+                        f'''
+                        <div class="ai-box">
+                        <h4 style="color:#58ff2f;">MARKET</h4>
+                        <b>BOOK ODDS:</b> {row.get("kurs_buk", "-")}<br>
+                        <b>MODEL ODDS:</b> {row.get("kurs_model", "-")}<br>
+                        <b>BOT ODDS:</b> {row.get("kurs_bota", "-")}<br>
+                        <b>SHARP:</b> {row.get("sharp_label", "-")}<br>
+                        </div>
+                        ''',
+                        unsafe_allow_html=True
+                    )
+
+                c4, c5 = st.columns(2)
+
+                with c4:
+                    st.markdown(
+                        f'''
+                        <div class="ai-box">
+                        <h4 style="color:#58ff2f;">xG ENGINE</h4>
+                        <b>HOME xG:</b> {row.get("home_xg", "-")}<br>
+                        <b>AWAY xG:</b> {row.get("away_xg", "-")}<br>
+                        <b>MARGIN:</b> {row.get("marza_%", "-")}<br>
+                        </div>
+                        ''',
+                        unsafe_allow_html=True
+                    )
+
+                with c5:
+                    st.markdown(
+                        f'''
+                        <div class="ai-box">
+                        <h4 style="color:#58ff2f;">SHARP MONEY</h4>
+                        <b>SCORE:</b> {row.get("sharp_score", "-")}<br>
+                        <b>LABEL:</b> {row.get("sharp_label", "-")}<br>
+                        <b>SIGNALS:</b> {row.get("sharp_signals", "-")}<br>
+                        </div>
+                        ''',
+                        unsafe_allow_html=True
+                    )
 
 with analytics_tab:
-
     st.header("📊 ANALYTICS")
 
-    st.metric(
-        "TOTAL SIGNALS",
-        len(df)
-    )
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.metric(
-            "LIVE MATCHES",
-            len(live_df)
-        )
-
-    with c2:
-
-        if "confidence" in df.columns:
-
-            try:
-                avg_conf = pd.to_numeric(
-                    df["confidence"],
-                    errors="coerce"
-                ).mean()
-
-                st.metric(
-                    "AVG CONFIDENCE",
-                    confidence_format(avg_conf)
-                )
-
-            except:
-                st.metric("AVG CONFIDENCE", "-")
-
-        else:
-            st.metric("AVG CONFIDENCE", "-")
-
-    with c3:
-
-        ev_col = "ev_percent" if "ev_percent" in df.columns else "ev"
-
-        if ev_col in df.columns:
-
-            try:
-                avg_ev = pd.to_numeric(
-                    df[ev_col],
-                    errors="coerce"
-                ).mean()
-
-                st.metric(
-                    "AVG EV",
-                    percent_format(avg_ev)
-                )
-
-            except:
-                st.metric("AVG EV", "-")
-
-        else:
-            st.metric("AVG EV", "-")
-
-# =====================================
-# HISTORY
-# =====================================
-
 with history_tab:
-
-    st.info("Historia będzie dostępna później.")
-
-# =====================================
-# RANKING
-# =====================================
+    st.header("🕘 HISTORY")
 
 with ranking_tab:
-
-    st.info("Ranking będzie dostępny później.")
-
-# =====================================
-# ALERTS
-# =====================================
+    st.header("🏆 RANKING")
 
 with alerts_tab:
-
-    st.info("Alerty będą dostępne później.")
+    st.header("🔔 ALERTS")
