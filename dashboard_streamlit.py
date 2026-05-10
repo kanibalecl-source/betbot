@@ -142,7 +142,7 @@ st.markdown(
         border: 1px solid rgba(88,255,47,0.15);
         border-radius: 12px;
         padding: 12px;
-        margin-bottom: 10px;
+        margin-bottom: 12px;
     }
 
     </style>
@@ -155,16 +155,16 @@ if BANNER_FILE.exists():
 else:
     st.title("KANIBAL ANALYTICS")
 
-live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = st.tabs(
-    [
-        "🚨 LIVE",
-        "⚽ PREMATCH",
-        "📊 ANALYTICS",
-        "🕘 HISTORY",
-        "🏆 RANKING",
-        "🔔 ALERTS"
-    ]
-)
+tabs = st.tabs([
+    "🚨 LIVE",
+    "⚽ PREMATCH",
+    "📊 ANALYTICS",
+    "🕘 HISTORY",
+    "🏆 RANKING",
+    "🔔 ALERTS"
+])
+
+live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = tabs
 
 with live_tab:
     st.header("🟢 LIVE SIGNALS")
@@ -211,6 +211,7 @@ with prematch_tab:
                         <div class="ai-box">
                         <h4 style="color:#58ff2f;">MODEL AI</h4>
                         <b>CONFIDENCE:</b> {row.get("confidence", "-")}<br>
+                        <b>CALIBRATED:</b> {row.get("confidence_calibrated_v2", "-")}<br>
                         <b>MODEL PROB:</b> {row.get("prawd_model", "-")}<br>
                         <b>FINAL PROB:</b> {row.get("prawd_final", "-")}<br>
                         <b>STAGE A PROB:</b> {row.get("stage_a_probability", "-")}<br>
@@ -223,7 +224,7 @@ with prematch_tab:
                     st.markdown(
                         f'''
                         <div class="ai-box">
-                        <h4 style="color:#58ff2f;">VALUE</h4>
+                        <h4 style="color:#58ff2f;">VALUE ENGINE</h4>
                         <b>EV:</b> {row.get("ev", "-")}<br>
                         <b>EDGE:</b> {row.get("edge", "-")}<br>
                         <b>KELLY:</b> {row.get("kelly_25", "-")}<br>
@@ -237,7 +238,7 @@ with prematch_tab:
                     st.markdown(
                         f'''
                         <div class="ai-box">
-                        <h4 style="color:#58ff2f;">MARKET</h4>
+                        <h4 style="color:#58ff2f;">MARKET ENGINE</h4>
                         <b>BOOK ODDS:</b> {row.get("kurs_buk", "-")}<br>
                         <b>MODEL ODDS:</b> {row.get("kurs_model", "-")}<br>
                         <b>BOT ODDS:</b> {row.get("kurs_bota", "-")}<br>
@@ -256,6 +257,8 @@ with prematch_tab:
                         <h4 style="color:#58ff2f;">xG ENGINE</h4>
                         <b>HOME xG:</b> {row.get("home_xg", "-")}<br>
                         <b>AWAY xG:</b> {row.get("away_xg", "-")}<br>
+                        <b>ADV TOTAL xG:</b> {row.get("advanced_total_xg", "-")}<br>
+                        <b>ADV OVER2.5:</b> {row.get("advanced_over25_prob", "-")}<br>
                         <b>MARGIN:</b> {row.get("marza_%", "-")}<br>
                         </div>
                         ''',
@@ -266,10 +269,11 @@ with prematch_tab:
                     st.markdown(
                         f'''
                         <div class="ai-box">
-                        <h4 style="color:#58ff2f;">SHARP MONEY</h4>
-                        <b>SCORE:</b> {row.get("sharp_score", "-")}<br>
-                        <b>LABEL:</b> {row.get("sharp_label", "-")}<br>
-                        <b>SIGNALS:</b> {row.get("sharp_signals", "-")}<br>
+                        <h4 style="color:#58ff2f;">MOMENTUM ENGINE</h4>
+                        <b>MOMENTUM SCORE:</b> {row.get("momentum_score", "-")}<br>
+                        <b>MOMENTUM LABEL:</b> {row.get("momentum_label", "-")}<br>
+                        <b>SHARP SCORE:</b> {row.get("sharp_score", "-")}<br>
+                        <b>SHARP SIGNALS:</b> {row.get("sharp_signals", "-")}<br>
                         </div>
                         ''',
                         unsafe_allow_html=True
