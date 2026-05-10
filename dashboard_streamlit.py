@@ -29,6 +29,52 @@ def load_csv():
 
 df = load_csv()
 
+# =========================
+# DISPLAY FILTER: ODDS 1.00–2.50
+# =========================
+if not df.empty and "kurs_buk" in df.columns:
+    df["_kurs_buk_num"] = pd.to_numeric(df["kurs_buk"], errors="coerce")
+    df = df[(df["_kurs_buk_num"] >= 1.00) & (df["_kurs_buk_num"] <= 2.50)].copy()
+
+# =========================
+# BEST PICK FALLBACK SCORE
+# =========================
+if not df.empty:
+    if "ai_pick_score" not in df.columns:
+        def _num(row, key, default=0):
+            try:
+                return float(row.get(key, default))
+            except Exception:
+                return default
+
+        def _score(row):
+            confidence = _num(row, "confidence")
+            calibrated = _num(row, "confidence_calibrated_v2", confidence)
+            ev = _num(row, "ev_percent", _num(row, "ev"))
+            edge = _num(row, "edge") * 100
+            meta = _num(row, "meta_probability")
+            sharp = _num(row, "sharp_score")
+            momentum = _num(row, "momentum_score")
+            return round(
+                confidence * 0.25
+                + calibrated * 0.20
+                + ev * 0.20
+                + edge * 0.15
+                + meta * 0.10
+                + sharp * 0.05
+                + momentum * 0.05,
+                2
+            )
+
+        df["ai_pick_score"] = df.apply(_score, axis=1)
+
+    if "best_pick_label" not in df.columns:
+        df["best_pick_label"] = df.apply(
+            lambda row: "BEST PICK" if float(row.get("ai_pick_score", 0) or 0) >= 70 else "STANDARD",
+            axis=1
+        )
+
+
 def only_existing_columns(dataframe, columns):
     existing = [c for c in columns if c in dataframe.columns]
     if not existing:
@@ -145,6 +191,23 @@ st.markdown(
         margin-bottom: 12px;
     }
 
+    
+    .best-pick-box {
+        background: linear-gradient(90deg, rgba(88,255,47,0.20), rgba(88,255,47,0.05));
+        border: 1px solid rgba(88,255,47,0.55);
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        box-shadow: 0 0 24px rgba(88,255,47,0.10);
+    }
+
+    .best-pick-title {
+        color: #58ff2f;
+        font-weight: 900;
+        font-size: 18px;
+    }
+
+
     </style>
     ''',
     unsafe_allow_html=True
@@ -188,7 +251,9 @@ with prematch_tab:
             "confidence",
             "ev",
             "edge",
-            "risk"
+            "risk",
+            "ai_pick_score",
+            "best_pick_label"
         ]
 
         compact_view = only_existing_columns(df, compact_columns)
@@ -202,6 +267,17 @@ with prematch_tab:
             match_name = row.get("mecz", row.get("match", "BRAK MECZU"))
 
             with st.expander(f"📊 {match_name}"):
+
+                if str(row.get("best_pick_label", "")).upper() == "BEST PICK":
+                    st.markdown(
+                        f"""
+                        <div class="best-pick-box">
+                            <div class="best-pick-title">✅ BEST PICK</div>
+                            <div>AI SCORE: {row.get("ai_pick_score", "-")} | Kurs: {row.get("kurs_buk", "-")} | EV: {row.get("ev", "-")} | Confidence: {row.get("confidence", "-")}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
 
                 c1, c2, c3 = st.columns(3)
 
