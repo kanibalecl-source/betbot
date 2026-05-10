@@ -705,7 +705,7 @@ def run_bot():
                 book_odds
             )
 
-                        stage_c_data = stage_c.enrich_pick(
+            stage_c_data = stage_c.enrich_pick(
                 pick={},
                 market=market,
                 model_prob=model_prob,
