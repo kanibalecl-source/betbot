@@ -4,316 +4,216 @@ from pathlib import Path
 from datetime import datetime
 
 st.set_page_config(
-    page_title="BETBOT AI",
+    page_title="KANIBAL ANALYTICS",
     page_icon="⚽",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
-
-# =========================
-# STYLING
-# =========================
 
 st.markdown("""
 <style>
-
+html, body, [class*="css"] {
+    background-color:#05070d;
+    color:white;
+}
 .main {
-    background-color: #0f172a;
-    color: white;
+    background: radial-gradient(circle at top right, #111827 0%, #05070d 60%);
 }
-
-section[data-testid="stSidebar"] {
-    background-color: #111827;
-}
-
 .block-container {
-    padding-top: 1rem;
+    padding-top:1rem;
 }
-
 .banner {
-    background: linear-gradient(90deg, #111827 0%, #1e293b 100%);
-    border-radius: 18px;
-    padding: 24px;
-    margin-bottom: 18px;
-    border: 1px solid #334155;
+    background: linear-gradient(90deg,#0b1120 0%, #111827 100%);
+    border:1px solid #1f2937;
+    border-radius:24px;
+    padding:32px;
+    margin-bottom:20px;
 }
-
 .banner-title {
-    font-size: 34px;
-    font-weight: 700;
-    color: white;
+    font-size:56px;
+    font-weight:900;
+    color:white;
 }
-
 .banner-sub {
-    color: #cbd5e1;
-    margin-top: 8px;
-    font-size: 15px;
+    color:#9ca3af;
+    font-size:18px;
 }
-
 .metric-card {
-    background: #1e293b;
-    padding: 18px;
-    border-radius: 14px;
-    border: 1px solid #334155;
-    text-align: center;
+    background:#0f172a;
+    border:1px solid #1f2937;
+    border-radius:18px;
+    padding:18px;
 }
-
 .metric-title {
-    color: #94a3b8;
-    font-size: 13px;
+    color:#9ca3af;
+    font-size:14px;
 }
-
 .metric-value {
-    color: white;
-    font-size: 28px;
-    font-weight: 700;
+    color:#84cc16;
+    font-size:34px;
+    font-weight:800;
 }
-
+.section-box {
+    background:#0b1120;
+    border:1px solid #1f2937;
+    border-radius:20px;
+    padding:20px;
+    margin-bottom:20px;
+}
+.section-title {
+    font-size:24px;
+    font-weight:700;
+    margin-bottom:16px;
+}
 div[data-testid="stDataFrame"] {
-    border: 1px solid #334155;
-    border-radius: 14px;
-    overflow: hidden;
+    border-radius:18px;
+    overflow:hidden;
+    border:1px solid #1f2937;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
-# =========================
-# PATHS
-# =========================
-
 DATA_DIR = Path("data")
-
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 
-# =========================
-# HELPERS
-# =========================
-
 @st.cache_data(ttl=30)
-def load_csv(path):
-
-    if not path.exists():
+def load_data():
+    if not PREMATCH_FILE.exists():
         return pd.DataFrame()
-
     try:
-
-        df = pd.read_csv(path)
-
-        # FIX BIAŁEJ STRONY
+        df = pd.read_csv(PREMATCH_FILE)
         df = df.fillna("")
-
         for col in df.columns:
             try:
                 df[col] = df[col].astype(str)
-            except Exception:
+            except:
                 pass
-
         return df
-
     except Exception as e:
         st.error(f"CSV ERROR: {e}")
         return pd.DataFrame()
 
-
-def clean_df(df):
-
+def clean_table(df):
     rename_map = {
-        "mecz": "MATCH",
-        "liga": "LEAGUE",
-        "typ": "PICK",
-        "kurs_buk": "ODDS",
-        "confidence": "CONF %",
-        "ev_percent": "EV %",
-        "tempo_level": "TEMPO",
-        "risk_level": "RISK",
-        "recommended_stake": "STAKE",
-        "market_direction": "MARKET",
-        "score": "SCORE",
-        "minute": "MIN"
+        "mecz":"MATCH",
+        "liga":"LEAGUE",
+        "typ":"SIGNAL",
+        "kurs_buk":"ODDS",
+        "confidence":"CONFIDENCE",
+        "ev_percent":"EV",
+        "recommended_stake":"STAKE",
+        "risk_level":"RISK",
+        "score":"SCORE",
+        "minute":"MIN"
     }
+    for o,n in rename_map.items():
+        if o in df.columns:
+            df=df.rename(columns={o:n})
 
-    for old, new in rename_map.items():
-        if old in df.columns:
-            df = df.rename(columns={old: new})
+    drop_cols=["pick_id","fixture_id","odds_event_id","home_team","away_team","home","away"]
+    existing=[c for c in drop_cols if c in df.columns]
+    if existing:
+        df=df.drop(columns=existing)
 
-    drop_cols = [
-        "pick_id",
-        "fixture_id",
-        "odds_event_id",
-        "home_team",
-        "away_team",
-        "home",
-        "away"
-    ]
+    preferred=["LEAGUE","MATCH","MIN","SCORE","SIGNAL","CONFIDENCE","ODDS","EV","STAKE","RISK","match_date"]
+    cols=[c for c in preferred if c in df.columns]
+    rest=[c for c in df.columns if c not in cols]
+    return df[cols+rest]
 
-    existing_drop = [c for c in drop_cols if c in df.columns]
+raw_df = load_data()
+prematch_df = raw_df.copy()
 
-    if existing_drop:
-        df = df.drop(columns=existing_drop)
-
-    preferred = [
-        "MATCH",
-        "LEAGUE",
-        "PICK",
-        "ODDS",
-        "CONF %",
-        "EV %",
-        "TEMPO",
-        "RISK",
-        "STAKE",
-        "MARKET",
-        "MIN",
-        "SCORE",
-        "match_date"
-    ]
-
-    cols = [c for c in preferred if c in df.columns]
-    rest = [c for c in df.columns if c not in cols]
-
-    return df[cols + rest]
-
-
-# =========================
-# LOAD DATA
-# =========================
-
-df = load_csv(PREMATCH_FILE)
-
-# =========================
-# HEADER
-# =========================
+live_df = pd.DataFrame()
+if not raw_df.empty and "minute" in raw_df.columns:
+    try:
+        live_df = raw_df[pd.to_numeric(raw_df["minute"], errors="coerce") > 0]
+    except:
+        pass
 
 st.markdown("""
 <div class="banner">
-    <div class="banner-title">⚽ BETBOT AI DASHBOARD</div>
-    <div class="banner-sub">
-        AI • Bayesian • Ensemble • EV • Kelly • CLV • Market Movement
-    </div>
+<div class="banner-title">⚽ KANIBAL ANALYTICS</div>
+<div class="banner-sub">ANALIZA • PRZEWAGA • ZYSK</div>
 </div>
 """, unsafe_allow_html=True)
 
-# =========================
-# METRICS
-# =========================
+c1,c2,c3,c4 = st.columns(4)
 
-c1, c2, c3, c4 = st.columns(4)
+total=len(prematch_df)
+live=len(live_df)
 
-total_picks = len(df) if not df.empty else 0
+avg_ev=0
+avg_conf=0
 
-avg_conf = 0
-if not df.empty and "confidence" in df.columns:
-    try:
-        avg_conf = round(pd.to_numeric(df["confidence"], errors="coerce").mean(), 1)
-    except:
-        avg_conf = 0
+if not prematch_df.empty:
+    if "ev_percent" in prematch_df.columns:
+        try:
+            avg_ev=round(pd.to_numeric(prematch_df["ev_percent"],errors="coerce").mean(),1)
+        except:
+            pass
+    if "confidence" in prematch_df.columns:
+        try:
+            avg_conf=round(pd.to_numeric(prematch_df["confidence"],errors="coerce").mean(),1)
+        except:
+            pass
 
-avg_ev = 0
-if not df.empty and "ev_percent" in df.columns:
-    try:
-        avg_ev = round(pd.to_numeric(df["ev_percent"], errors="coerce").mean(), 1)
-    except:
-        avg_ev = 0
+metrics = [
+    ("TOTAL SIGNALS", total),
+    ("LIVE MATCHES", live),
+    ("AVG EV", f"{avg_ev}%"),
+    ("AVG CONF", f"{avg_conf}%")
+]
 
-with c1:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">TOTAL PICKS</div>
-        <div class="metric-value">{total_picks}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c2:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">AVG CONFIDENCE</div>
-        <div class="metric-value">{avg_conf}%</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c3:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">AVG EV</div>
-        <div class="metric-value">{avg_ev}%</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with c4:
-    st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-title">LAST UPDATE</div>
-        <div class="metric-value" style="font-size:16px;">
-            {datetime.now().strftime("%H:%M:%S")}
+for col,metric in zip([c1,c2,c3,c4], metrics):
+    with col:
+        st.markdown(f"""
+        <div class="metric-card">
+        <div class="metric-title">{metric[0]}</div>
+        <div class="metric-value">{metric[1]}</div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-st.write("")
-
-# =========================
-# TABS
-# =========================
-
-tab1, tab2, tab3, tab4 = st.tabs([
-    "🎯 PREMATCH",
-    "📡 LIVE",
-    "📈 ANALYTICS",
-    "⚙️ SYSTEM"
+prematch_tab, live_tab, analytics_tab, history_tab, ranking_tab, alerts_tab, settings_tab = st.tabs([
+"🎯 PREMATCH","📡 LIVE","📈 ANALYTICS","📜 HISTORY","🏆 RANKING","🔔 ALERTS","⚙️ SETTINGS"
 ])
 
-with tab1:
-
-    st.subheader("🎯 PREMATCH PICKS")
-
-    if df.empty:
+with prematch_tab:
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">🎯 PREMATCH SIGNALS</div>', unsafe_allow_html=True)
+    if prematch_df.empty:
         st.warning("Brak danych PREMATCH")
     else:
+        st.dataframe(clean_table(prematch_df), use_container_width=True, height=700)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        clean = clean_df(df)
+with live_tab:
+    st.markdown('<div class="section-box">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📡 LIVE SIGNALS</div>', unsafe_allow_html=True)
+    if live_df.empty:
+        st.warning("LIVE brak danych — bot pokaże mecze LIVE gdy minute > 0")
+    else:
+        st.dataframe(clean_table(live_df), use_container_width=True, height=700)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        st.dataframe(
-            clean,
-            use_container_width=True,
-            height=720
-        )
+with analytics_tab:
+    if not prematch_df.empty and "liga" in prematch_df.columns:
+        stats = prematch_df["liga"].value_counts().reset_index()
+        stats.columns=["League","Signals"]
+        st.dataframe(stats, use_container_width=True)
 
-with tab2:
+with history_tab:
+    st.info("Historia typów będzie rozwijana.")
 
-    st.subheader("📡 LIVE MATCHES")
+with ranking_tab:
+    st.info("Ranking AI będzie rozwijany.")
 
-    st.info("LIVE ENGINE aktywny — moduł LIVE będzie rozwijany dalej.")
+with alerts_tab:
+    st.success("Alert system ONLINE")
 
-with tab3:
-
-    st.subheader("📈 ANALYTICS")
-
-    if not df.empty:
-
-        st.write("Top ligi:")
-
-        if "liga" in df.columns:
-
-            league_stats = (
-                df["liga"]
-                .value_counts()
-                .reset_index()
-            )
-
-            league_stats.columns = ["League", "Picks"]
-
-            st.dataframe(
-                league_stats,
-                use_container_width=True,
-                height=400
-            )
-
-with tab4:
-
-    st.subheader("⚙️ SYSTEM STATUS")
-
+with settings_tab:
     st.success("Scheduler: ONLINE")
-    st.success("Data API: ONLINE")
     st.success("Odds API: ONLINE")
+    st.success("Data API: ONLINE")
     st.success("ETAPY 1-10: ACTIVE")
-    st.success("CSV ENGINE: ACTIVE")
+
+st.caption(f"Ostatnia aktualizacja: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
