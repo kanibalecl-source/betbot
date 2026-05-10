@@ -10,9 +10,9 @@ st.set_page_config(
 
 DATA_DIR = Path("data")
 
-AUTO_FILE = DATA_DIR / "auto_all_picks.csv"
+PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 
-st.title("📊 BETBOT DASHBOARD")
+st.title("⚽ BETBOT AI DASHBOARD")
 
 
 def safe_load_csv(path):
@@ -31,7 +31,6 @@ def safe_load_csv(path):
         df = df.fillna("")
 
         for col in df.columns:
-
             try:
                 df[col] = df[col].astype(str)
             except Exception:
@@ -46,30 +45,116 @@ def safe_load_csv(path):
         return pd.DataFrame()
 
 
-while True:
+def cleanup_dataframe(df):
 
-    st.subheader("🎯 PREMATCH PICKS")
+    hide_cols = [
+        "pick_id",
+        "fixture_id",
+        "odds_event_id",
+        "home_team",
+        "away_team",
+        "home",
+        "away",
+    ]
 
-    df = safe_load_csv(AUTO_FILE)
+    for col in hide_cols:
+        if col in df.columns:
+            df = df.drop(columns=[col])
+
+    rename_map = {
+        "mecz": "MATCH",
+        "liga": "LEAGUE",
+        "typ": "PICK",
+        "kurs_buk": "ODDS",
+        "confidence": "CONFIDENCE %",
+        "ev_percent": "EV %",
+        "tempo_level": "TEMPO",
+        "tempo_score": "TEMPO SCORE",
+        "risk_level": "RISK",
+        "recommended_stake": "STAKE",
+        "market_direction": "MARKET MOVE",
+        "clv_percent": "CLV %",
+        "minute": "MIN",
+        "score": "SCORE",
+        "status": "STATUS",
+    }
+
+    existing = {
+        k: v for k, v in rename_map.items()
+        if k in df.columns
+    }
+
+    df = df.rename(columns=existing)
+
+    preferred_order = [
+        "MATCH",
+        "LEAGUE",
+        "PICK",
+        "ODDS",
+        "CONFIDENCE %",
+        "EV %",
+        "TEMPO",
+        "TEMPO SCORE",
+        "RISK",
+        "STAKE",
+        "MARKET MOVE",
+        "CLV %",
+        "MIN",
+        "SCORE",
+        "STATUS",
+        "match_date"
+    ]
+
+    final_cols = [
+        c for c in preferred_order
+        if c in df.columns
+    ]
+
+    other_cols = [
+        c for c in df.columns
+        if c not in final_cols
+    ]
+
+    df = df[final_cols + other_cols]
+
+    return df
+
+
+def render_prematch():
+
+    st.subheader("🎯 PREMATCH")
+
+    df = safe_load_csv(PREMATCH_FILE)
 
     if df.empty:
+        st.warning("Brak danych PREMATCH")
+        return
 
-        st.warning("Brak danych")
+    df = cleanup_dataframe(df)
 
-    else:
+    st.success(f"Załadowano {len(df)} typów")
 
-        st.success(f"Załadowano {len(df)} typów")
-
-        st.dataframe(
-            df,
-            use_container_width=True,
-            height=700
-        )
-
-    st.caption(
-        f"Ostatnie odświeżenie: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+    st.dataframe(
+        df,
+        use_container_width=True,
+        height=750
     )
 
-    time.sleep(30)
 
-    st.rerun()
+tab1, tab2 = st.tabs([
+    "🎯 PREMATCH",
+    "📡 LIVE"
+])
+
+with tab1:
+    render_prematch()
+
+with tab2:
+    st.info("LIVE będzie rozwijany w kolejnych etapach.")
+
+st.caption(
+    f"Ostatnie odświeżenie: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+)
+
+time.sleep(30)
+st.rerun()
