@@ -80,6 +80,28 @@ HISTORY_FILE = DATA_DIR / "auto_all_picks_history.csv"
 CLV_FILE = DATA_DIR / "clv_history.csv"
 CONFIG_FILE = BASE_DIR / "config_strategy.json"
 
+TARGET_MARKETS = {
+    "DOUBLE_1X",
+    "DOUBLE_X2",
+    "DOUBLE_12",
+
+    "BTTS_YES",
+    "BTTS_NO",
+
+    "OVER_0.5",
+    "OVER_1.5",
+    "OVER_2.5",
+    "OVER_3.5",
+    "OVER_4.5",
+
+    "UNDER_0.5",
+    "UNDER_1.5",
+    "UNDER_2.5",
+    "UNDER_3.5",
+    "UNDER_4.5",
+}
+
+
 
 # =========================
 # CONFIG
@@ -96,15 +118,31 @@ def load_config():
 
 def format_bet(market):
     mapping = {
-        "HOME_WIN": "Home Win",
-        "DRAW": "Draw",
-        "AWAY_WIN": "Away Win",
+        "HOME_WIN": "1",
+        "DRAW": "X",
+        "AWAY_WIN": "2",
+
+        "DOUBLE_1X": "1X",
+        "DOUBLE_X2": "X2",
+        "DOUBLE_12": "12",
+
         "BTTS_YES": "BTTS Yes",
         "BTTS_NO": "BTTS No",
+
+        "OVER_0.5": "Over 0.5",
+        "UNDER_0.5": "Under 0.5",
+
+        "OVER_1.5": "Over 1.5",
+        "UNDER_1.5": "Under 1.5",
+
         "OVER_2.5": "Over 2.5",
         "UNDER_2.5": "Under 2.5",
-        "OVER_1.5": "Over 1.5",
-        "UNDER_1.5": "Under 1.5"
+
+        "OVER_3.5": "Over 3.5",
+        "UNDER_3.5": "Under 3.5",
+
+        "OVER_4.5": "Over 4.5",
+        "UNDER_4.5": "Under 4.5",
     }
     return mapping.get(market, market)
 
@@ -112,28 +150,50 @@ def format_bet(market):
 def market_to_odds_api(market):
     if market in {"HOME_WIN", "DRAW", "AWAY_WIN"}:
         return "h2h"
-    if market in {"OVER_2.5", "UNDER_2.5", "OVER_1.5", "UNDER_1.5"}:
+
+    if market in {"DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"}:
+        return "double_chance"
+
+    if market.startswith("OVER_") or market.startswith("UNDER_"):
         return "totals"
+
     if market in {"BTTS_YES", "BTTS_NO"}:
         return "btts"
-    return "h2h"
+
+    return "unknown"
 
 
 def outcome_name_for_closing(match, market):
     if market == "HOME_WIN":
         return match.get("home_team") or match.get("home")
+
     if market == "AWAY_WIN":
         return match.get("away_team") or match.get("away")
+
     if market == "DRAW":
         return "Draw"
-    if market in {"OVER_2.5", "OVER_1.5"}:
+
+    if market == "DOUBLE_1X":
+        return "Home/Draw"
+
+    if market == "DOUBLE_X2":
+        return "Draw/Away"
+
+    if market == "DOUBLE_12":
+        return "Home/Away"
+
+    if market.startswith("OVER_"):
         return "Over"
-    if market in {"UNDER_2.5", "UNDER_1.5"}:
+
+    if market.startswith("UNDER_"):
         return "Under"
+
     if market == "BTTS_YES":
         return "Yes"
+
     if market == "BTTS_NO":
         return "No"
+
     return None
 
 
@@ -142,20 +202,43 @@ def get_market_group(market):
         "HOME_WIN": ["HOME_WIN", "DRAW", "AWAY_WIN"],
         "DRAW": ["HOME_WIN", "DRAW", "AWAY_WIN"],
         "AWAY_WIN": ["HOME_WIN", "DRAW", "AWAY_WIN"],
+
         "BTTS_YES": ["BTTS_YES", "BTTS_NO"],
         "BTTS_NO": ["BTTS_YES", "BTTS_NO"],
-        "OVER_2.5": ["OVER_2.5", "UNDER_2.5"],
-        "UNDER_2.5": ["OVER_2.5", "UNDER_2.5"],
+
+        "OVER_0.5": ["OVER_0.5", "UNDER_0.5"],
+        "UNDER_0.5": ["OVER_0.5", "UNDER_0.5"],
+
         "OVER_1.5": ["OVER_1.5", "UNDER_1.5"],
         "UNDER_1.5": ["OVER_1.5", "UNDER_1.5"],
+
+        "OVER_2.5": ["OVER_2.5", "UNDER_2.5"],
+        "UNDER_2.5": ["OVER_2.5", "UNDER_2.5"],
+
+        "OVER_3.5": ["OVER_3.5", "UNDER_3.5"],
+        "UNDER_3.5": ["OVER_3.5", "UNDER_3.5"],
+
+        "OVER_4.5": ["OVER_4.5", "UNDER_4.5"],
+        "UNDER_4.5": ["OVER_4.5", "UNDER_4.5"],
     }
+
+    # Double chance markets overlap, so standard margin sum is not meaningful.
+    # We do not use margin rejection for these; calculate_market_margin returns 1.0.
+    if market in {"DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"}:
+        return ["DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"]
+
     return groups.get(market)
 
 
 def calculate_market_margin(odds_dict, market):
+    # Double chance outcomes overlap, therefore classic implied-probability margin
+    # is not suitable. Returning 1.0 prevents false rejection.
+    if market in {"DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"}:
+        return 1.0
+
     group = get_market_group(market)
     if not group:
-        return None
+        return 1.0
 
     probs = []
 
@@ -170,7 +253,9 @@ def calculate_market_margin(odds_dict, market):
             probs.append(1 / odd)
 
     if len(probs) != len(group):
-        return None
+        # Missing opposite side should not crash the bot.
+        # Use neutral margin so the pick can still be evaluated.
+        return 1.0
 
     return sum(probs)
 
@@ -580,17 +665,10 @@ def run_bot():
         for market, data in odds_data.items():
 
             # =========================
-            # SAFE MARKET FILTER
+            # TARGET MARKETS ONLY
+            # 1X / X2 / 12, BTTS, Over/Under 0.5–4.5
             # =========================
-            market_lower = str(market).lower()
-
-            allowed = (
-                "over" in market_lower
-                or "under" in market_lower
-                or "btts" in market_lower
-            )
-
-            if not allowed:
+            if market not in TARGET_MARKETS:
                 continue
 
             if not active_markets.get(market, True):
@@ -919,7 +997,7 @@ def run_bot():
     print("✅ GOTOWE")
     print(f"📊 {len(df)} typów zapisanych")
     print(f"📁 {ALL_FILE}")
-    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv, stage_a, stage_b, stage_c, odds_1_250, best_pick_ranking")
+    print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv, stage_a, stage_b, stage_c, target_markets, best_pick_ranking")
 
 
 if __name__ == "__main__":

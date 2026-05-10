@@ -216,6 +216,54 @@ def get_matches():
 # KLUCZOWY FIX
 # =========================
 
+def _normalize_total_line(value):
+    try:
+        text = str(value or "").strip()
+        # API-Football usually returns "Over 2.5" / "Under 2.5"
+        parts = text.replace(",", ".").split()
+        for part in reversed(parts):
+            try:
+                return f"{float(part):.1f}"
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return ""
+
+
+def _normalize_double_chance(value):
+    text = str(value or "").strip().lower()
+    text = (
+        text.replace(" ", "")
+        .replace("-", "/")
+        .replace("_", "/")
+        .replace("or", "/")
+    )
+
+    # Common API names:
+    # Home/Draw, Draw/Away, Home/Away
+    # 1X, X2, 12
+    if text in {"home/draw", "1/x", "1x", "homeor draw", "home/draw"}:
+        return "DOUBLE_1X"
+
+    if text in {"draw/away", "x/2", "x2", "draw/away"}:
+        return "DOUBLE_X2"
+
+    if text in {"home/away", "1/2", "12", "home/away"}:
+        return "DOUBLE_12"
+
+    if "home" in text and "draw" in text:
+        return "DOUBLE_1X"
+
+    if "draw" in text and "away" in text:
+        return "DOUBLE_X2"
+
+    if "home" in text and "away" in text:
+        return "DOUBLE_12"
+
+    return None
+
+
 def get_odds_market_data(match):
 
     fixture_id = match.get("fixture_id")
@@ -260,7 +308,7 @@ def get_odds_market_data(match):
 
             for bet in bookmaker.get("bets", []):
 
-                market_name = bet.get("name")
+                market_name = str(bet.get("name") or "").strip()
 
                 for value in bet.get("values", []):
 
@@ -269,10 +317,14 @@ def get_odds_market_data(match):
                     except Exception:
                         continue
 
-                    outcome = value.get("value")
+                    if odd <= 1:
+                        continue
+
+                    outcome = str(value.get("value") or "").strip()
 
                     key = None
 
+                    # 1X2
                     if market_name == "Match Winner":
 
                         if outcome == "Home":
@@ -284,6 +336,12 @@ def get_odds_market_data(match):
                         elif outcome == "Away":
                             key = "AWAY_WIN"
 
+                    # Double Chance: 1X / X2 / 12
+                    elif market_name == "Double Chance":
+
+                        key = _normalize_double_chance(outcome)
+
+                    # BTTS
                     elif market_name == "Both Teams Score":
 
                         if outcome == "Yes":
@@ -292,18 +350,18 @@ def get_odds_market_data(match):
                         elif outcome == "No":
                             key = "BTTS_NO"
 
+                    # Totals: Over/Under 0.5–4.5
                     elif market_name and "Over/Under" in market_name:
 
-                        try:
-                            line = outcome.split(" ")[-1]
-                        except Exception:
-                            line = ""
+                        line = _normalize_total_line(outcome)
 
-                        if "Over" in outcome:
-                            key = f"OVER_{line}"
+                        if line in {"0.5", "1.5", "2.5", "3.5", "4.5"}:
 
-                        elif "Under" in outcome:
-                            key = f"UNDER_{line}"
+                            if "Over" in outcome:
+                                key = f"OVER_{line}"
+
+                            elif "Under" in outcome:
+                                key = f"UNDER_{line}"
 
                     if key:
 
@@ -322,6 +380,9 @@ def get_odds_market_data(match):
                                     "best_odds": odd,
                                     "bookmaker": bookmaker_name
                                 }
+
+        if markets:
+            print(f"ODDS MARKETS: {sorted(list(markets.keys()))}")
 
         return markets
 

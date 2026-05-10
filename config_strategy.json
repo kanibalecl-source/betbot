@@ -32,15 +32,21 @@
     }
   },
   "active_markets": {
-    "HOME_WIN": true,
-    "DRAW": true,
-    "AWAY_WIN": true,
+    "DOUBLE_1X": true,
+    "DOUBLE_X2": true,
+    "DOUBLE_12": true,
     "BTTS_YES": true,
     "BTTS_NO": true,
-    "OVER_2.5": true,
-    "UNDER_2.5": true,
+    "OVER_0.5": true,
     "OVER_1.5": true,
-    "UNDER_1.5": true
+    "OVER_2.5": true,
+    "OVER_3.5": true,
+    "OVER_4.5": true,
+    "UNDER_0.5": true,
+    "UNDER_1.5": true,
+    "UNDER_2.5": true,
+    "UNDER_3.5": true,
+    "UNDER_4.5": true
   },
   "autotune": {
     "enabled": true,

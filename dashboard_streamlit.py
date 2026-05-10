@@ -15,6 +15,7 @@ DATA_DIR = BASE_DIR / "data"
 CSV_FILE = DATA_DIR / "auto_all_picks.csv"
 BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 
+
 def load_csv():
     if not CSV_FILE.exists():
         return pd.DataFrame()
@@ -27,13 +28,69 @@ def load_csv():
         except Exception:
             return pd.DataFrame()
 
-df = load_csv()
 
 def only_existing_columns(dataframe, columns):
     existing = [c for c in columns if c in dataframe.columns]
     if not existing:
         return dataframe
     return dataframe[existing]
+
+
+def normalize_label(value):
+    return str(value if value is not None else "STANDARD").upper().strip()
+
+
+def show_pick_badge(row):
+    label = normalize_label(row.get("best_pick_label", "STANDARD"))
+    score = row.get("ai_pick_score", "-")
+    odds = row.get("kurs_buk", "-")
+    ev = row.get("ev", "-")
+    confidence = row.get("confidence", "-")
+
+    text = f"{label} | AI SCORE: {score} | ODDS: {odds} | EV: {ev} | CONF: {confidence}"
+
+    if label == "ULTRA ELITE":
+        st.markdown(f"### 🟣 {text}")
+
+    elif label == "TOP PICK":
+        st.success(f"🟢 {text}")
+
+    elif label == "BEST PICK":
+        st.success(f"🟩 {text}")
+
+    elif label == "VALUE PICK":
+        st.warning(f"🟨 {text}")
+
+    else:
+        st.caption(f"⚪ {text}")
+
+
+df = load_csv()
+
+TARGET_MARKETS = {
+    "DOUBLE_1X",
+    "DOUBLE_X2",
+    "DOUBLE_12",
+    "BTTS_YES",
+    "BTTS_NO",
+    "OVER_0.5",
+    "OVER_1.5",
+    "OVER_2.5",
+    "OVER_3.5",
+    "OVER_4.5",
+    "UNDER_0.5",
+    "UNDER_1.5",
+    "UNDER_2.5",
+    "UNDER_3.5",
+    "UNDER_4.5",
+}
+
+if not df.empty and "market" in df.columns:
+    df = df[df["market"].astype(str).isin(TARGET_MARKETS)].copy()
+
+if not df.empty and "kurs_buk" in df.columns:
+    df["_kurs_buk_num"] = pd.to_numeric(df["kurs_buk"], errors="coerce")
+    df = df[(df["_kurs_buk_num"] >= 1.00) & (df["_kurs_buk_num"] <= 2.50)].copy()
 
 st.markdown(
     '''
@@ -158,13 +215,14 @@ else:
 tabs = st.tabs([
     "🚨 LIVE",
     "⚽ PREMATCH",
+    "🧠 AI",
     "📊 ANALYTICS",
     "🕘 HISTORY",
     "🏆 RANKING",
     "🔔 ALERTS"
 ])
 
-live_tab, prematch_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = tabs
+live_tab, prematch_tab, ai_tab, analytics_tab, history_tab, ranking_tab, alerts_tab = tabs
 
 with live_tab:
     st.header("🟢 LIVE SIGNALS")
@@ -178,7 +236,6 @@ with prematch_tab:
         st.warning("Brak danych PREMATCH")
 
     else:
-
         compact_columns = [
             "liga",
             "mecz",
@@ -188,78 +245,29 @@ with prematch_tab:
             "confidence",
             "ev",
             "edge",
-            "risk"
+            "risk",
+            "best_pick_label",
+            "ai_pick_score",
         ]
 
         compact_view = only_existing_columns(df, compact_columns)
-
         st.table(compact_view)
 
-        st.markdown("## 🔍 AI DETAILS")
+with ai_tab:
 
+    st.header("🧠 AI DETAILS")
+
+    if df.empty:
+        st.warning("Brak danych AI")
+    else:
         for idx, row in df.iterrows():
 
             match_name = row.get("mecz", row.get("match", "BRAK MECZU"))
+            market_name = row.get("typ", row.get("market", ""))
 
-            with st.expander(f"📊 {match_name}"):
+            with st.expander(f"📊 {match_name} | {market_name}"):
 
-                # =========================
-                # SAFE RANKING BADGE
-                # =========================
-
-                pick_label = str(row.get("best_pick_label", "STANDARD")).upper()
-                ai_score = row.get("ai_pick_score", "-")
-
-                badge_colors = {
-                    "ULTRA ELITE": "#b026ff",
-                    "TOP PICK": "#58ff2f",
-                    "BEST PICK": "#2ecc71",
-                    "VALUE PICK": "#f1c40f",
-                    "STANDARD": "#5f5f5f"
-                }
-
-                badge_color = badge_colors.get(
-                    pick_label,
-                    "#5f5f5f"
-                )
-
-                badge_html = f"""
-                <div style="
-                    background: linear-gradient(
-                        90deg,
-                        {badge_color}22,
-                        rgba(255,255,255,0.02)
-                    );
-                    border: 2px solid {badge_color};
-                    border-radius: 14px;
-                    padding: 14px;
-                    margin-bottom: 18px;
-                ">
-
-                    <div style="
-                        color:{badge_color};
-                        font-size:22px;
-                        font-weight:900;
-                    ">
-                        {pick_label}
-                    </div>
-
-                    <div style="
-                        color:white;
-                        margin-top:8px;
-                        font-size:16px;
-                    ">
-                        AI SCORE: {ai_score}
-                    </div>
-
-                </div>
-                """
-
-                st.markdown(
-                    badge_html,
-                    unsafe_allow_html=True
-                )
-
+                show_pick_badge(row)
 
                 c1, c2, c3 = st.columns(3)
 
@@ -306,7 +314,7 @@ with prematch_tab:
                         unsafe_allow_html=True
                     )
 
-                c4, c5 = st.columns(2)
+                c4, c5, c6 = st.columns(3)
 
                 with c4:
                     st.markdown(
@@ -337,8 +345,51 @@ with prematch_tab:
                         unsafe_allow_html=True
                     )
 
+                with c6:
+                    st.markdown(
+                        f'''
+                        <div class="ai-box">
+                        <h4 style="color:#58ff2f;">META AI ENGINE</h4>
+                        <b>META PROB:</b> {row.get("meta_probability", "-")}<br>
+                        <b>MODEL WEIGHT:</b> {row.get("meta_weight_model", "-")}<br>
+                        <b>MARKET WEIGHT:</b> {row.get("meta_weight_market", "-")}<br>
+                        <b>xG WEIGHT:</b> {row.get("meta_weight_xg", "-")}<br>
+                        <b>MOMENTUM WEIGHT:</b> {row.get("meta_weight_momentum", "-")}<br>
+                        <b>SHARP WEIGHT:</b> {row.get("meta_weight_sharp", "-")}<br>
+                        <b>DYNAMIC STAKE:</b> {row.get("dynamic_stake", "-")}<br>
+                        </div>
+                        ''',
+                        unsafe_allow_html=True
+                    )
+
 with analytics_tab:
     st.header("📊 ANALYTICS")
+
+    if df.empty:
+        st.warning("Brak danych")
+    else:
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            st.metric("TOTAL PICKS", len(df))
+
+        with c2:
+            if "ai_pick_score" in df.columns:
+                st.metric(
+                    "AVG AI SCORE",
+                    round(pd.to_numeric(df["ai_pick_score"], errors="coerce").mean(), 2)
+                )
+
+        with c3:
+            if "best_pick_label" in df.columns:
+                strong_count = len(
+                    df[
+                        df["best_pick_label"].astype(str).str.upper().isin(
+                            ["ULTRA ELITE", "TOP PICK", "BEST PICK"]
+                        )
+                    ]
+                )
+                st.metric("STRONG PICKS", strong_count)
 
 with history_tab:
     st.header("🕘 HISTORY")
@@ -348,8 +399,3 @@ with ranking_tab:
 
 with alerts_tab:
     st.header("🔔 ALERTS")
-
-
-# META AI ENGINE ENABLED
-
-# OVER/UNDER 0.5-4.5 ENABLED

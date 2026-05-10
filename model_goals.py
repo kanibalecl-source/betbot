@@ -91,17 +91,41 @@ def build_model(home_xg, away_xg):
     home_win, draw, away_win = calculate_1x2(matrix)
 
     btts_yes = calculate_btts(matrix)
-    over_2_5 = calculate_over(matrix, 2.5)
+
+    over_0_5 = calculate_over(matrix, 0.5)
     over_1_5 = calculate_over(matrix, 1.5)
+    over_2_5 = calculate_over(matrix, 2.5)
+    over_3_5 = calculate_over(matrix, 3.5)
+    over_4_5 = calculate_over(matrix, 4.5)
 
     return sanity_check_model({
+        # 1X2 base probabilities
         "HOME_WIN": home_win,
         "DRAW": draw,
         "AWAY_WIN": away_win,
+
+        # Double chance
+        "DOUBLE_1X": home_win + draw,
+        "DOUBLE_X2": draw + away_win,
+        "DOUBLE_12": home_win + away_win,
+
+        # BTTS
         "BTTS_YES": btts_yes,
         "BTTS_NO": 1 - btts_yes,
-        "OVER_2.5": over_2_5,
-        "UNDER_2.5": 1 - over_2_5,
+
+        # Totals 0.5–4.5
+        "OVER_0.5": over_0_5,
+        "UNDER_0.5": 1 - over_0_5,
+
         "OVER_1.5": over_1_5,
         "UNDER_1.5": 1 - over_1_5,
+
+        "OVER_2.5": over_2_5,
+        "UNDER_2.5": 1 - over_2_5,
+
+        "OVER_3.5": over_3_5,
+        "UNDER_3.5": 1 - over_3_5,
+
+        "OVER_4.5": over_4_5,
+        "UNDER_4.5": 1 - over_4_5,
     })
