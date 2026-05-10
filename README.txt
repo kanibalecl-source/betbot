@@ -1,11 +1,19 @@
-NADPISZ:
-- bot.py
-- dashboard_streamlit.py
+FINAL ALL BADGES PATCH
 
-Potem:
-git add .
-git commit -m "final working best pick system"
-git push
+Nadpisz:
+dashboard_streamlit.py
 
-Oznaczenia pojawią się:
+NAPRAWIA:
+- każdy mecz pokazuje badge rankingowy
+- STANDARD też jest widoczny
+- poprawiona kolorystyka
+- lepszy glow i widoczność
+- ULTRA ELITE / TOP PICK / BEST PICK / VALUE PICK / STANDARD
+
+Badge pojawia się:
 PREMATCH -> kliknięcie meczu -> nad AI DETAILS
+
+Deploy:
+git add .
+git commit -m "final all badges fix"
+git push
