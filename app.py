@@ -1,56 +1,4 @@
 from pathlib import Path
-import pandas as pd
-import os
-
-BASE_DIR = Path(__file__).resolve().parent
-
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
-
-LIVE_FILE = DATA_DIR / "live_matches.csv"
-
-
-class LiveEngine:
-    def __init__(self):
-        pass
-
-    def save_live_matches(self, matches):
-        try:
-            df = pd.DataFrame(matches)
-
-            df.to_csv(
-                LIVE_FILE,
-                index=False
-            )
-
-            print(f"✅ LIVE SAVED -> {LIVE_FILE}")
-
-        except Exception as e:
-            print(f"❌ SAVE LIVE ERROR: {e}")
-
-    def load_live_matches(self):
-        try:
-            if not LIVE_FILE.exists():
-                return []
-
-            df = pd.read_csv(LIVE_FILE)
-            df = df.fillna("")
-
-            return df.to_dict(orient="records")
-
-        except Exception as e:
-            print(f"❌ LOAD LIVE ERROR: {e}")
-            return []
-```
-
----
-
-# PLIK 2 — app.py
-
-SKOPIUJ CAŁY PLIK I NADPISZ.
-
-```python
-from pathlib import Path
 import os
 import pandas as pd
 from flask import Flask, render_template, request, jsonify, redirect, url_for
@@ -138,18 +86,5 @@ def play():
     return redirect(url_for("index"))
 
 
-@app.route("/health")
-def health():
-    return {"ok": True}
-
-
 if __name__ == "__main__":
-    init_db()
-
-    port = int(os.environ.get("PORT", 8080))
-
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False,
-    )
+    app.run(host="0.0.0.0", port=5000, debug=True)
