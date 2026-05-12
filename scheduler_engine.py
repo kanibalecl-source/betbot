@@ -47,6 +47,8 @@ def run_prematch():
             sys.stdout.flush()
 
             print("✅ LIVE SAVED")
+
+            run_v7_enterprise_maintenance()
             print("💓 SCHEDULER LOOP OK")
 
             sys.stdout.flush()
@@ -63,6 +65,18 @@ def run_prematch():
         sys.stdout.flush()
 
         time.sleep(300)
+
+
+
+def run_v7_enterprise_maintenance():
+    try:
+        from auto_retraining_runtime import AutoRetrainingRuntime
+        result = AutoRetrainingRuntime(min_hours_between_runs=12).run_if_due()
+        print(f"[SCHEDULER] V7 ENTERPRISE MAINTENANCE: {result.get('status')}")
+        sys.stdout.flush()
+    except Exception as e:
+        print(f"[SCHEDULER] V7 MAINTENANCE WARNING: {e}")
+        sys.stdout.flush()
 
 
 def main():
