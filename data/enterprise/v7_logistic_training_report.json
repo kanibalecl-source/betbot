@@ -1,0 +1,25 @@
+{
+  "status": "NO_SETTLED_DATA",
+  "samples": 0,
+  "features": [
+    "probability",
+    "home_xg",
+    "away_xg",
+    "xg_diff",
+    "total_xg",
+    "odds",
+    "edge",
+    "ev",
+    "data_quality",
+    "tempo",
+    "home_form",
+    "away_form",
+    "confidence",
+    "closing_line_value"
+  ],
+  "model_path": "data/enterprise/v7_logistic.json",
+  "calibration": {},
+  "metrics": {
+    "note": "Add settled bets with won/result/outcome field."
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "last_run": "2026-05-12T05:01:36.855177+00:00",
+  "runs": 1,
+  "status": "DONE",
+  "started_at": "2026-05-12T05:01:36.854079+00:00",
+  "training_status": "NO_SETTLED_DATA",
+  "walk_forward_status": "NO_ENOUGH_DATA",
+  "samples": 0
+}
