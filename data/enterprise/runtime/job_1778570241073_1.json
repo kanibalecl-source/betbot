@@ -1,0 +1,131 @@
+{
+  "ok": true,
+  "job": {
+    "fixture_id": "test_fixture_2",
+    "home_xg": 1.8,
+    "away_xg": 0.8,
+    "market": "HOME_WIN",
+    "bookmaker_odds": 2.1,
+    "job_id": "job_1778570241073_1",
+    "created_at": 1778570241.0731068
+  },
+  "result": {
+    "status": "V8_FULL_ENTERPRISE_STACK_ACTIVE",
+    "fixture_id": "test_fixture_2",
+    "market": "HOME_WIN",
+    "probability": 0.583794,
+    "v7_probability": 0.576663,
+    "v8_ai_probability": 0.59543,
+    "data_quality": 0.0,
+    "enterprise_feeds": {
+      "status": "NO_ENTERPRISE_FEEDS",
+      "updated_at": "2026-05-12T07:17:21.109749+00:00",
+      "enterprise_feed_results": [
+        {
+          "provider": "opta",
+          "ok": false,
+          "payload": {},
+          "mode": "missing_credentials",
+          "error": "OPTA_BASE_URL/OPTA_API_KEY not configured",
+          "status_code": null,
+          "fetched_at": "2026-05-12T07:17:21.108695+00:00"
+        },
+        {
+          "provider": "statsbomb",
+          "ok": false,
+          "payload": {},
+          "mode": "missing_credentials",
+          "error": "STATSBOMB_BASE_URL/STATSBOMB_API_KEY not configured",
+          "status_code": null,
+          "fetched_at": "2026-05-12T07:17:21.109112+00:00"
+        },
+        {
+          "provider": "tracking",
+          "ok": false,
+          "payload": {},
+          "mode": "missing_credentials",
+          "error": "TRACKING_BASE_URL/TRACKING_API_KEY not configured",
+          "status_code": null,
+          "fetched_at": "2026-05-12T07:17:21.109439+00:00"
+        },
+        {
+          "provider": "betfair_liquidity",
+          "ok": false,
+          "payload": {},
+          "mode": "missing_credentials",
+          "error": "BETFAIR_* env vars not configured",
+          "status_code": null,
+          "fetched_at": "2026-05-12T07:17:21.109618+00:00"
+        },
+        {
+          "provider": "premium_sharp",
+          "ok": false,
+          "payload": {},
+          "mode": "missing_credentials",
+          "error": "SHARP_FEED_BASE_URL/SHARP_FEED_API_KEY not configured",
+          "status_code": null,
+          "fetched_at": "2026-05-12T07:17:21.109735+00:00"
+        }
+      ]
+    },
+    "ai_research_layer": {
+      "status": "V8_AI_RESEARCH_ACTIVE",
+      "probability": 0.59543,
+      "uncertainty": 0.453027,
+      "model_outputs": [
+        {
+          "model": "temporal_neural_net_lite",
+          "probability": 0.606429,
+          "confidence": 0.7,
+          "details": {
+            "xg_trend": 0.0,
+            "tempo_trend": 0.0,
+            "quality": 0.5,
+            "probability": 0.576663
+          }
+        },
+        {
+          "model": "transformer_sequence_lite",
+          "probability": 0.576663,
+          "confidence": 0.45,
+          "details": {
+            "attention_rows": 0
+          }
+        },
+        {
+          "model": "bayesian_deep_learning_lite",
+          "probability": 0.597057,
+          "confidence": 0.4581,
+          "details": {
+            "posterior_std": 0.169346,
+            "samples": 64
+          }
+        }
+      ],
+      "rl_policy": {
+        "action": "PASS",
+        "ev": 0.250402,
+        "stake": 14.012,
+        "stake_fraction": 0.014012,
+        "quality_ok": false,
+        "edge_ok": true
+      }
+    },
+    "runtime": {
+      "backend": "memory",
+      "queue_name": "betbot:v8:inference",
+      "enqueued": 2,
+      "processed": 1,
+      "failed": 0,
+      "workers": 2
+    },
+    "bookmaker_used_only_for_comparison": true,
+    "market_comparison": {
+      "bookmaker_odds": 2.1,
+      "fair_odds": 1.7129,
+      "edge_ev": 0.225967,
+      "value": true
+    }
+  },
+  "ts": 1778570241.1105964
+}

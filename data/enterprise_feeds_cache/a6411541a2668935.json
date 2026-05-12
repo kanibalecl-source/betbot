@@ -1,0 +1,51 @@
+{
+  "status": "NO_ENTERPRISE_FEEDS",
+  "updated_at": "2026-05-12T07:17:21.091255+00:00",
+  "enterprise_feed_results": [
+    {
+      "provider": "opta",
+      "ok": false,
+      "payload": {},
+      "mode": "missing_credentials",
+      "error": "OPTA_BASE_URL/OPTA_API_KEY not configured",
+      "status_code": null,
+      "fetched_at": "2026-05-12T07:17:21.089518+00:00"
+    },
+    {
+      "provider": "statsbomb",
+      "ok": false,
+      "payload": {},
+      "mode": "missing_credentials",
+      "error": "STATSBOMB_BASE_URL/STATSBOMB_API_KEY not configured",
+      "status_code": null,
+      "fetched_at": "2026-05-12T07:17:21.089729+00:00"
+    },
+    {
+      "provider": "tracking",
+      "ok": false,
+      "payload": {},
+      "mode": "missing_credentials",
+      "error": "TRACKING_BASE_URL/TRACKING_API_KEY not configured",
+      "status_code": null,
+      "fetched_at": "2026-05-12T07:17:21.090023+00:00"
+    },
+    {
+      "provider": "betfair_liquidity",
+      "ok": false,
+      "payload": {},
+      "mode": "missing_credentials",
+      "error": "BETFAIR_* env vars not configured",
+      "status_code": null,
+      "fetched_at": "2026-05-12T07:17:21.090503+00:00"
+    },
+    {
+      "provider": "premium_sharp",
+      "ok": false,
+      "payload": {},
+      "mode": "missing_credentials",
+      "error": "SHARP_FEED_BASE_URL/SHARP_FEED_API_KEY not configured",
+      "status_code": null,
+      "fetched_at": "2026-05-12T07:17:21.091219+00:00"
+    }
+  ]
+}
