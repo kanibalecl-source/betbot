@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable, List, Optional
 import requests
 
 from source_quality_engine import SourceQualityEngine
+from enterprise_data_feeds import EnterpriseDataFeeds
 
 
 @dataclass
@@ -50,6 +51,7 @@ class MultiSourceIngestion:
         self.timeout = timeout
         self.retries = retries
         self.quality = SourceQualityEngine()
+        self.enterprise_feeds = EnterpriseDataFeeds(data_dir=self.data_dir)
 
     def fetch_fixture(self, fixture_id: str | int, sources: Optional[List[str]] = None) -> Dict[str, Any]:
         sources = sources or self.DEFAULT_SOURCES
@@ -61,6 +63,9 @@ class MultiSourceIngestion:
                 provider = source.replace("local_", "")
                 results.append(self._fetch_local_provider(fixture_id, provider).to_dict())
         merged = self.merge_sources([r for r in results if r.get("ok")])
+        enterprise = self.enterprise_feeds.fetch_all(fixture_id)
+        if enterprise.get("status") == "ENTERPRISE_FEEDS_MERGED":
+            merged.update({k: v for k, v in enterprise.items() if v not in (None, "", [], {})})
         quality_reports = [self.quality.evaluate(r.get("payload", {}), r.get("provider", "unknown")) for r in results if r.get("ok")]
         merged["source_quality"] = self.quality.merge_reports(quality_reports)
         merged["source_results"] = results
