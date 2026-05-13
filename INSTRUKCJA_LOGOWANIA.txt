@@ -1,0 +1,45 @@
+KANIBAL ANALYTICS - PROSTY ZAMKNIĘTY PANEL LOGOWANIA
+
+1. Konta użytkowników znajdują się w pliku:
+   users.json
+
+2. Domyślne konto po wgraniu paczki:
+   login: admin
+   hasło: admin123
+
+3. Jak zmienić hasło?
+   Otwórz users.json i zmień pole "password".
+
+   Przykład:
+   {
+     "admin": {
+       "password": "mojeNoweHaslo",
+       "role": "admin",
+       "active": true
+     }
+   }
+
+4. Jak dodać drugiego użytkownika?
+   Dopisz kolejny wpis:
+
+   {
+     "admin": {
+       "password": "mojeNoweHaslo",
+       "role": "admin",
+       "active": true
+     },
+     "vip1": {
+       "password": "hasloDlaVip1",
+       "role": "user",
+       "active": true
+     }
+   }
+
+5. Jak zablokować użytkownika?
+   Zmień active na false.
+
+6. Nie ma rejestracji kont przez użytkowników.
+   Konta działają tylko wtedy, gdy ręcznie dodasz je w users.json.
+
+WAŻNE:
+Po pierwszym deployu koniecznie zmień domyślne hasło admin123.

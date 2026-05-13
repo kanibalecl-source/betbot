@@ -3,9 +3,6 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
-from auth_manager import require_login
-from advanced_learning_engine import AdvancedLearningEngine
-
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
     layout="wide",
@@ -67,8 +64,6 @@ def show_pick_badge(row):
     else:
         st.caption(f"⚪ {text}")
 
-
-require_login()
 
 df = load_csv()
 
@@ -233,14 +228,6 @@ with live_tab:
     st.header("🟢 LIVE SIGNALS")
     st.info("LIVE ENGINE ACTIVE")
 
-    learning_engine = AdvancedLearningEngine()
-    live_df = learning_engine.live_tempo_snapshot()
-    if live_df.empty:
-        st.warning("Brak zapisanych danych LIVE w data/live_matches.csv")
-    else:
-        st.subheader("Mecze LIVE i tempo")
-        st.dataframe(live_df, use_container_width=True)
-
 with prematch_tab:
 
     st.header("🟢 PREMATCH PICKS")
@@ -403,43 +390,6 @@ with analytics_tab:
                     ]
                 )
                 st.metric("STRONG PICKS", strong_count)
-
-        st.markdown("---")
-        st.subheader("🧠 Learning Analytics")
-        learning_engine = AdvancedLearningEngine()
-        summary = learning_engine.performance_summary()
-        l1, l2, l3, l4 = st.columns(4)
-        l1.metric("Learning Bets", summary.get("bets", 0))
-        l2.metric("Winrate", f"{summary.get('winrate_pct', 0)}%")
-        l3.metric("ROI", f"{summary.get('roi_pct', 0)}%")
-        l4.metric("Profit", summary.get("profit", 0))
-
-        insights = learning_engine.learning_insights()
-        if insights:
-            st.subheader("Wnioski systemu")
-            for insight in insights:
-                st.info(insight)
-
-        curve = learning_engine.profit_curve()
-        if not curve.empty:
-            st.subheader("Profit curve")
-            st.line_chart(curve.set_index(curve.columns[0]))
-
-        conf = learning_engine.confidence_accuracy()
-        if not conf.empty:
-            st.subheader("Confidence accuracy")
-            st.dataframe(conf, use_container_width=True)
-
-        market_perf = learning_engine.group_performance("market")
-        if not market_perf.empty:
-            st.subheader("Market performance")
-            st.dataframe(market_perf, use_container_width=True)
-
-        league_col = "league" if "league" in learning_engine.load_results().columns else "liga"
-        league_perf = learning_engine.group_performance(league_col)
-        if not league_perf.empty:
-            st.subheader("League performance")
-            st.dataframe(league_perf, use_container_width=True)
 
 with history_tab:
     st.header("🕘 HISTORY")
