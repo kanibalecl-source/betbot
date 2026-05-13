@@ -1,0 +1,26 @@
+ETAP 1 — KOPIA BEZPIECZEŃSTWA OBECNEJ WERSJI
+
+CEL:
+Ten etap niczego nie zmienia w logice bota.
+Ma tylko zabezpieczyć obecny stan, żeby w razie problemów wrócić do punktu wyjścia.
+
+CO SIĘ ZMIENI:
+- pojawi się folder _backups/
+- w nim pojawi się kopia obecnych plików:
+  .py, .json, .cmd, .csv oraz folder data/
+
+CO ZNIKNIE:
+- nic
+
+CO BĘDZIE INNE:
+- nic w działaniu bota
+
+JAK WDROŻYĆ:
+1. Wypakuj zawartość tego ZIP do głównego folderu bota.
+2. Uruchom:
+   backup_current_version.cmd
+   albo start_all.cmd
+3. Sprawdź, czy powstał folder:
+   _backups/BASELINE_...
+
+DOPIERO PO TYM PRZEJDŹ DO ETAPU 2.

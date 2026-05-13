@@ -1,0 +1,58 @@
+{
+  "model": {
+    "model_weight": 0.85,
+    "market_weight": 0.15
+  },
+  "filters": {
+    "min_edge": 0.03,
+    "min_ev": 0.02,
+    "max_edge": 0.35,
+    "max_margin_sum": 1.2,
+    "min_book_odds": 1.2,
+    "max_book_odds": 15.0
+  },
+  "risk_thresholds": {
+    "top": {
+      "min_edge": 0.1,
+      "min_ev": 0.07,
+      "min_probability": 0.58,
+      "max_margin_sum": 1.08
+    },
+    "low": {
+      "min_edge": 0.06,
+      "min_ev": 0.04,
+      "min_probability": 0.5,
+      "max_margin_sum": 1.12
+    },
+    "risk": {
+      "min_edge": 0.03,
+      "min_ev": 0.02,
+      "min_probability": 0.42,
+      "max_margin_sum": 1.2
+    }
+  },
+  "active_markets": {
+    "DOUBLE_1X": true,
+    "DOUBLE_X2": true,
+    "DOUBLE_12": true,
+    "BTTS_YES": true,
+    "BTTS_NO": true,
+    "OVER_0.5": true,
+    "OVER_1.5": true,
+    "OVER_2.5": true,
+    "OVER_3.5": true,
+    "OVER_4.5": true,
+    "UNDER_0.5": true,
+    "UNDER_1.5": true,
+    "UNDER_2.5": true,
+    "UNDER_3.5": true,
+    "UNDER_4.5": true
+  },
+  "autotune": {
+    "enabled": true,
+    "min_bets_per_market": 50,
+    "disable_market_if_roi_below": -0.08,
+    "disable_market_if_clv_below": -0.015,
+    "min_days_between_changes": 30
+  }
+}
