@@ -72,6 +72,53 @@ require_login()
 
 df = load_csv()
 
+CUSTOM_CSS = """
+<style>
+.stApp {background: linear-gradient(180deg,#02060d,#07111f); color:white;}
+.block-container {padding-top: 1rem; max-width: 100%;}
+[data-testid="stSidebar"] {background:#050b14;border-right:1px solid #163b24;}
+div[data-testid="metric-container"]{
+background:rgba(10,16,28,.92);
+border:1px solid rgba(56,255,121,.12);
+padding:18px;border-radius:16px;
+box-shadow:0 0 25px rgba(0,255,120,.08);
+}
+h1,h2,h3 {color:#f8f8f8;}
+table {background:#08131f !important;}
+.stTabs [data-baseweb="tab"]{
+background:#0b1624;border-radius:10px;margin-right:8px;color:#8bf58f;
+}
+.main-banner{
+background:linear-gradient(90deg,#02060d,#071d10,#02060d);
+border:1px solid rgba(56,255,121,.15);
+border-radius:22px;padding:24px;margin-bottom:18px;
+display:flex;justify-content:space-between;align-items:center;
+}
+.banner-title{
+font-size:56px;font-weight:900;color:white;letter-spacing:2px;
+}
+.banner-sub{color:#7CFF83;font-size:18px;}
+.panel{
+background:rgba(7,14,24,.88);
+border:1px solid rgba(56,255,121,.10);
+border-radius:18px;padding:16px;margin-bottom:16px;
+}
+</style>
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+st.markdown("""
+<div class='main-banner'>
+<div>
+<div class='banner-title'>KANIBAL ANALYTICS</div>
+<div class='banner-sub'>ANALIZA • PRZEWAGA • ZYSK</div>
+</div>
+<div style='text-align:right;color:#7CFF83;font-weight:700'>
+SYSTEM ONLINE<br>AI POWERED BETTING ASSISTANT
+</div>
+</div>
+""", unsafe_allow_html=True)
+
+
 TARGET_MARKETS = {
     "DOUBLE_1X",
     "DOUBLE_X2",
