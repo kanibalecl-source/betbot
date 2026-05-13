@@ -15,6 +15,21 @@ DATA_DIR = BASE_DIR / "data"
 CSV_FILE = DATA_DIR / "auto_all_picks.csv"
 BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
 
+LIVE_CSV_FILE = DATA_DIR / "live_matches.csv"
+
+
+def load_live_csv():
+    if not LIVE_CSV_FILE.exists():
+        return pd.DataFrame()
+
+    try:
+        return pd.read_csv(LIVE_CSV_FILE)
+    except Exception:
+        try:
+            return pd.read_csv(LIVE_CSV_FILE, encoding="utf-8")
+        except Exception:
+            return pd.DataFrame()
+
 
 def load_csv():
     if not CSV_FILE.exists():
@@ -227,6 +242,69 @@ live_tab, prematch_tab, ai_tab, analytics_tab, history_tab, ranking_tab, alerts_
 with live_tab:
     st.header("🟢 LIVE SIGNALS")
     st.info("LIVE ENGINE ACTIVE")
+
+    live_df = load_live_csv()
+
+    if live_df.empty:
+        st.warning("Brak danych LIVE")
+
+    else:
+        live_columns = [
+            "league", "home", "away", "minute", "score", "status",
+            "signal", "confidence", "advanced_signal", "advanced_market",
+            "advanced_confidence", "tempo_score", "pressure_index",
+            "momentum_score_adv", "live_intensity", "xg_pace", "shots_total",
+            "shots_on_goal", "dangerous_attacks", "attacks", "corners",
+            "possession_home", "possession_away", "shots_per_min",
+            "shots_on_goal_per_min", "dangerous_attacks_per_min",
+            "corners_per_min", "odds", "live_edge", "ev", "cashout",
+            "stake", "risk",
+        ]
+
+        live_view = only_existing_columns(live_df, live_columns)
+        st.table(live_view)
+
+        for idx, row in live_df.iterrows():
+            match_name = f"{row.get('home', '')} - {row.get('away', '')}"
+
+            with st.expander(f"⚡ LIVE TEMPO | {match_name} | {row.get('minute', '-')} min | {row.get('score', '-')}"):
+                c1, c2, c3 = st.columns(3)
+
+                with c1:
+                    st.markdown(
+                        f'''<div class="ai-box">
+                        <h4 style="color:#58ff2f;">TEMPO ENGINE</h4>
+                        <b>TEMPO SCORE:</b> {row.get('tempo_score', '-')}<br>
+                        <b>INTENSITY:</b> {row.get('live_intensity', '-')}<br>
+                        <b>xG PACE:</b> {row.get('xg_pace', '-')}<br>
+                        <b>PRESSURE:</b> {row.get('pressure_index', '-')}<br>
+                        </div>''',
+                        unsafe_allow_html=True
+                    )
+
+                with c2:
+                    st.markdown(
+                        f'''<div class="ai-box">
+                        <h4 style="color:#58ff2f;">MATCH DYNAMICS</h4>
+                        <b>SHOTS:</b> {row.get('shots_total', '-')}<br>
+                        <b>SHOTS ON GOAL:</b> {row.get('shots_on_goal', '-')}<br>
+                        <b>DANGEROUS ATTACKS:</b> {row.get('dangerous_attacks', '-')}<br>
+                        <b>CORNERS:</b> {row.get('corners', '-')}<br>
+                        </div>''',
+                        unsafe_allow_html=True
+                    )
+
+                with c3:
+                    st.markdown(
+                        f'''<div class="ai-box">
+                        <h4 style="color:#58ff2f;">LIVE DECISION</h4>
+                        <b>ADV SIGNAL:</b> {row.get('advanced_signal', '-')}<br>
+                        <b>MARKET:</b> {row.get('advanced_market', '-')}<br>
+                        <b>ADV CONF:</b> {row.get('advanced_confidence', '-')}<br>
+                        <b>LIVE EDGE:</b> {row.get('live_edge', '-')}<br>
+                        </div>''',
+                        unsafe_allow_html=True
+                    )
 
 with prematch_tab:
 

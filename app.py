@@ -86,5 +86,18 @@ def play():
     return redirect(url_for("index"))
 
 
+@app.route("/health")
+def health():
+    return {"ok": True}
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    init_db()
+
+    port = int(os.environ.get("PORT", 8080))
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        debug=False,
+    )

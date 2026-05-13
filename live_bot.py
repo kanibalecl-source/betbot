@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 from config import API_FOOTBALL_KEY
+from advanced_live_engine import AdvancedLiveEngine
 
 HEADERS = {
     "x-apisports-key": API_FOOTBALL_KEY
@@ -19,6 +20,8 @@ DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 LIVE_FILE = DATA_DIR / "live_matches.csv"
+
+ADVANCED_LIVE_ENGINE = AdvancedLiveEngine()
 
 
 def get_fixture_statistics(fixture_id):
@@ -332,12 +335,15 @@ def get_live_matches():
 
             risk = risk_level(ev)
 
-            matches.append({
+            live_match = {
 
+                "fixture_id": fixture_id,
                 "home": m["teams"]["home"]["name"],
                 "away": m["teams"]["away"]["name"],
                 "league": m["league"]["name"],
                 "minute": minute,
+                "home_goals": home_goals,
+                "away_goals": away_goals,
                 "score": f"{home_goals}:{away_goals}",
                 "pressure": pressure,
                 "momentum": momentum,
@@ -351,7 +357,19 @@ def get_live_matches():
                 "risk": risk,
                 "status": m["fixture"]["status"]["short"]
 
-            })
+            }
+
+            advanced_live_data = ADVANCED_LIVE_ENGINE.enrich_match(
+                live_match,
+                stats=stats,
+                odds=odds,
+                base_signal=live_pick,
+                base_confidence=confidence,
+            )
+
+            live_match.update(advanced_live_data)
+
+            matches.append(live_match)
 
         return matches
 
