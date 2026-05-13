@@ -3,8 +3,6 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
-from advanced_learning_engine import AdvancedLearningEngine
-
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
     layout="wide",
@@ -16,21 +14,6 @@ DATA_DIR = BASE_DIR / "data"
 
 CSV_FILE = DATA_DIR / "auto_all_picks.csv"
 BANNER_FILE = BASE_DIR / "kanibal_banner_pro.webp"
-
-LIVE_CSV_FILE = DATA_DIR / "live_matches.csv"
-
-
-def load_live_csv():
-    if not LIVE_CSV_FILE.exists():
-        return pd.DataFrame()
-
-    try:
-        return pd.read_csv(LIVE_CSV_FILE)
-    except Exception:
-        try:
-            return pd.read_csv(LIVE_CSV_FILE, encoding="utf-8")
-        except Exception:
-            return pd.DataFrame()
 
 
 def load_csv():
@@ -55,22 +38,6 @@ def only_existing_columns(dataframe, columns):
 
 def normalize_label(value):
     return str(value if value is not None else "STANDARD").upper().strip()
-
-
-def safe_percent(value):
-    try:
-        return f"{float(value):.2f}%"
-    except Exception:
-        return "0.00%"
-
-
-def render_learning_table(title, dataframe):
-    st.subheader(title)
-    if dataframe.empty:
-        st.caption("Brak danych do wyświetlenia")
-    else:
-        st.table(dataframe)
-
 
 
 def show_pick_badge(row):
@@ -99,7 +66,6 @@ def show_pick_badge(row):
 
 
 df = load_csv()
-learning_engine = AdvancedLearningEngine()
 
 TARGET_MARKETS = {
     "DOUBLE_1X",
@@ -261,69 +227,6 @@ live_tab, prematch_tab, ai_tab, analytics_tab, history_tab, ranking_tab, alerts_
 with live_tab:
     st.header("🟢 LIVE SIGNALS")
     st.info("LIVE ENGINE ACTIVE")
-
-    live_df = load_live_csv()
-
-    if live_df.empty:
-        st.warning("Brak danych LIVE")
-
-    else:
-        live_columns = [
-            "league", "home", "away", "minute", "score", "status",
-            "signal", "confidence", "advanced_signal", "advanced_market",
-            "advanced_confidence", "tempo_score", "pressure_index",
-            "momentum_score_adv", "live_intensity", "xg_pace", "shots_total",
-            "shots_on_goal", "dangerous_attacks", "attacks", "corners",
-            "possession_home", "possession_away", "shots_per_min",
-            "shots_on_goal_per_min", "dangerous_attacks_per_min",
-            "corners_per_min", "odds", "live_edge", "ev", "cashout",
-            "stake", "risk",
-        ]
-
-        live_view = only_existing_columns(live_df, live_columns)
-        st.table(live_view)
-
-        for idx, row in live_df.iterrows():
-            match_name = f"{row.get('home', '')} - {row.get('away', '')}"
-
-            with st.expander(f"⚡ LIVE TEMPO | {match_name} | {row.get('minute', '-')} min | {row.get('score', '-')}"):
-                c1, c2, c3 = st.columns(3)
-
-                with c1:
-                    st.markdown(
-                        f'''<div class="ai-box">
-                        <h4 style="color:#58ff2f;">TEMPO ENGINE</h4>
-                        <b>TEMPO SCORE:</b> {row.get('tempo_score', '-')}<br>
-                        <b>INTENSITY:</b> {row.get('live_intensity', '-')}<br>
-                        <b>xG PACE:</b> {row.get('xg_pace', '-')}<br>
-                        <b>PRESSURE:</b> {row.get('pressure_index', '-')}<br>
-                        </div>''',
-                        unsafe_allow_html=True
-                    )
-
-                with c2:
-                    st.markdown(
-                        f'''<div class="ai-box">
-                        <h4 style="color:#58ff2f;">MATCH DYNAMICS</h4>
-                        <b>SHOTS:</b> {row.get('shots_total', '-')}<br>
-                        <b>SHOTS ON GOAL:</b> {row.get('shots_on_goal', '-')}<br>
-                        <b>DANGEROUS ATTACKS:</b> {row.get('dangerous_attacks', '-')}<br>
-                        <b>CORNERS:</b> {row.get('corners', '-')}<br>
-                        </div>''',
-                        unsafe_allow_html=True
-                    )
-
-                with c3:
-                    st.markdown(
-                        f'''<div class="ai-box">
-                        <h4 style="color:#58ff2f;">LIVE DECISION</h4>
-                        <b>ADV SIGNAL:</b> {row.get('advanced_signal', '-')}<br>
-                        <b>MARKET:</b> {row.get('advanced_market', '-')}<br>
-                        <b>ADV CONF:</b> {row.get('advanced_confidence', '-')}<br>
-                        <b>LIVE EDGE:</b> {row.get('live_edge', '-')}<br>
-                        </div>''',
-                        unsafe_allow_html=True
-                    )
 
 with prematch_tab:
 
@@ -487,75 +390,6 @@ with analytics_tab:
                     ]
                 )
                 st.metric("STRONG PICKS", strong_count)
-
-    st.markdown("---")
-    st.subheader("🧠 LEARNING ANALYTICS")
-
-    learning_summary = learning_engine.performance_summary()
-    lc1, lc2, lc3, lc4, lc5 = st.columns(5)
-
-    with lc1:
-        st.metric("LEARNED BETS", learning_summary.get("bets", 0))
-    with lc2:
-        st.metric("WINRATE", safe_percent(learning_summary.get("winrate_pct", 0)))
-    with lc3:
-        st.metric("ROI", safe_percent(learning_summary.get("roi_pct", 0)))
-    with lc4:
-        st.metric("PROFIT", learning_summary.get("profit", 0))
-    with lc5:
-        st.metric("AVG CONF", safe_percent(learning_summary.get("avg_confidence", 0)))
-
-    insights = learning_engine.learning_insights()
-    with st.expander("🧠 Czego bot się nauczył", expanded=True):
-        for insight in insights:
-            st.markdown(f"- {insight}")
-
-    confidence_accuracy = learning_engine.confidence_accuracy()
-    league_performance = learning_engine.group_performance("league")
-    market_performance = learning_engine.group_performance("market")
-    profit_curve = learning_engine.profit_curve()
-    live_tempo = learning_engine.live_tempo_snapshot()
-
-    a1, a2 = st.columns(2)
-
-    with a1:
-        render_learning_table("Confidence accuracy %", confidence_accuracy)
-        if not confidence_accuracy.empty and "real_winrate_pct" in confidence_accuracy.columns:
-            chart_df = confidence_accuracy.set_index("confidence_bucket")[["real_winrate_pct"]]
-            st.bar_chart(chart_df)
-
-    with a2:
-        render_learning_table("Market performance %", market_performance)
-        if not market_performance.empty and "roi_pct" in market_performance.columns:
-            chart_df = market_performance.set_index("market")[["roi_pct"]]
-            st.bar_chart(chart_df)
-
-    a3, a4 = st.columns(2)
-
-    with a3:
-        render_learning_table("League performance %", league_performance)
-        if not league_performance.empty and "roi_pct" in league_performance.columns:
-            chart_df = league_performance.set_index("league")[["roi_pct"]]
-            st.bar_chart(chart_df)
-
-    with a4:
-        st.subheader("Profit curve")
-        if profit_curve.empty:
-            st.caption("Brak historii profitu")
-        else:
-            if "timestamp" in profit_curve.columns:
-                st.line_chart(profit_curve.set_index("timestamp")[["cumulative_profit"]])
-            else:
-                st.line_chart(profit_curve.set_index("bet_no")[["cumulative_profit"]])
-
-    st.subheader("⚡ LIVE tempo learning snapshot")
-    if live_tempo.empty:
-        st.caption("Brak danych LIVE do analizy tempa")
-    else:
-        st.table(live_tempo)
-        tempo_cols = [c for c in ["tempo_score", "pressure_index", "momentum_score_adv", "xg_pace"] if c in live_tempo.columns]
-        if tempo_cols:
-            st.bar_chart(live_tempo[tempo_cols])
 
 with history_tab:
     st.header("🕘 HISTORY")
