@@ -3,6 +3,8 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
+from advanced_learning_engine import AdvancedLearningEngine
+
 st.set_page_config(
     page_title="KANIBAL ANALYTICS",
     layout="wide",
@@ -55,6 +57,22 @@ def normalize_label(value):
     return str(value if value is not None else "STANDARD").upper().strip()
 
 
+def safe_percent(value):
+    try:
+        return f"{float(value):.2f}%"
+    except Exception:
+        return "0.00%"
+
+
+def render_learning_table(title, dataframe):
+    st.subheader(title)
+    if dataframe.empty:
+        st.caption("Brak danych do wyświetlenia")
+    else:
+        st.table(dataframe)
+
+
+
 def show_pick_badge(row):
     label = normalize_label(row.get("best_pick_label", "STANDARD"))
     score = row.get("ai_pick_score", "-")
@@ -81,6 +99,7 @@ def show_pick_badge(row):
 
 
 df = load_csv()
+learning_engine = AdvancedLearningEngine()
 
 TARGET_MARKETS = {
     "DOUBLE_1X",
@@ -468,6 +487,75 @@ with analytics_tab:
                     ]
                 )
                 st.metric("STRONG PICKS", strong_count)
+
+    st.markdown("---")
+    st.subheader("🧠 LEARNING ANALYTICS")
+
+    learning_summary = learning_engine.performance_summary()
+    lc1, lc2, lc3, lc4, lc5 = st.columns(5)
+
+    with lc1:
+        st.metric("LEARNED BETS", learning_summary.get("bets", 0))
+    with lc2:
+        st.metric("WINRATE", safe_percent(learning_summary.get("winrate_pct", 0)))
+    with lc3:
+        st.metric("ROI", safe_percent(learning_summary.get("roi_pct", 0)))
+    with lc4:
+        st.metric("PROFIT", learning_summary.get("profit", 0))
+    with lc5:
+        st.metric("AVG CONF", safe_percent(learning_summary.get("avg_confidence", 0)))
+
+    insights = learning_engine.learning_insights()
+    with st.expander("🧠 Czego bot się nauczył", expanded=True):
+        for insight in insights:
+            st.markdown(f"- {insight}")
+
+    confidence_accuracy = learning_engine.confidence_accuracy()
+    league_performance = learning_engine.group_performance("league")
+    market_performance = learning_engine.group_performance("market")
+    profit_curve = learning_engine.profit_curve()
+    live_tempo = learning_engine.live_tempo_snapshot()
+
+    a1, a2 = st.columns(2)
+
+    with a1:
+        render_learning_table("Confidence accuracy %", confidence_accuracy)
+        if not confidence_accuracy.empty and "real_winrate_pct" in confidence_accuracy.columns:
+            chart_df = confidence_accuracy.set_index("confidence_bucket")[["real_winrate_pct"]]
+            st.bar_chart(chart_df)
+
+    with a2:
+        render_learning_table("Market performance %", market_performance)
+        if not market_performance.empty and "roi_pct" in market_performance.columns:
+            chart_df = market_performance.set_index("market")[["roi_pct"]]
+            st.bar_chart(chart_df)
+
+    a3, a4 = st.columns(2)
+
+    with a3:
+        render_learning_table("League performance %", league_performance)
+        if not league_performance.empty and "roi_pct" in league_performance.columns:
+            chart_df = league_performance.set_index("league")[["roi_pct"]]
+            st.bar_chart(chart_df)
+
+    with a4:
+        st.subheader("Profit curve")
+        if profit_curve.empty:
+            st.caption("Brak historii profitu")
+        else:
+            if "timestamp" in profit_curve.columns:
+                st.line_chart(profit_curve.set_index("timestamp")[["cumulative_profit"]])
+            else:
+                st.line_chart(profit_curve.set_index("bet_no")[["cumulative_profit"]])
+
+    st.subheader("⚡ LIVE tempo learning snapshot")
+    if live_tempo.empty:
+        st.caption("Brak danych LIVE do analizy tempa")
+    else:
+        st.table(live_tempo)
+        tempo_cols = [c for c in ["tempo_score", "pressure_index", "momentum_score_adv", "xg_pace"] if c in live_tempo.columns]
+        if tempo_cols:
+            st.bar_chart(live_tempo[tempo_cols])
 
 with history_tab:
     st.header("🕘 HISTORY")
