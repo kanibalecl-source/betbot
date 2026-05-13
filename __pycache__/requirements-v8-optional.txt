@@ -1,0 +1,8 @@
+# Optional enterprise infrastructure. The code works without these packages by using safe fallbacks.
+redis>=5.0.0
+kafka-python>=2.0.2
+# Optional GPU acceleration for gpu_optimizer.py when CUDA/CuPy is available:
+# cupy-cuda12x
+# Optional deep learning stack for future replacement of lite models:
+# torch
+# pyro-ppl
