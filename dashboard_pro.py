@@ -1,3 +1,14 @@
+with open("styles.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
+# ZAMIEŃ SEKCJĘ BANERA NA:
+
+st.markdown("""
+<div class="hero-banner">
+    <img src="KANIBAL_ANALYTICS_BANNER.png">
+</div>
+""", unsafe_allow_html=True)
+
 import streamlit as st
 import pandas as pd
 
