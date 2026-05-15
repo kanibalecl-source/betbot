@@ -1,0 +1,31 @@
+KANIBAL ANALYTICS UI v2 - RAPORT AUDYTU
+
+Zakres zmian wykonany wyłącznie w dashboard_streamlit.py:
+1. LIVE:
+   - usunięto zachodzenie sekcji AI SIGNAL QUALITY na dolne wykresy przez osobny grid live-layout.
+   - wykresy LIVE PRESSURE, STATS OVERVIEW, VALUE TOP 5, RISK DISTRIBUTION podpięte do realnych danych CSV/runtime.
+2. PREMATCH:
+   - MODEL AI podpięty do realnych danych PREMATCH bez zmiany układu sekcji.
+3. AI:
+   - dodano tabelę AI PICKS nad wykresami.
+   - status w tabeli działa jako rozwijany panel szczegółów przez query param ai_pick.
+   - wykresy AI podpięte do realnych danych.
+4. ANALITYKA:
+   - bez zmiany layoutu.
+   - wykresy podpięte do danych picks/results/history.
+5. HISTORIA:
+   - bez zmiany layoutu.
+   - wykresy podpięte do danych results/history.
+6. RANKING:
+   - białe tabele Streamlit zastąpione tabelami HTML w stylu LIVE SIGNALS.
+   - dane rankingowe bez zmian, nadal liczone z realnego źródła.
+7. ALERTY:
+   - wykres Alerty w czasie podpięty do danych alert/source.
+8. USTAWIENIA:
+   - bez zmian.
+
+Kontrola przed spakowaniem:
+- python -m py_compile dashboard_streamlit.py: OK
+- brak linków Imgur/zewnętrznych obrazów w dashboard_streamlit.py: OK
+- bot.py / scheduler_engine.py / AI engine / live engine nie zostały zmienione: OK
+- paczka zawiera tylko pliki potrzebne do UI v2: dashboard_streamlit.py, kanibal_banner.png, raport.
