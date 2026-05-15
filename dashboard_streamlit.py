@@ -200,46 +200,12 @@ def ensure_live_file() -> None:
         pd.DataFrame(columns=cols).to_csv(LIVE_FILE, index=False)
 
 
-def build_live_bridge(picks: pd.DataFrame) -> pd.DataFrame:
-    cols = ["league", "match", "minute", "score", "signal", "confidence", "odds", "value", "ev", "cashout", "stake", "risk", "source"]
-    if picks.empty:
-        return pd.DataFrame(columns=cols)
-    rows = []
-    for _, row in picks.head(10).iterrows():
-        conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
-        ev = as_float(first_existing(row, ["ev", "edge", "value"], 0))
-        risk_raw = str(first_existing(row, ["risk", "risk_label"], "LOW")).upper()
-        risk = "HIGH" if "HIGH" in risk_raw or "WYS" in risk_raw else "MEDIUM" if "MED" in risk_raw or "ŚR" in risk_raw else "LOW"
-        rows.append({
-            "league": first_existing(row, ["league", "liga"], "-"),
-            "match": first_existing(row, ["match", "mecz"], "-"),
-            "minute": first_existing(row, ["minute", "minuta"], "MON"),
-            "score": first_existing(row, ["score", "wynik"], "-"),
-            "signal": fmt_market(first_existing(row, ["signal", "typ", "market"], "-")),
-            "confidence": round(conf, 1),
-            "odds": first_existing(row, ["odds", "kurs_buk"], "-"),
-            "value": round(ev, 1),
-            "ev": round(ev, 1),
-            "cashout": "HOLD" if conf >= 70 else "NO ACTION",
-            "stake": first_existing(row, ["dynamic_stake", "stake", "kelly_25"], "-"),
-            "risk": risk,
-            "source": "PREMATCH BRIDGE",
-        })
-    return pd.DataFrame(rows)
-
 
 def load_live_data(picks: pd.DataFrame) -> pd.DataFrame:
+    # FULL BETA: LIVE uses only real live pipeline data from data/live_matches.csv.
+    # No PREMATCH bridge is written into LIVE, so dashboard does not mix prematch rows with live feed.
     ensure_live_file()
-    live = read_csv_safe(LIVE_FILE)
-    if not live.empty:
-        return live
-    bridge = build_live_bridge(picks)
-    if not bridge.empty:
-        try:
-            bridge.to_csv(LIVE_FILE, index=False)
-        except Exception:
-            pass
-    return bridge
+    return read_csv_safe(LIVE_FILE)
 
 
 def load_results() -> pd.DataFrame:

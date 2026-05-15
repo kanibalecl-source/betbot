@@ -46,6 +46,13 @@ def run_prematch():
 
             sys.stdout.flush()
 
+            try:
+                from live_pipeline_runtime import run_once as run_live_pipeline_once
+                live_count = run_live_pipeline_once()
+                print(f"✅ LIVE SCHEDULER PIPELINE OK | active={live_count}")
+            except Exception as live_error:
+                print(f"❌ LIVE SCHEDULER PIPELINE ERROR: {live_error}")
+
             print("✅ LIVE SAVED")
             print("💓 SCHEDULER LOOP OK")
 

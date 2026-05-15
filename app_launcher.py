@@ -1,28 +1,48 @@
 import os
-import subprocess
-import time
 import signal
+import subprocess
 import sys
 import threading
+import time
 
 print("🚀 APP LAUNCHER START")
+sys.stdout.flush()
 
 PORT = os.environ.get("PORT", "8080")
 
-processes = []
+PROCESS_SPECS = {
+    "scheduler": ["python3", "scheduler_engine.py"],
+    "live_pipeline": ["python3", "live_pipeline_runtime.py"],
+    "settlement": ["python3", "settle_loop.py"],
+    "retraining": ["python3", "auto_retraining_loop.py"],
+    "dashboard": [
+        "python3", "-m", "streamlit", "run", "dashboard_streamlit.py",
+        "--server.port", str(PORT),
+        "--server.address", "0.0.0.0",
+        "--server.headless", "true",
+    ],
+}
+
+processes = {}
 
 
 def stream_output(process, prefix):
-    for line in iter(process.stdout.readline, ''):
-        if line:
-            print(f"{prefix} {line.strip()}")
+    try:
+        for line in iter(process.stdout.readline, ""):
+            if line:
+                print(f"{prefix} {line.strip()}")
+                sys.stdout.flush()
+    except Exception as exc:
+        print(f"{prefix} OUTPUT STREAM ERROR: {exc}")
+        sys.stdout.flush()
 
 
-def start_scheduler():
-    print("🚀 START scheduler_engine.py")
+def start_process(name, command):
+    print(f"🚀 START {name}: {' '.join(command)}")
+    sys.stdout.flush()
 
     process = subprocess.Popen(
-        ["python3", "scheduler_engine.py"],
+        command,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -31,97 +51,62 @@ def start_scheduler():
 
     threading.Thread(
         target=stream_output,
-        args=(process, "[SCHEDULER]"),
+        args=(process, f"[{name.upper()}]"),
         daemon=True,
     ).start()
 
-    print("✅ scheduler_engine.py STARTED")
-
+    print(f"✅ {name} STARTED")
+    sys.stdout.flush()
     return process
 
 
-def start_dashboard():
-    print("🚀 START dashboard_streamlit.py")
-
-    process = subprocess.Popen(
-        [
-            "python3",
-            "-m",
-            "streamlit",
-            "run",
-            "dashboard_streamlit.py",
-            "--server.port",
-            str(PORT),
-            "--server.address",
-            "0.0.0.0",
-            "--server.headless",
-            "true",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-
-    threading.Thread(
-        target=stream_output,
-        args=(process, "[DASHBOARD]"),
-        daemon=True,
-    ).start()
-
-    print("✅ dashboard_streamlit.py STARTED")
-
-    return process
+def start_all():
+    for name, command in PROCESS_SPECS.items():
+        processes[name] = start_process(name, command)
 
 
 def shutdown(*args):
     print("🛑 SHUTDOWN START")
+    sys.stdout.flush()
 
-    for p in processes:
+    for name, process in list(processes.items()):
         try:
-            p.terminate()
+            print(f"🛑 TERMINATE {name}")
+            process.terminate()
         except Exception:
             pass
 
     print("✅ SHUTDOWN COMPLETE")
-
+    sys.stdout.flush()
     sys.exit(0)
 
 
 signal.signal(signal.SIGTERM, shutdown)
 signal.signal(signal.SIGINT, shutdown)
 
-scheduler_process = start_scheduler()
-dashboard_process = start_dashboard()
-
-processes = [scheduler_process, dashboard_process]
+start_all()
 
 while True:
     try:
-        scheduler_alive = scheduler_process.poll() is None
-        dashboard_alive = dashboard_process.poll() is None
+        states = {}
 
-        print(
-            f"💓 HEARTBEAT | scheduler={scheduler_alive} | dashboard={dashboard_alive}"
-        )
+        for name, command in PROCESS_SPECS.items():
+            process = processes.get(name)
+            alive = process is not None and process.poll() is None
+            states[name] = alive
 
-        if not scheduler_alive:
-            print("❌ scheduler_engine.py CRASHED -> RESTART")
+            if not alive:
+                print(f"❌ {name} CRASHED -> RESTART")
+                sys.stdout.flush()
+                processes[name] = start_process(name, command)
 
-            scheduler_process = start_scheduler()
-
-            processes[0] = scheduler_process
-
-        if not dashboard_alive:
-            print("❌ dashboard_streamlit.py CRASHED -> RESTART")
-
-            dashboard_process = start_dashboard()
-
-            processes[1] = dashboard_process
+        state_text = " | ".join(f"{name}={alive}" for name, alive in states.items())
+        print(f"💓 HEARTBEAT | {state_text}")
+        sys.stdout.flush()
 
         time.sleep(30)
 
-    except Exception as e:
-        print(f"❌ APP LAUNCHER ERROR: {e}")
-
+    except Exception as exc:
+        print(f"❌ APP LAUNCHER ERROR: {exc}")
+        sys.stdout.flush()
         time.sleep(15)

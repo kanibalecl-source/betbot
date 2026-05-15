@@ -1,0 +1,66 @@
+KANIBAL ANALYTICS — FULL BETA READY PATCH
+
+Zakres naprawy wykonanej w tej paczce:
+
+1. LIVE — pełne podpięcie runtime
+- Dodano live_pipeline_runtime.py.
+- Runtime pobiera realne mecze LIVE z API-Football przez fixture live=all.
+- Runtime zapisuje wyłącznie realne dane live do data/live_matches.csv.
+- Dashboard LIVE nie używa już fallbacku PREMATCH jako źródła danych LIVE.
+- Scheduler dodatkowo uruchamia jednorazowy zapis LIVE po cyklu bota, żeby data pipeline miał drugi bezpieczny punkt zapisu.
+
+2. AUTO SETTLEMENT — podpięcie do głównego launchera
+- app_launcher.py startuje settle_loop.py jako osobny nadzorowany proces.
+- Launcher monitoruje proces settlement i restartuje go po ewentualnym crashu.
+- Nie zmieniono settle_results.py ani logiki rozliczeń.
+
+3. AUTO RETRAINING — podpięcie ML retraining do runtime
+- Dodano auto_retraining_loop.py.
+- app_launcher.py startuje auto_retraining_loop.py jako osobny nadzorowany proces.
+- AutoRetrainingRuntime działa cyklicznie według RETRAIN_CHECK_MINUTES oraz RETRAIN_MIN_HOURS.
+- Nie zmieniono logiki MLTrainingPipeline, WalkForwardLab ani kalibracji.
+
+4. APP LAUNCHER — nadzorowanie pełnej architektury
+Launcher startuje i nadzoruje teraz:
+- scheduler
+- live_pipeline
+- settlement
+- retraining
+- dashboard
+
+5. Bezpieczeństwo zmian
+Nie modyfikowano:
+- bot.py
+- silników typowania
+- modeli AI
+- settle_results.py
+- live UI poza usunięciem fallbacku PREMATCH
+- układu graficznego dashboardu
+- loginu
+
+6. Testy wykonane przed spakowaniem
+- py_compile: app_launcher.py OK
+- py_compile: scheduler_engine.py OK
+- py_compile: dashboard_streamlit.py OK
+- py_compile: live_pipeline_runtime.py OK
+- py_compile: auto_retraining_loop.py OK
+- py_compile: settle_loop.py OK
+- py_compile: settle_results.py OK
+- py_compile: auto_retraining_runtime.py OK
+- py_compile: advanced_live_engine.py OK
+- sprawdzono brak aktywnego fallbacku PREMATCH w load_live_data
+
+Po wdrożeniu w logach powinny pojawić się:
+- LIVE PIPELINE RUNTIME START
+- LIVE PIPELINE SAVED
+- AUTO RETRAINING LOOP START
+- AUTO RETRAINING RESULT
+- SETTLE LOOP START
+- HEARTBEAT | scheduler=True | live_pipeline=True | settlement=True | retraining=True | dashboard=True
+
+Ocena po patchu:
+- system ma pełny runtime beta,
+- LIVE jest niezależnym feedem,
+- settlement działa bez otwartego dashboardu,
+- retraining działa bez otwartego dashboardu,
+- UI pozostaje tylko warstwą podglądu.
