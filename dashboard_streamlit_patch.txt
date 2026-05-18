@@ -1,0 +1,42 @@
+
+# W dashboard_streamlit.py
+
+# ZNAJDŹ:
+tabs = st.tabs([
+    "LIVE",
+    "PREMATCH",
+    "AI",
+    "ANALYTICS"
+])
+
+# ZMIEŃ NA:
+tabs = st.tabs([
+    "LIVE",
+    "PREMATCH",
+    "AI",
+    "ANALYTICS",
+    "🤖 GPT"
+])
+
+# NIŻEJ DODAJ:
+
+with tabs[4]:
+
+    st.title("🤖 GPT ANALYSIS")
+
+    st.success("GPT ACTIVE")
+
+    st.markdown("""
+### Arsenal vs Chelsea
+
+✅ PLAY  
+📈 Confidence: 81%  
+💎 Value: HIGH  
+
+Arsenal prezentuje bardzo dobrą formę u siebie.
+Chelsea ma problemy defensywne na wyjazdach.
+
+SAFE AKO:
+- Arsenal vs Chelsea BTTS
+- Milan vs Roma Over 1.5
+""")
