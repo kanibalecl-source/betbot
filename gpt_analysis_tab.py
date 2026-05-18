@@ -1,47 +1,30 @@
-from flask import Blueprint, jsonify, render_template
+from __future__ import annotations
 
-def register_gpt_analysis_routes(app, base_dir=None):
+import json
+from pathlib import Path
+from flask import jsonify, render_template, request
 
-    gpt_bp = Blueprint(
-        'gpt_analysis',
-        __name__,
-        template_folder='templates'
-    )
 
-    @gpt_bp.route('/gpt-analysis')
+def register_gpt_analysis_routes(app, base_dir):
+    """Rejestruje osobną zakładkę ANALIZA GPT bez ruszania istniejących route'ów."""
+    base_dir = Path(base_dir)
+
+    @app.route("/gpt-analysis")
     def gpt_analysis_page():
-        return render_template('gpt_analysis.html')
+        return render_template("gpt_analysis.html", page="gpt_analysis")
 
-    @gpt_bp.route('/api/gpt-analysis')
+    @app.route("/api/gpt-analysis", methods=["GET"])
     def api_gpt_analysis():
+        from gpt_match_value_engine import load_latest_report
+        return jsonify(load_latest_report(base_dir))
 
-        return jsonify({
-            "matches": [
-                {
-                    "match": "Arsenal vs Chelsea",
-                    "bet": "BTTS",
-                    "confidence": 81,
-                    "value": "HIGH",
-                    "risk": "MEDIUM",
-                    "status": "PLAY",
-                    "analysis": "Arsenal prezentuje bardzo dobrą formę u siebie. Chelsea ma problemy defensywne na wyjazdach. Zakład BTTS wygląda korzystnie względem kursu."
-                },
-                {
-                    "match": "Milan vs Roma",
-                    "bet": "Over 1.5",
-                    "confidence": 77,
-                    "value": "MEDIUM",
-                    "risk": "LOW",
-                    "status": "PLAY",
-                    "analysis": "Obie drużyny regularnie kreują sytuacje bramkowe. Tempo meczu powinno sprzyjać overowi."
-                }
-            ],
-            "ako": {
-                "safe": [
-                    "Arsenal vs Chelsea - BTTS",
-                    "Milan vs Roma - Over 1.5"
-                ]
-            }
-        })
-
-    app.register_blueprint(gpt_bp)
+    @app.route("/api/gpt-analysis/run", methods=["POST"])
+    def api_gpt_analysis_run():
+        from gpt_match_value_engine import run_full_gpt_analysis
+        limit = request.json.get("limit") if request.is_json else None
+        try:
+            limit = int(limit) if limit else None
+        except Exception:
+            limit = None
+        report = run_full_gpt_analysis(base_dir, limit=limit)
+        return jsonify(report)

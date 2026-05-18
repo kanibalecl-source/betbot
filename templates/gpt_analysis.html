@@ -1,96 +1,57 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="pl">
 <head>
-<meta charset="utf-8">
-<title>GPT ANALYSIS</title>
-
-<style>
-body{
-    background:#0f1117;
-    color:white;
-    font-family:Arial;
-    padding:30px;
-}
-
-.card{
-    background:#1b1f2b;
-    border-radius:16px;
-    padding:20px;
-    margin-bottom:20px;
-    box-shadow:0 0 20px rgba(0,255,136,0.08);
-}
-
-.play{
-    color:#00ff88;
-    font-weight:bold;
-}
-
-.skip{
-    color:#ff4d4d;
-    font-weight:bold;
-}
-
-.title{
-    color:#9eff00;
-}
-</style>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANALIZA GPT</title>
+  <link rel="stylesheet" href="/static/css/gpt_analysis.css">
 </head>
 <body>
+  <main class="gpt-wrap">
+    <header class="gpt-header">
+      <div>
+        <p class="gpt-kicker">KANIBAL BOT</p>
+        <h1>ANALIZA GPT</h1>
+        <p class="gpt-sub">Opisowa ocena meczów, value, ryzyka oraz kupony AKO.</p>
+      </div>
+      <div class="gpt-actions">
+        <a class="gpt-btn ghost" href="/">← Dashboard</a>
+        <button class="gpt-btn" id="runBtn">Uruchom analizę GPT</button>
+      </div>
+    </header>
 
-<h1 class="title">🧠 GPT ANALYSIS</h1>
+    <section class="gpt-status" id="statusBox">Ładowanie danych...</section>
 
-<div id="app"></div>
-
-<script>
-
-fetch('/api/gpt-analysis')
-.then(r=>r.json())
-.then(data=>{
-
-    let html='';
-
-    data.matches.forEach(match=>{
-
-        html += `
-        <div class="card">
-
-            <h2>${match.match}</h2>
-
-            <p><b>BET:</b> ${match.bet}</p>
-            <p><b>CONFIDENCE:</b> ${match.confidence}%</p>
-            <p><b>VALUE:</b> ${match.value}</p>
-            <p><b>RISK:</b> ${match.risk}</p>
-
-            <p class="${match.status === 'PLAY' ? 'play' : 'skip'}">
-                ${match.status}
-            </p>
-
-            <hr>
-
-            <p style="line-height:1.7;">
-                ${match.analysis}
-            </p>
-
+    <section class="gpt-grid">
+      <div class="gpt-card wide">
+        <div class="gpt-card-head">
+          <h2>Mecze ocenione przez GPT</h2>
+          <span id="generatedAt"></span>
         </div>
-        `;
-    });
+        <div class="table-scroll">
+          <table class="gpt-table">
+            <thead>
+              <tr>
+                <th>Mecz</th><th>Typ</th><th>Kurs</th><th>Confidence</th><th>Value</th><th>Ryzyko</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="analysisRows"></tbody>
+          </table>
+        </div>
+      </div>
 
-    html += `<div class="card">
-        <h2 class="title">💎 SAFE AKO</h2>
-    `;
+      <aside class="gpt-card">
+        <h2>Kupony AKO</h2>
+        <div id="couponsBox" class="coupons"></div>
+      </aside>
+    </section>
 
-    data.ako.safe.forEach(pick=>{
-        html += `<p>${pick}</p>`;
-    });
+    <section class="gpt-card report-card">
+      <h2>Opisowa analiza GPT</h2>
+      <div id="reportBox" class="report-empty">Kliknij mecz z tabeli, aby zobaczyć pełny raport opisowy.</div>
+    </section>
+  </main>
 
-    html += `</div>`;
-
-    document.getElementById('app').innerHTML = html;
-
-});
-
-</script>
-
+  <script src="/static/js/gpt_analysis.js"></script>
 </body>
 </html>
