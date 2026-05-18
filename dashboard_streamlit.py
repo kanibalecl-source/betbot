@@ -14,63 +14,27 @@ except Exception:
 
 st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 
+# WORKING AIWATCH BUTTON
 st.markdown("""
 <style>
-/* FINAL AI TABLE */
-.ai-status{
-display:flex;
-align-items:center;
-justify-content:center;
-width:148px;
-height:58px;
-margin:0 auto;
-border-radius:18px;
-background:rgba(14,40,10,.92);
-border:1px solid rgba(108,255,41,.35);
-color:#7CFF2B;
-font-size:15px;
-font-weight:950;
-letter-spacing:.05em;
-text-transform:uppercase;
-cursor:pointer;
-transition:.18s ease;
-box-shadow:0 0 18px rgba(108,255,41,.08);
+div[data-testid="stButton"] button{
+width:148px!important;
+height:58px!important;
+border-radius:18px!important;
+background:rgba(14,40,10,.92)!important;
+border:1px solid rgba(108,255,41,.35)!important;
+color:#7CFF2B!important;
+font-size:15px!important;
+font-weight:950!important;
+letter-spacing:.05em!important;
+text-transform:uppercase!important;
+box-shadow:0 0 18px rgba(108,255,41,.08)!important;
+transition:.18s ease!important;
 }
-.ai-status:hover{
-background:rgba(20,58,14,.98);
-box-shadow:0 0 24px rgba(108,255,41,.18);
-}
-.stButton{display:none!important;}
-.ai-details-box{
-margin:0 0 18px 0;
-padding:18px;
-border-radius:18px;
-background:linear-gradient(180deg,#071018,#05080d);
-border:1px solid rgba(108,255,41,.18);
-}
-.ai-details-grid{
-display:grid;
-grid-template-columns:repeat(4,minmax(0,1fr));
-gap:12px;
-}
-.ai-kpi{
-padding:14px;
-border-radius:14px;
-background:rgba(255,255,255,.03);
-border:1px solid rgba(255,255,255,.05);
-}
-.ai-kpi-label{
-font-size:11px;
-font-weight:900;
-letter-spacing:.08em;
-text-transform:uppercase;
-color:#8fa39a;
-margin-bottom:8px;
-}
-.ai-kpi-value{
-font-size:22px;
-font-weight:900;
-color:#7CFF2B;
+div[data-testid="stButton"] button:hover{
+background:rgba(20,58,14,.98)!important;
+box-shadow:0 0 24px rgba(108,255,41,.18)!important;
+color:#7CFF2B!important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -507,9 +471,55 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         )
         row_html = row_html.replace(
             '<div></div></div></div>',
-            f'<div><div class="ai-status" onclick="document.getElementById(\'details_{key}\').style.display=(document.getElementById(\'details_{key}\').style.display==\'block\'?\'none\':\'block\')">{status_label}</div></div></div>'
+            f'<div class="ai-status-inline">{status_label}</div></div></div>'
         )
         st.markdown(row_html, unsafe_allow_html=True)
+
+        if st.button(status_label, key=f"btn_{key}"):
+
+            st.session_state[f"details_{key}"] = not st.session_state.get(f"details_{key}", False)
+
+        if st.session_state.get(f"details_{key}", False):
+
+            xg_home = row.get("xg_home", row.get("home_xg", 0))
+            xg_away = row.get("xg_away", row.get("away_xg", 0))
+            bot_odds = row.get("bot_odds", row.get("fair_odds", "-"))
+            market_odds = row.get("market_odds", row.get("odds", "-"))
+            bookmaker_margin = row.get("bookmaker_margin", row.get("margin", "-"))
+
+            st.markdown(f"""
+            <div class="ai-details-box">
+                <div class="ai-details-grid">
+
+                    <div class="ai-kpi">
+                        <div class="ai-kpi-label">xG HOME</div>
+                        <div class="ai-kpi-value">{xg_home}</div>
+                    </div>
+
+                    <div class="ai-kpi">
+                        <div class="ai-kpi-label">xG AWAY</div>
+                        <div class="ai-kpi-value">{xg_away}</div>
+                    </div>
+
+                    <div class="ai-kpi">
+                        <div class="ai-kpi-label">BOT ODDS</div>
+                        <div class="ai-kpi-value">{bot_odds}</div>
+                    </div>
+
+                    <div class="ai-kpi">
+                        <div class="ai-kpi-label">BOOK ODDS</div>
+                        <div class="ai-kpi-value">{market_odds}</div>
+                    </div>
+
+                    <div class="ai-kpi">
+                        <div class="ai-kpi-label">BOOKMAKER MARGIN</div>
+                        <div class="ai-kpi-value">{bookmaker_margin}</div>
+                    </div>
+
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
 
         
 
