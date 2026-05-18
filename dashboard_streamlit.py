@@ -18,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
+AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"
 PICK_CANDIDATES = [DATA_DIR / "auto_all_picks.csv", BASE_DIR / "auto_all_picks.csv"]
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
@@ -113,6 +114,25 @@ def load_picks() -> pd.DataFrame:
         if not df.empty:
             return df
     return pd.DataFrame()
+
+
+
+def load_ai_picks(prematch: pd.DataFrame) -> pd.DataFrame:
+    """Load autonomous AI picks. If the file is missing, generate it once on demand."""
+    df = read_csv_safe(AI_PICKS_FILE)
+    if not df.empty:
+        return df
+    try:
+        from ai_autonomous_picks_engine import run_once as run_ai_picks_once
+        run_ai_picks_once()
+        df = read_csv_safe(AI_PICKS_FILE)
+        if not df.empty:
+            return df
+    except Exception:
+        pass
+    # Empty dataframe means AI has no independent signals yet; do not copy PREMATCH into AI.
+    return pd.DataFrame()
+
 
 def real_values(df: pd.DataFrame, columns: Iterable[str], limit: int = 10, default=None) -> List[float]:
     if default is None:
@@ -303,8 +323,8 @@ def ai_pick_rows(picks: pd.DataFrame) -> List[List[str]]:
     for idx, (_, row) in enumerate(picks.head(10).iterrows()):
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         edge = first_existing(row, ["ev", "edge", "value"], "-")
-        status_label = "WARTO" if conf >= 60 else "OBSERWUJ"
-        status_class = "pill-green" if conf >= 60 else "pill-yellow"
+        status_label = str(first_existing(row, ["status"], "AI PICK" if conf >= 60 else "AI WATCH"))
+        status_class = "pill-green" if conf >= 68 else "pill-yellow"
         href = "?" if opened == str(idx) else f"?ai_pick={idx}"
         rows.append([
             str(first_existing(row, ["liga", "league"], "-")),
@@ -322,29 +342,43 @@ def render_ai_detail(picks: pd.DataFrame) -> None:
     if not opened.isdigit() or picks.empty:
         return
     idx = int(opened)
-    if idx < 0 or idx >= len(picks.head(10)):
+    shown = picks.head(10)
+    if idx < 0 or idx >= len(shown):
         return
-    row = picks.head(10).iloc[idx]
+    row = shown.iloc[idx]
     conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
     edge = as_float(first_existing(row, ["ev", "edge", "value"], 0))
-    odds = first_existing(row, ["kurs_buk", "odds"], "-")
-    market = fmt_market(first_existing(row, ["typ", "market"], "-"))
-    match = first_existing(row, ["mecz", "match"], "-")
-    league = first_existing(row, ["liga", "league"], "-")
+    odds = first_existing(row, ["odds", "kurs_buk"], "-")
+    market = fmt_market(first_existing(row, ["market", "typ"], "-"))
+    match = first_existing(row, ["match", "mecz"], "-")
+    league = first_existing(row, ["league", "liga"], "-")
+    risk = first_existing(row, ["risk"], "-")
+    tempo = as_float(first_existing(row, ["tempo"], 0), 0)
+    pressure = as_float(first_existing(row, ["pressure"], 0), 0)
+    momentum = as_float(first_existing(row, ["momentum"], 0), 0)
+    reason = first_existing(row, ["model_reason", "reason"], "Autonomiczny AI pick wygenerowany przez niezależny scoring engine.")
     detail = f"""
     <div class="ai-detail">
         <h3>{match}</h3>
         <div class="ka-three">
             <div class="ka-card"><div class="ka-label">Liga</div><div class="ka-value" style="font-size:18px">{league}</div></div>
-            <div class="ka-card"><div class="ka-label">Rynek AI</div><div class="ka-value" style="font-size:18px">{market}</div></div>
+            <div class="ka-card"><div class="ka-label">AI Pick</div><div class="ka-value" style="font-size:18px">{market}</div></div>
             <div class="ka-card"><div class="ka-label">Kurs</div><div class="ka-value" style="font-size:18px">{odds}</div></div>
         </div>
         <br>
         <div class="ka-three">
-            <div class="ka-card"><div class="ka-label">Confidence</div>{confidence_bar(conf)}</div>
+            <div class="ka-card"><div class="ka-label">Confidence AI</div>{confidence_bar(conf)}</div>
             <div class="ka-card"><div class="ka-label">Edge / EV</div><div class="ka-value" style="font-size:18px"><span class="green">{edge:.2f}</span></div></div>
-            <div class="ka-card"><div class="ka-label">Model</div><div class="ka-value" style="font-size:18px">Tempo / Forma / Value</div></div>
+            <div class="ka-card"><div class="ka-label">Ryzyko</div><div class="ka-value" style="font-size:18px">{risk}</div></div>
         </div>
+        <br>
+        <div class="ka-three">
+            <div class="ka-card"><div class="ka-label">Tempo</div>{confidence_bar(tempo)}</div>
+            <div class="ka-card"><div class="ka-label">Pressure</div>{confidence_bar(pressure)}</div>
+            <div class="ka-card"><div class="ka-label">Momentum</div>{confidence_bar(momentum)}</div>
+        </div>
+        <br>
+        <div class="ka-card"><div class="ka-label">AI reasoning</div><div class="ka-sub">{reason}</div></div>
     </div>
     """
     st.markdown(detail, unsafe_allow_html=True)
@@ -451,11 +485,12 @@ raw_picks = load_picks()
 picks = normalize_picks(raw_picks)
 live = load_live_data(picks)
 results = load_results()
+ai_picks = load_ai_picks(picks)
 
 tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS"])
 with tabs[0]: render_live(live, picks)
 with tabs[1]: render_prematch(picks)
-with tabs[2]: render_ai(picks, results)
+with tabs[2]: render_ai(ai_picks, results)
 with tabs[3]: render_analytics(picks, results, "ANALITYKA")
 with tabs[4]: render_history(results)
 with tabs[5]: render_ranking(picks, results)
