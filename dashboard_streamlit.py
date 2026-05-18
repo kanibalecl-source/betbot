@@ -14,6 +14,67 @@ except Exception:
 
 st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 
+st.markdown("""
+<style>
+/* FINAL AI TABLE */
+.ai-status{
+display:flex;
+align-items:center;
+justify-content:center;
+width:148px;
+height:58px;
+margin:0 auto;
+border-radius:18px;
+background:rgba(14,40,10,.92);
+border:1px solid rgba(108,255,41,.35);
+color:#7CFF2B;
+font-size:15px;
+font-weight:950;
+letter-spacing:.05em;
+text-transform:uppercase;
+cursor:pointer;
+transition:.18s ease;
+box-shadow:0 0 18px rgba(108,255,41,.08);
+}
+.ai-status:hover{
+background:rgba(20,58,14,.98);
+box-shadow:0 0 24px rgba(108,255,41,.18);
+}
+.stButton{display:none!important;}
+.ai-details-box{
+margin:0 0 18px 0;
+padding:18px;
+border-radius:18px;
+background:linear-gradient(180deg,#071018,#05080d);
+border:1px solid rgba(108,255,41,.18);
+}
+.ai-details-grid{
+display:grid;
+grid-template-columns:repeat(4,minmax(0,1fr));
+gap:12px;
+}
+.ai-kpi{
+padding:14px;
+border-radius:14px;
+background:rgba(255,255,255,.03);
+border:1px solid rgba(255,255,255,.05);
+}
+.ai-kpi-label{
+font-size:11px;
+font-weight:900;
+letter-spacing:.08em;
+text-transform:uppercase;
+color:#8fa39a;
+margin-bottom:8px;
+}
+.ai-kpi-value{
+font-size:22px;
+font-weight:900;
+color:#7CFF2B;
+}
+</style>
+""", unsafe_allow_html=True)
+
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -446,18 +507,11 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         )
         row_html = row_html.replace(
             '<div></div></div></div>',
-            f'<div class="ai-status-inline">{status_label}</div></div></div>'
+            f'<div><div class="ai-status" onclick="document.getElementById(\'details_{key}\').style.display=(document.getElementById(\'details_{key}\').style.display==\'block\'?\'none\':\'block\')">{status_label}</div></div></div>'
         )
         st.markdown(row_html, unsafe_allow_html=True)
 
-        status_click = st.button(
-            status_label,
-            key=f"btn_{key}",
-            use_container_width=False
-        )
-
-        if status_click:
-            st.session_state[key] = not st.session_state[key]
+        
 
         if st.session_state.get(key):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
