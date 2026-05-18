@@ -505,3 +505,12 @@ with tabs[5]: render_ranking(picks, results)
 with tabs[6]: render_alerts(picks, live)
 with tabs[7]: render_settings()
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
+
+
+# === CHART READABILITY DESCRIPTIONS ===
+CHART_DESCRIPTIONS = {
+    "ROI":"Zwrot z inwestycji modeli AI.",
+    "WINRATE":"Skuteczność wszystkich aktywnych sygnałów.",
+    "VALUE":"Najwyższe value wykryte przez AI.",
+    "RISK":"Rozkład poziomów ryzyka sygnałów."
+}
