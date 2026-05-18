@@ -1,0 +1,8 @@
+DODAJ IMPORT:
+from gpt_analysis_api import register_gpt_analysis_api
+
+DODAJ POD:
+app = Flask(__name__)
+
+WKLEJ:
+register_gpt_analysis_api(app)
