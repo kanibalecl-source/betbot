@@ -12,6 +12,8 @@ DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "live_matches.csv"
 
 app = Flask(__name__)
+register_gpt_analysis_routes(app)
+
 
 
 def load_picks():

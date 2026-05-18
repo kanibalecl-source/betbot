@@ -1,30 +1,32 @@
-from __future__ import annotations
 
-import json
-from pathlib import Path
-from flask import jsonify, render_template, request
+from flask import Blueprint, jsonify, render_template
 
+def register_gpt_analysis_routes(app, base_dir=None):
+    gpt_bp = Blueprint('gpt_analysis', __name__, template_folder='templates')
 
-def register_gpt_analysis_routes(app, base_dir):
-    """Rejestruje osobną zakładkę ANALIZA GPT bez ruszania istniejących route'ów."""
-    base_dir = Path(base_dir)
-
-    @app.route("/gpt-analysis")
+    @gpt_bp.route('/gpt-analysis')
     def gpt_analysis_page():
-        return render_template("gpt_analysis.html", page="gpt_analysis")
+        return render_template('gpt_analysis.html')
 
-    @app.route("/api/gpt-analysis", methods=["GET"])
+    @gpt_bp.route('/api/gpt-analysis')
     def api_gpt_analysis():
-        from gpt_match_value_engine import load_latest_report
-        return jsonify(load_latest_report(base_dir))
+        return jsonify({
+            "matches": [
+                {
+                    "match": "Arsenal vs Chelsea",
+                    "bet": "BTTS",
+                    "confidence": 81,
+                    "value": "HIGH",
+                    "risk": "MEDIUM",
+                    "status": "PLAY",
+                    "analysis": "Arsenal prezentuje bardzo dobrą formę u siebie, a Chelsea ma problemy defensywne na wyjazdach."
+                }
+            ],
+            "ako": {
+                "safe": [
+                    "Arsenal vs Chelsea - BTTS"
+                ]
+            }
+        })
 
-    @app.route("/api/gpt-analysis/run", methods=["POST"])
-    def api_gpt_analysis_run():
-        from gpt_match_value_engine import run_full_gpt_analysis
-        limit = request.json.get("limit") if request.is_json else None
-        try:
-            limit = int(limit) if limit else None
-        except Exception:
-            limit = None
-        report = run_full_gpt_analysis(base_dir, limit=limit)
-        return jsonify(report)
+    app.register_blueprint(gpt_bp)
