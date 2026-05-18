@@ -1,0 +1,31 @@
+
+/* FINAL STATUS BUTTON */
+.ai-status{
+display:flex;
+align-items:center;
+justify-content:center;
+width:148px;
+height:58px;
+margin:0 auto;
+border-radius:18px;
+background:rgba(14,40,10,.92);
+border:1px solid rgba(108,255,41,.35);
+color:#7CFF2B;
+font-size:15px;
+font-weight:950;
+letter-spacing:.05em;
+text-transform:uppercase;
+cursor:pointer;
+transition:.18s ease;
+box-shadow:0 0 18px rgba(108,255,41,.08);
+}
+
+.ai-status:hover{
+background:rgba(20,58,14,.98);
+box-shadow:0 0 24px rgba(108,255,41,.18);
+}
+
+/* UKRYJ STARE STREAMLIT BUTTONY */
+.stButton{
+display:none!important;
+}
