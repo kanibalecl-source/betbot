@@ -269,6 +269,22 @@ header[data-testid="stHeader"]{background:transparent!important}div[data-testid=
 .ai-conf-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#7CFF2B,#ffc400);box-shadow:0 0 12px rgba(124,255,43,.28)}
 .ai-status-col .stButton>button{width:100%!important;border-radius:999px!important;background:linear-gradient(180deg,rgba(124,255,43,.20),rgba(25,95,30,.24))!important;border:1px solid rgba(124,255,43,.42)!important;color:#B8FF7A!important;font-size:12px!important;font-weight:950!important;letter-spacing:.08em!important;text-transform:uppercase!important;box-shadow:0 0 18px rgba(124,255,43,.12)!important;padding:9px 10px!important}
 .ai-status-col .stButton>button:hover{color:#fff!important;background:linear-gradient(180deg,rgba(124,255,43,.32),rgba(35,120,42,.30))!important;box-shadow:0 0 24px rgba(124,255,43,.22)!important}
+.ai-status-inline{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+min-width:92px;
+height:36px;
+border-radius:10px;
+background:#103c08;
+border:1px solid rgba(124,255,43,.22);
+color:#7CFF2B;
+font-size:12px;
+font-weight:900;
+letter-spacing:.05em;
+text-transform:uppercase;
+margin-left:auto;
+}
 .ai-detail-final{background:linear-gradient(180deg,rgba(8,13,22,.99),rgba(3,7,13,.99));border:1px solid rgba(124,255,43,.20);border-radius:18px;padding:18px;margin:0 0 18px;box-shadow:0 0 28px rgba(124,255,43,.06)}
 .ai-detail-final-title{color:#7CFF2B;font-size:16px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;margin-bottom:14px}
 .ai-detail-final-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
@@ -428,14 +444,20 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
             f'<div></div>'
             f'</div></div>'
         )
+        row_html = row_html.replace(
+            '<div></div></div></div>',
+            f'<div class="ai-status-inline">{status_label}</div></div></div>'
+        )
         st.markdown(row_html, unsafe_allow_html=True)
 
-        cols = st.columns([.90, 1.58, .86, .58, 1.05, .84, .96])
-        with cols[-1]:
-            st.markdown('<div class="ai-status-col">', unsafe_allow_html=True)
-            if st.button(status_label, key=f"btn_{key}", use_container_width=True):
-                st.session_state[key] = not st.session_state[key]
-            st.markdown('</div>', unsafe_allow_html=True)
+        status_click = st.button(
+            status_label,
+            key=f"btn_{key}",
+            use_container_width=False
+        )
+
+        if status_click:
+            st.session_state[key] = not st.session_state[key]
 
         if st.session_state.get(key):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
