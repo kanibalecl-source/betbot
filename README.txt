@@ -1,14 +1,22 @@
-PRZYWRACANIE ORYGINALNEGO WYGLADU BOTA
 
-Ta paczka zawiera wszystkie kluczowe pliki UI potrzebne do przywrocenia poprzedniego wygladu.
+NADPISANIE BLOKU BADGE
 
-CO ZROBIC:
-1. Wgraj wszystkie pliki do glownego folderu bota.
-2. Nadpisz istniejace pliki.
-3. Deploy/restart Railway.
-4. Odswiez strone CTRL + F5.
+1. Otwórz dashboard_streamlit.py
 
-Najwazniejszy plik:
-dashboard_streamlit.py
+2. Znajdź:
+with st.expander(f"📊 {match_name}"):
 
-Zostal przywrocony z backupu audit_backup.
+3. POD TYM wklej zawartość:
+dashboard_badge_block.py
+
+4. Usuń stare uszkodzone badge block jeśli istnieją.
+
+5. Deploy:
+git add .
+git commit -m "safe dashboard render fix"
+git push
+
+Ta wersja:
+- nie psuje renderowania,
+- pokazuje badge dla każdego meczu,
+- zachowuje obecną kolorystykę.

@@ -12,8 +12,6 @@ DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "live_matches.csv"
 
 app = Flask(__name__)
-register_gpt_analysis_routes(app)
-
 
 
 def load_picks():
@@ -86,15 +84,6 @@ def play():
     save_bet(pick, stake)
 
     return redirect(url_for("index"))
-
-
-# ===== ANALIZA GPT TAB - SAFE ADDON =====
-try:
-    from gpt_analysis_tab import register_gpt_analysis_routes
-    register_gpt_analysis_routes(app, BASE_DIR)
-except Exception as e:
-    print(f"GPT ANALIZA TAB INIT ERROR: {e}")
-# ===== /ANALIZA GPT TAB =====
 
 
 @app.route("/health")

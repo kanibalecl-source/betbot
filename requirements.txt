@@ -5,4 +5,3 @@ streamlit
 numpy
 flask
 gunicorn
-openai>=1.0.0
