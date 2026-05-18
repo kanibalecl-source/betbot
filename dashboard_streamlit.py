@@ -251,6 +251,33 @@ def css() -> None:
 html,body,.stApp{background:radial-gradient(circle at 9% 5%,rgba(255,85,0,.10),transparent 28%),radial-gradient(circle at 88% 7%,rgba(98,255,0,.16),transparent 30%),linear-gradient(180deg,#050607 0%,#060a08 45%,#030405 100%)!important;color:var(--white)!important;font-family:Inter,Arial,sans-serif!important;}
 header[data-testid="stHeader"]{background:transparent!important}div[data-testid="stToolbar"],#MainMenu,footer{display:none!important}.block-container{max-width:1920px!important;padding:.35rem .75rem 1.0rem!important}.kanibal-hero{width:100%;margin:0 0 18px;border:1px solid rgba(124,255,43,.22);border-radius:18px;overflow:hidden;background:#050607}.kanibal-hero img{display:block;width:100%;height:auto;object-fit:contain;object-position:center}.kanibal-fallback{height:210px;border:1px solid rgba(124,255,43,.22);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:950;color:#fff;background:linear-gradient(90deg,#050607,#0a1a0c)}
 .stTabs [data-baseweb="tab-list"]{gap:0;background:#070a0d;border:1px solid var(--line);border-radius:12px;overflow:hidden;width:100%;margin:0 0 18px}.stTabs [data-baseweb="tab"]{height:58px;flex-grow:1;background:#070a0d;border-right:1px solid rgba(255,255,255,.08);color:#fff!important;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.02em}.stTabs [aria-selected="true"]{background:linear-gradient(180deg,rgba(124,255,43,.20),rgba(124,255,43,.055))!important;color:var(--green)!important;border-bottom:3px solid var(--green)!important}.stTabs [data-baseweb="tab-highlight"]{display:none}.ka-title{display:flex;align-items:center;gap:14px;font-size:34px;font-weight:950;line-height:1;color:#fff;text-shadow:0 2px 0 #000;margin:26px 0 22px}.ka-dot{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#caffdb,#1bd257 62%,#064e22);box-shadow:0 0 22px rgba(124,255,43,.65);display:inline-block}.ka-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin:0 0 14px}.ka-card{background:linear-gradient(180deg,rgba(255,255,255,.044),rgba(255,255,255,.016));border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:0 16px 36px rgba(0,0,0,.34)}.ka-card h3{font-size:18px;margin:0 0 14px;color:#fff!important;font-weight:950}.ka-label{font-size:11px;color:#a0a9b3;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}.ka-value{font-size:29px;font-weight:950;color:#fff;line-height:1}.ka-sub{font-size:12px;color:var(--green);font-weight:800;margin-top:8px}.ka-panel{background:linear-gradient(180deg,rgba(255,255,255,.038),rgba(255,255,255,.014));border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.34);height:auto;box-sizing:border-box}.ka-layout{display:grid;grid-template-columns:1.15fr .85fr;gap:14px;margin-bottom:14px}.ka-bottom{display:grid;grid-template-columns:1.05fr .75fr .85fr;gap:14px;margin-top:14px;clear:both}.live-layout{display:grid;grid-template-columns:1.38fr 1fr;gap:14px;align-items:start;margin-bottom:14px}.ai-detail{margin-top:14px;background:linear-gradient(180deg,rgba(124,255,43,.055),rgba(255,255,255,.018));border:1px solid rgba(124,255,43,.16);border-radius:14px;padding:16px}.status-link{text-decoration:none!important}.ai-head,.ai-row{display:grid;grid-template-columns:1.05fr 3.05fr 1.25fr .9fr 1.55fr 1.15fr 1.25fr;gap:0;align-items:center}.ai-head{background:rgba(255,255,255,.026);border-bottom:1px solid var(--line);color:#a6b0b9;text-transform:uppercase;font-size:12px;font-weight:950}.ai-head div{padding:12px 10px}.ai-row{background:rgba(2,6,8,.50);border-bottom:1px solid rgba(255,255,255,.065);font-size:14px}.ai-row:hover{background:rgba(124,255,43,.035)}.ai-row div{padding:13px 10px}.ai-status-wrap div[data-testid="stButton"] button{background:rgba(124,255,43,.10)!important;color:var(--green)!important;border:1px solid rgba(124,255,43,.20)!important;border-radius:7px!important;font-size:12px!important;font-weight:950!important;min-height:34px!important;padding:5px 10px!important;width:auto!important}.ai-status-wrap div[data-testid="stButton"] button:hover{background:rgba(124,255,43,.18)!important;border-color:rgba(124,255,43,.42)!important;color:#fff!important}.ai-details-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.ai-detail-title{font-size:20px;font-weight:950;margin-bottom:12px;color:#fff}.ai-reason{background:rgba(2,6,8,.40);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px;margin-top:14px}.ka-two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.ka-three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}.ka-table{width:100%;border-collapse:collapse;color:#fff!important;font-size:14px}.ka-table th{background:rgba(255,255,255,.024);padding:12px 10px;text-transform:uppercase;color:#a6b0b9;font-size:12px;font-weight:900;border-bottom:1px solid var(--line);text-align:left}.ka-table td{padding:13px 10px;border-bottom:1px solid rgba(255,255,255,.065);background:rgba(2,6,8,.50);vertical-align:middle}.ka-table tr:hover td{background:rgba(124,255,43,.035)}.green{color:var(--green)!important;font-weight:950}.yellow{color:var(--yellow)!important;font-weight:950}.red{color:var(--red)!important;font-weight:950}.blue{color:var(--blue)!important;font-weight:850}.pill{display:inline-block;padding:6px 10px;border-radius:7px;font-size:12px;font-weight:950}.pill-green{background:rgba(124,255,43,.10);color:var(--green)}.pill-yellow{background:rgba(255,196,0,.14);color:var(--yellow)}.pill-red{background:rgba(255,59,48,.14);color:var(--red)}.progress{height:8px;background:#30373c;border-radius:12px;overflow:hidden;min-width:88px}.progress span{height:100%;display:block;background:linear-gradient(90deg,#4fd62a,#9eff28);border-radius:12px}.placeholder-bars{height:175px;display:flex;align-items:end;gap:10px;padding:15px 8px 0;background:linear-gradient(180deg,rgba(124,255,43,.05),rgba(124,255,43,.015));border-radius:10px;border:1px solid rgba(255,255,255,.055)}.placeholder-bars i{flex:1;background:linear-gradient(180deg,var(--green),rgba(124,255,43,.10));border-radius:6px 6px 0 0;box-shadow:0 0 15px rgba(124,255,43,.20)}.sparkline{height:68px;border-bottom:1px solid rgba(255,255,255,.12);background:linear-gradient(180deg,rgba(124,255,43,.12),rgba(124,255,43,.02));clip-path:polygon(0 80%,12% 70%,25% 65%,37% 48%,50% 52%,62% 36%,75% 43%,88% 20%,100% 8%,100% 100%,0 100%)}.footer-ka{display:flex;justify-content:space-between;color:#7d858b;font-size:12px;padding:18px 8px 8px}.status-dot{display:inline-block;width:8px;height:8px;background:var(--green);border-radius:50%;box-shadow:0 0 12px var(--green);margin-left:8px}@media(max-width:1100px){.ka-grid,.ka-layout,.ka-bottom,.ka-two,.ka-three{grid-template-columns:1fr}.stTabs [data-baseweb="tab"]{font-size:11px;height:52px}.ka-title{font-size:28px}}
+
+/* === AI TABLE 1:1 FINAL === */
+.ai-table-final{width:100%;background:linear-gradient(180deg,rgba(8,13,22,.98),rgba(3,7,13,.99));border:1px solid rgba(124,255,43,.22);border-radius:18px;overflow:hidden;box-shadow:0 0 28px rgba(124,255,43,.06);margin:0 0 14px}
+.ai-table-final-head,.ai-table-final-row{display:grid;grid-template-columns:.90fr 1.58fr .86fr .58fr 1.05fr .84fr .96fr;align-items:center}
+.ai-table-final-head{min-height:48px;background:rgba(124,255,43,.075);border-bottom:1px solid rgba(124,255,43,.18);color:#7CFF2B;font-size:12px;font-weight:950;letter-spacing:.09em;text-transform:uppercase}
+.ai-table-final-head div,.ai-table-final-row div{padding:0 14px}
+.ai-table-final-row{min-height:68px;background:rgba(7,12,20,.84);border-bottom:1px solid rgba(255,255,255,.055);color:#eef9f0;font-size:14px;font-weight:700}
+.ai-table-final-row:hover{background:rgba(10,18,27,.98);box-shadow:inset 0 0 0 1px rgba(124,255,43,.10)}
+.ai-cell-main{color:#fff;font-weight:950;font-size:15px;line-height:1.15}
+.ai-cell-sub{display:block;margin-top:4px;color:#8d9b95;font-size:11px;font-weight:750;letter-spacing:.05em}
+.ai-cell-num{color:#f7fff7;font-weight:950}
+.ai-edge-plus{color:#7CFF2B;font-weight:950}
+.ai-conf-line{display:flex;align-items:center;gap:10px}
+.ai-conf-value{min-width:36px;color:#fff;font-weight:950}
+.ai-conf-track{height:8px;min-width:78px;max-width:104px;width:100%;border-radius:999px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.06);overflow:hidden}
+.ai-conf-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#7CFF2B,#ffc400);box-shadow:0 0 12px rgba(124,255,43,.28)}
+.ai-status-col .stButton>button{width:100%!important;border-radius:999px!important;background:linear-gradient(180deg,rgba(124,255,43,.20),rgba(25,95,30,.24))!important;border:1px solid rgba(124,255,43,.42)!important;color:#B8FF7A!important;font-size:12px!important;font-weight:950!important;letter-spacing:.08em!important;text-transform:uppercase!important;box-shadow:0 0 18px rgba(124,255,43,.12)!important;padding:9px 10px!important}
+.ai-status-col .stButton>button:hover{color:#fff!important;background:linear-gradient(180deg,rgba(124,255,43,.32),rgba(35,120,42,.30))!important;box-shadow:0 0 24px rgba(124,255,43,.22)!important}
+.ai-detail-final{background:linear-gradient(180deg,rgba(8,13,22,.99),rgba(3,7,13,.99));border:1px solid rgba(124,255,43,.20);border-radius:18px;padding:18px;margin:0 0 18px;box-shadow:0 0 28px rgba(124,255,43,.06)}
+.ai-detail-final-title{color:#7CFF2B;font-size:16px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;margin-bottom:14px}
+.ai-detail-final-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ai-detail-final-box{border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);padding:14px}
+.ai-detail-final-label{color:#8d9b95;font-size:11px;font-weight:950;letter-spacing:.09em;text-transform:uppercase;margin-bottom:8px}
+.ai-detail-final-value{color:#fff;font-size:18px;font-weight:950}
+.ai-detail-final-note{color:#a7b8af;font-size:12px;line-height:1.45;font-weight:650;margin-top:14px}
+@media(max-width:900px){.ai-table-final-head{display:none}.ai-table-final-row{grid-template-columns:1fr;gap:6px;padding:12px 0}.ai-table-final-row div{padding:4px 14px}.ai-detail-final-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
 </style>
 ''', unsafe_allow_html=True)
 
@@ -353,47 +380,66 @@ def render_ai_detail_card(row) -> str:
     )
 
 
+
 def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
     if picks.empty:
-        table = html_table(["Liga", "Mecz", "Rynek", "Kurs", "Pewność", "Edge", "Status"], [["-","Oczekiwanie na dane AI PICKS","-","-","-","-","-"]])
-        st.markdown(f'<div class="ka-panel"><h3>AI PICKS</h3>{table}</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="ka-panel"><h3>AI PICKS</h3>'
+            '<div class="ai-table-final">'
+            '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>KURS</div><div>PEWNOŚĆ</div><div>EDGE</div><div>STATUS</div></div>'
+            '<div class="ai-table-final-row"><div>-</div><div><span class="ai-cell-main">Oczekiwanie na dane AI PICKS</span></div><div>-</div><div>-</div><div>-</div><div>-</div><div>-</div></div>'
+            '</div></div>',
+            unsafe_allow_html=True
+        )
         return
 
-    st.markdown('<div class="ka-panel"><h3>AI PICKS</h3><div class="ai-head"><div>Liga</div><div>Mecz</div><div>Rynek</div><div>Kurs</div><div>Pewność</div><div>Edge</div><div>Status</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="ka-panel"><h3>AI PICKS</h3>'
+        '<div class="ai-table-final">'
+        '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>KURS</div><div>PEWNOŚĆ</div><div>EDGE</div><div>STATUS</div></div>'
+        '</div></div>',
+        unsafe_allow_html=True
+    )
 
     shown = picks.head(10).reset_index(drop=True)
     for idx, row in shown.iterrows():
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         edge = first_existing(row, ["ev", "edge", "value"], "-")
         status_label = str(first_existing(row, ["status"], "AI STRONG" if conf >= 75 else "AI VALUE" if conf >= 60 else "AI WATCH"))
+        league = first_existing(row, ["liga", "league"], "-")
+        match = first_existing(row, ["mecz", "match"], "-")
+        market = fmt_market(first_existing(row, ["typ", "market"], "-"))
+        odds = first_existing(row, ["kurs_buk", "odds"], "-")
         key = ai_row_key(row, idx)
+
         if key not in st.session_state:
             st.session_state[key] = False
 
+        conf_width = max(0, min(100, int(conf)))
         row_html = (
-            f'<div class="ai-row">'
-            f'<div>{first_existing(row, ["liga", "league"], "-")}</div>'
-            f'<div><b>{first_existing(row, ["mecz", "match"], "-")}</b></div>'
-            f'<div>{fmt_market(first_existing(row, ["typ", "market"], "-"))}</div>'
-            f'<div>{first_existing(row, ["kurs_buk", "odds"], "-")}</div>'
-            f'<div>{confidence_bar(conf)}</div>'
-            f'<div><span class="green">{edge}</span></div>'
+            f'<div class="ai-table-final" style="margin-top:-14px;border-top:0;border-radius:0;">'
+            f'<div class="ai-table-final-row">'
+            f'<div><span class="ai-cell-num">{league}</span></div>'
+            f'<div><span class="ai-cell-main">{match}</span><span class="ai-cell-sub">AI independent pick</span></div>'
+            f'<div><span class="ai-cell-num">{market}</span></div>'
+            f'<div><span class="ai-cell-num">{odds}</span></div>'
+            f'<div><div class="ai-conf-line"><span class="ai-conf-value">{conf_width}%</span><div class="ai-conf-track"><div class="ai-conf-fill" style="width:{conf_width}%"></div></div></div></div>'
+            f'<div><span class="ai-edge-plus">{edge}</span></div>'
             f'<div></div>'
-            f'</div>'
+            f'</div></div>'
         )
         st.markdown(row_html, unsafe_allow_html=True)
 
-        cols = st.columns([1.05, 3.05, 1.25, .9, 1.55, 1.15, 1.25])
+        cols = st.columns([.90, 1.58, .86, .58, 1.05, .84, .96])
         with cols[-1]:
-            st.markdown('<div class="ai-status-wrap">', unsafe_allow_html=True)
-            if st.button(status_label, key=f"btn_{key}"):
+            st.markdown('<div class="ai-status-col">', unsafe_allow_html=True)
+            if st.button(status_label, key=f"btn_{key}", use_container_width=True):
                 st.session_state[key] = not st.session_state[key]
             st.markdown('</div>', unsafe_allow_html=True)
 
         if st.session_state.get(key):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
 def title(text: str) -> None:
     st.markdown(f'<div class="ka-title"><span class="ka-dot"></span>{text}</div>', unsafe_allow_html=True)
@@ -505,12 +551,3 @@ with tabs[5]: render_ranking(picks, results)
 with tabs[6]: render_alerts(picks, live)
 with tabs[7]: render_settings()
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
-
-
-# === CHART READABILITY DESCRIPTIONS ===
-CHART_DESCRIPTIONS = {
-    "ROI":"Zwrot z inwestycji modeli AI.",
-    "WINRATE":"Skuteczność wszystkich aktywnych sygnałów.",
-    "VALUE":"Najwyższe value wykryte przez AI.",
-    "RISK":"Rozkład poziomów ryzyka sygnałów."
-}
