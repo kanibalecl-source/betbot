@@ -1,14 +1,14 @@
-1. Wgraj gpt_analysis_tab.py do glownego folderu bota.
-2. Wgraj templates/gpt_analysis.html do folderu templates.
-3. W app.py dodaj IMPORT:
+PRZYWRACANIE ORYGINALNEGO WYGLADU BOTA
 
-from gpt_analysis_tab import register_gpt_analysis_routes
+Ta paczka zawiera wszystkie kluczowe pliki UI potrzebne do przywrocenia poprzedniego wygladu.
 
-4. POD:
-app = Flask(__name__)
+CO ZROBIC:
+1. Wgraj wszystkie pliki do glownego folderu bota.
+2. Nadpisz istniejace pliki.
+3. Deploy/restart Railway.
+4. Odswiez strone CTRL + F5.
 
-dodaj:
-register_gpt_analysis_routes(app)
+Najwazniejszy plik:
+dashboard_streamlit.py
 
-5. Wejdz:
-https://twoj-bot.up.railway.app/gpt-analysis
+Zostal przywrocony z backupu audit_backup.
