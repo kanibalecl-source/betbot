@@ -11,6 +11,12 @@ from typing import Any, Dict, List
 
 from ako_coupon_builder import build_ako_coupons
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 REPORT_FILE = Path("data/gpt_analysis_report.json")
 CACHE_DIR = Path("cache/gpt_analysis")
 
@@ -169,11 +175,23 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
         model = os.getenv("GPT_ANALYSIS_MODEL", "gpt-4.1-mini")
-        response = client.responses.create(
-            model=model,
-            tools=[{"type": "web_search_preview"}],
-            input=_prompt(item),
-        )
+        prompt = _prompt(item)
+
+        # Najpierw próbujemy z web search, bo użytkownik chce analizę formy, kontuzji i newsów.
+        # Jeśli konto/model nie obsłuży web_search_preview, robimy drugi bezpieczny fallback bez narzędzia,
+        # żeby zakładka GPT nie wywróciła całego dashboardu.
+        try:
+            response = client.responses.create(
+                model=model,
+                tools=[{"type": "web_search_preview"}],
+                input=prompt,
+            )
+        except Exception:
+            response = client.responses.create(
+                model=model,
+                input=prompt,
+            )
+
         text = getattr(response, "output_text", "") or ""
         parsed = _parse_json(text)
         data = {
