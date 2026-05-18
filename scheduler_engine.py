@@ -47,14 +47,6 @@ def run_prematch():
             sys.stdout.flush()
 
             try:
-                from ai_autonomous_picks_engine import run_once as run_ai_picks_once
-                ai_count = run_ai_picks_once()
-                print(f"✅ AI AUTONOMOUS PICKS OK | rows={ai_count}")
-            except Exception as ai_error:
-                print(f"❌ AI AUTONOMOUS PICKS ERROR: {ai_error}")
-
-
-            try:
                 from live_pipeline_runtime import run_once as run_live_pipeline_once
                 live_count = run_live_pipeline_once()
                 print(f"✅ LIVE SCHEDULER PIPELINE OK | active={live_count}")
@@ -62,6 +54,19 @@ def run_prematch():
                 print(f"❌ LIVE SCHEDULER PIPELINE ERROR: {live_error}")
 
             print("✅ LIVE SAVED")
+            try:
+                from ai_self_learning_runtime import run_self_learning_cycle
+                ai_result = run_self_learning_cycle()
+                print(f"✅ AI SELF-LEARNING LOOP OK | picks={ai_result.get('ai_picks')} | mode={ai_result.get('mode')} | settled={ai_result.get('settled_samples')}")
+            except Exception as ai_error:
+                print(f"❌ AI SELF-LEARNING LOOP ERROR: {ai_error}")
+
+            try:
+                from auto_retraining_runtime import AutoRetrainingRuntime
+                retrain_result = AutoRetrainingRuntime().run_if_due()
+                print(f"✅ AI RETRAINING CHECK | status={retrain_result.get('status')}")
+            except Exception as retrain_error:
+                print(f"⚠️ AI RETRAINING CHECK ERROR: {retrain_error}")
             print("💓 SCHEDULER LOOP OK")
 
             sys.stdout.flush()
