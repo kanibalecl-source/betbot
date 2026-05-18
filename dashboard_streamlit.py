@@ -294,48 +294,6 @@ margin-left:auto;
 .ai-detail-final-note{color:#a7b8af;font-size:12px;line-height:1.45;font-weight:650;margin-top:14px}
 @media(max-width:900px){.ai-table-final-head{display:none}.ai-table-final-row{grid-template-columns:1fr;gap:6px;padding:12px 0}.ai-table-final-row div{padding:4px 14px}.ai-detail-final-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
-
-/* === AI STATUS FINAL GREY BUTTON + DETAILS === */
-.ai-status-inline{display:none!important;}
-.ai-status-gray{
-display:flex!important;
-align-items:center!important;
-justify-content:center!important;
-width:148px!important;
-height:44px!important;
-margin:0 auto!important;
-border-radius:14px!important;
-background:#1b2026!important;
-border:1px solid rgba(255,255,255,.10)!important;
-color:#f4fff7!important;
-font-size:13px!important;
-font-weight:950!important;
-letter-spacing:.05em!important;
-text-transform:uppercase!important;
-text-decoration:none!important;
-box-shadow:inset 0 0 0 1px rgba(255,255,255,.025)!important;
-}
-.ai-status-gray:hover{
-background:#1b2026!important;
-border-color:rgba(124,255,43,.22)!important;
-color:#f4fff7!important;
-text-decoration:none!important;
-}
-.ai-detail-final{
-background:linear-gradient(180deg,rgba(8,13,22,.99),rgba(3,7,13,.99));
-border:1px solid rgba(124,255,43,.20);
-border-radius:18px;
-padding:18px;
-margin:0 0 18px;
-box-shadow:0 0 28px rgba(124,255,43,.06);
-}
-.ai-detail-final-title{color:#7CFF2B;font-size:16px;font-weight:950;letter-spacing:.10em;text-transform:uppercase;margin-bottom:14px}
-.ai-detail-final-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.ai-detail-final-box{border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);padding:14px}
-.ai-detail-final-label{color:#8d9b95;font-size:11px;font-weight:950;letter-spacing:.09em;text-transform:uppercase;margin-bottom:8px}
-.ai-detail-final-value{color:#fff;font-size:18px;font-weight:950}
-.ai-detail-final-note{color:#a7b8af;font-size:12px;line-height:1.45;font-weight:650;margin-top:14px}
-
 </style>
 ''', unsafe_allow_html=True)
 
@@ -402,48 +360,38 @@ def ai_row_key(row, idx: int) -> str:
 def render_ai_detail_card(row) -> str:
     conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
     edge = as_float(first_existing(row, ["ev", "edge", "value"], 0))
-    market_odds = first_existing(row, ["market_odds", "odds", "kurs_buk"], "-")
-    bot_odds = first_existing(row, ["bot_odds", "fair_odds", "model_odds", "ai_odds"], "-")
-    book_odds = first_existing(row, ["book_odds", "buk_odds", "bookmaker_odds", "odds", "kurs_buk"], market_odds)
-    bookmaker_margin = first_existing(row, ["bookmaker_margin", "margin", "marza", "book_margin"], "-")
-    xg_home = first_existing(row, ["xg_home", "home_xg", "xG HOME", "xg_gospodarze"], "-")
-    xg_away = first_existing(row, ["xg_away", "away_xg", "xG AWAY", "xg_goscie"], "-")
+    odds = first_existing(row, ["odds", "kurs_buk"], "-")
     market = fmt_market(first_existing(row, ["market", "typ"], "-"))
     match = first_existing(row, ["match", "mecz"], "-")
     league = first_existing(row, ["league", "liga"], "-")
-    risk = str(first_existing(row, ["risk", "risk_level"], "LOW")).upper()
+    risk = str(first_existing(row, ["risk"], "LOW")).upper()
     tempo = as_float(first_existing(row, ["tempo", "tempo_score"], conf), conf)
     pressure = as_float(first_existing(row, ["pressure", "pressure_score"], conf), conf)
     momentum = as_float(first_existing(row, ["momentum", "momentum_score"], conf), conf)
     value_score = as_float(first_existing(row, ["value_score", "value", "ev", "edge"], edge), edge)
     model_score = as_float(first_existing(row, ["model_score", "ai_pick_score", "score"], conf), conf)
     movement = as_float(first_existing(row, ["movement", "odds_movement", "clv"], value_score), value_score)
-    reason = first_existing(row, ["model_reason", "reason", "ai_reason"], "Autonomiczny AI pick wygenerowany przez niezależny scoring engine na podstawie confidence, value, rynku, xG, kursów oraz jakości sygnału.")
-
+    reason = first_existing(row, ["model_reason", "reason", "ai_reason"], "Autonomiczny AI pick wygenerowany przez niezależny scoring engine na podstawie confidence, value, rynku i jakości sygnału.")
     return (
-        f"<div class='ai-detail-final'>"
-        f"<div class='ai-detail-final-title'>AI MATCH ANALYSIS · {match}</div>"
-        f"<div class='ai-detail-final-grid'>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Liga</div><div class='ai-detail-final-value'>{league}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>AI Pick</div><div class='ai-detail-final-value'>{market}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Confidence</div><div class='ai-detail-final-value'>{conf:.0f}%</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Edge / EV</div><div class='ai-detail-final-value'>{edge:.2f}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>xG Home</div><div class='ai-detail-final-value'>{xg_home}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>xG Away</div><div class='ai-detail-final-value'>{xg_away}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Kurs rynku</div><div class='ai-detail-final-value'>{market_odds}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Kurs bota</div><div class='ai-detail-final-value'>{bot_odds}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Kurs buk</div><div class='ai-detail-final-value'>{book_odds}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Marża bukmachera</div><div class='ai-detail-final-value'>{bookmaker_margin}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Ryzyko</div><div class='ai-detail-final-value'>{risk}</div></div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Market Movement</div><div class='ai-detail-final-value'>{movement:.0f}%</div></div>"
-        f"</div>"
-        f"<div class='ai-detail-final-grid' style='margin-top:12px'>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Tempo</div>{confidence_bar(tempo)}</div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Pressure</div>{confidence_bar(pressure)}</div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Momentum</div>{confidence_bar(momentum)}</div>"
-        f"<div class='ai-detail-final-box'><div class='ai-detail-final-label'>Model AI</div>{confidence_bar(model_score)}</div>"
-        f"</div>"
-        f"<div class='ai-detail-final-note'><b>AI reasoning:</b> {reason}</div>"
+        f"<div class='ai-detail'>"
+        f"<div class='ai-detail-title'>{match}</div>"
+        f"<div class='ai-details-grid'>"
+        f"<div class='ka-card'><div class='ka-label'>Liga</div><div class='ka-value' style='font-size:18px'>{league}</div></div>"
+        f"<div class='ka-card'><div class='ka-label'>AI Pick</div><div class='ka-value' style='font-size:18px'>{market}</div></div>"
+        f"<div class='ka-card'><div class='ka-label'>Kurs</div><div class='ka-value' style='font-size:18px'>{odds}</div></div>"
+        f"</div><br><div class='ai-details-grid'>"
+        f"<div class='ka-card'><div class='ka-label'>Confidence AI</div>{confidence_bar(conf)}</div>"
+        f"<div class='ka-card'><div class='ka-label'>Edge / EV</div><div class='ka-value' style='font-size:18px'><span class='green'>{edge:.2f}</span></div></div>"
+        f"<div class='ka-card'><div class='ka-label'>Ryzyko</div><div class='ka-value' style='font-size:18px'>{risk}</div></div>"
+        f"</div><br><div class='ai-details-grid'>"
+        f"<div class='ka-card'><div class='ka-label'>Tempo</div>{confidence_bar(tempo)}</div>"
+        f"<div class='ka-card'><div class='ka-label'>Pressure</div>{confidence_bar(pressure)}</div>"
+        f"<div class='ka-card'><div class='ka-label'>Momentum</div>{confidence_bar(momentum)}</div>"
+        f"</div><br><div class='ai-details-grid'>"
+        f"<div class='ka-card'><div class='ka-label'>Value</div>{confidence_bar(value_score)}</div>"
+        f"<div class='ka-card'><div class='ka-label'>Model AI</div>{confidence_bar(model_score)}</div>"
+        f"<div class='ka-card'><div class='ka-label'>Market movement</div>{confidence_bar(movement)}</div>"
+        f"</div><div class='ai-reason'><div class='ka-label'>AI reasoning</div><div class='ka-sub'>{reason}</div></div>"
         f"</div>"
     )
 
@@ -460,11 +408,6 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
             unsafe_allow_html=True
         )
         return
-
-    try:
-        active_key = str(st.query_params.get("ai_open", ""))
-    except Exception:
-        active_key = ""
 
     st.markdown(
         '<div class="ka-panel"><h3>AI PICKS</h3>'
@@ -484,8 +427,11 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         market = fmt_market(first_existing(row, ["typ", "market"], "-"))
         odds = first_existing(row, ["kurs_buk", "odds"], "-")
         key = ai_row_key(row, idx)
-        conf_width = max(0, min(100, int(conf)))
 
+        if key not in st.session_state:
+            st.session_state[key] = False
+
+        conf_width = max(0, min(100, int(conf)))
         row_html = (
             f'<div class="ai-table-final" style="margin-top:-14px;border-top:0;border-radius:0;">'
             f'<div class="ai-table-final-row">'
@@ -495,14 +441,26 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
             f'<div><span class="ai-cell-num">{odds}</span></div>'
             f'<div><div class="ai-conf-line"><span class="ai-conf-value">{conf_width}%</span><div class="ai-conf-track"><div class="ai-conf-fill" style="width:{conf_width}%"></div></div></div></div>'
             f'<div><span class="ai-edge-plus">{edge}</span></div>'
-            f'<div><a class="ai-status-gray" href="?ai_open={key}">{status_label}</a></div>'
+            f'<div></div>'
             f'</div></div>'
+        )
+        row_html = row_html.replace(
+            '<div></div></div></div>',
+            f'<div class="ai-status-inline">{status_label}</div></div></div>'
         )
         st.markdown(row_html, unsafe_allow_html=True)
 
-        if active_key == key:
-            st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
+        status_click = st.button(
+            status_label,
+            key=f"btn_{key}",
+            use_container_width=False
+        )
 
+        if status_click:
+            st.session_state[key] = not st.session_state[key]
+
+        if st.session_state.get(key):
+            st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
 
 
 def title(text: str) -> None:
