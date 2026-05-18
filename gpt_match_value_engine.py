@@ -1,214 +1,248 @@
-"""GPT + web-search match value engine.
-
-This module does NOT ask the bot's internal model for team context. It sends only
-basic fixture + proposed bet data to OpenAI and lets the model search the public
-web for current context: form, injuries, lineups, morale, playing style, schedule,
-weather/motivation signals, and recent news.
-
-Safety note: this is a decision-support layer. It never places bets.
-"""
 from __future__ import annotations
 
+import csv
 import json
 import os
 import re
 import time
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List
 
-try:
-    from openai import OpenAI
-except Exception:  # pragma: no cover - allows app to run without openai installed
-    OpenAI = None  # type: ignore
+from ako_coupon_builder import build_ako_coupons
 
-BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
-GPT_CACHE_FILE = DATA_DIR / "gpt_match_value_cache.json"
-GPT_EVAL_FILE = DATA_DIR / "gpt_match_evaluations.csv"
-
-DEFAULT_MODEL = os.getenv("OPENAI_MATCH_MODEL", "gpt-4.1-mini")
-DEFAULT_MAX_MATCHES = int(os.getenv("GPT_MAX_MATCHES", "20"))
-DEFAULT_SLEEP_SECONDS = float(os.getenv("GPT_MATCH_SLEEP_SECONDS", "0.3"))
+REPORT_FILE = Path("data/gpt_analysis_report.json")
+CACHE_DIR = Path("cache/gpt_analysis")
 
 
-@dataclass
-class MatchBetInput:
-    match: str
-    market: str
-    odds: float
-    league: str = ""
-    country: str = ""
-    match_date: str = ""
-    bookmaker: str = ""
-    bot_confidence: Optional[float] = None
-    bot_edge: Optional[float] = None
-    bot_ev: Optional[float] = None
-
-
-EVALUATION_SCHEMA: Dict[str, Any] = {
-    "name": "match_bet_evaluation",
-    "schema": {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "play": {"type": "boolean"},
-            "ako_candidate": {"type": "boolean"},
-            "single_candidate": {"type": "boolean"},
-            "confidence": {"type": "number", "minimum": 0, "maximum": 100},
-            "value_rating": {"type": "number", "minimum": 0, "maximum": 10},
-            "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "NO_BET"]},
-            "recommended_action": {"type": "string", "enum": ["PLAY", "SMALL_STAKE", "ONLY_SINGLE", "SKIP"]},
-            "fair_odds_estimate": {"type": "number"},
-            "model_probability_estimate": {"type": "number", "minimum": 0, "maximum": 1},
-            "context_summary": {"type": "string"},
-            "positive_factors": {"type": "array", "items": {"type": "string"}},
-            "negative_factors": {"type": "array", "items": {"type": "string"}},
-            "missing_info": {"type": "array", "items": {"type": "string"}},
-            "reason": {"type": "string"},
-            "sources_used": {"type": "array", "items": {"type": "string"}},
-        },
-        "required": [
-            "play", "ako_candidate", "single_candidate", "confidence", "value_rating", "risk",
-            "recommended_action", "fair_odds_estimate", "model_probability_estimate",
-            "context_summary", "positive_factors", "negative_factors", "missing_info",
-            "reason", "sources_used",
-        ],
-    },
-    "strict": True,
-}
-
-
-def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _load_cache() -> Dict[str, Any]:
-    if GPT_CACHE_FILE.exists():
-        try:
-            return json.loads(GPT_CACHE_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
-    return {}
-
-
-def _save_cache(cache: Dict[str, Any]) -> None:
-    GPT_CACHE_FILE.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _cache_key(item: MatchBetInput) -> str:
-    # Date prefix prevents using stale context forever while still saving cost during a run.
-    day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    raw = f"{day}|{item.league}|{item.match}|{item.market}|{item.odds}"
-    return re.sub(r"\s+", " ", raw.strip().lower())
-
-
-def _json_from_response(resp: Any) -> Dict[str, Any]:
-    # New SDK exposes output_text. Fallback handles dict-like / message content shapes.
-    text = getattr(resp, "output_text", None)
-    if not text:
-        try:
-            text = resp.output[0].content[0].text
-        except Exception:
-            text = str(resp)
+def _read_csv(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
     try:
-        return json.loads(text)
+        with path.open("r", encoding="utf-8-sig", newline="") as f:
+            return [dict(r) for r in csv.DictReader(f)]
     except Exception:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        raise
+        return []
 
 
-def _fallback_no_api(item: MatchBetInput, reason: str) -> Dict[str, Any]:
+def load_candidate_matches(base_dir: Path, limit: int | None = None) -> List[Dict[str, Any]]:
+    files = [
+        base_dir / "data" / "auto_all_picks.csv",
+        base_dir / "data" / "live_matches.csv",
+        base_dir / "auto_all_picks.csv",
+        base_dir / "live_matches.csv",
+    ]
+    rows: List[Dict[str, Any]] = []
+    seen = set()
+    for file in files:
+        for r in _read_csv(file):
+            match = _first(r, ["match", "mecz", "fixture", "game", "teams", "home_away"])
+            home = _first(r, ["home", "home_team", "gospodarze"])
+            away = _first(r, ["away", "away_team", "goscie", "goście"])
+            if not match and (home or away):
+                match = f"{home} vs {away}".strip()
+            bet = _first(r, ["bet", "pick", "type", "typ", "market", "selection"])
+            odds = _first(r, ["odds", "kurs", "price"])
+            if not match or not bet:
+                continue
+            key = (match.lower(), bet.lower(), str(odds))
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append({
+                "match": match,
+                "bet": bet,
+                "odds": odds or "",
+                "league": _first(r, ["league", "liga"]),
+                "time": _first(r, ["time", "start", "date", "kickoff"]),
+                "source_row": r,
+            })
+            if limit and len(rows) >= limit:
+                return rows
+    return rows
+
+
+def _first(row: Dict[str, Any], keys: List[str]) -> str:
+    lower = {str(k).lower(): v for k, v in row.items()}
+    for k in keys:
+        v = lower.get(k.lower())
+        if v not in (None, "", "nan"):
+            return str(v)
+    return ""
+
+
+def _safe_name(text: str) -> str:
+    text = re.sub(r"[^a-zA-Z0-9_-]+", "_", text)[:120]
+    return text or "match"
+
+
+def _cache_path(base_dir: Path, item: Dict[str, Any]) -> Path:
+    return base_dir / CACHE_DIR / f"{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
+
+
+def _load_cache(base_dir: Path, item: Dict[str, Any], ttl_seconds: int = 1800):
+    p = _cache_path(base_dir, item)
+    if not p.exists():
+        return None
+    try:
+        if time.time() - p.stat().st_mtime > ttl_seconds:
+            return None
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _save_cache(base_dir: Path, item: Dict[str, Any], data: Dict[str, Any]):
+    p = _cache_path(base_dir, item)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _prompt(item: Dict[str, Any]) -> str:
+    return f"""
+Jesteś profesjonalnym analitykiem zakładów sportowych. Oceń, czy wskazany zakład jest warty grania.
+
+Mecz: {item.get('match')}
+Liga: {item.get('league')}
+Termin: {item.get('time')}
+Typ zakładu: {item.get('bet')}
+Kurs: {item.get('odds')}
+
+Wykorzystaj aktualnie dostępne informacje z internetu: forma drużyn, styl gry, kontuzje, zawieszenia, rotacje, atmosfera w klubie, terminarz, motywacja, newsy, przewidywane składy, H2H i ryzyko pułapki bukmacherskiej.
+
+Zwróć WYŁĄCZNIE poprawny JSON bez markdown:
+{{
+  "decision": "PLAY albo SKIP",
+  "confidence": 0-100,
+  "value_score": 0-10,
+  "risk": "low albo medium albo high",
+  "summary": "krótka decyzja po polsku",
+  "analysis": {{
+    "forma": "opis po polsku",
+    "kontuzje_kadra": "opis po polsku",
+    "styl_matchup": "opis po polsku",
+    "motywacja_atmosfera": "opis po polsku",
+    "value_kurs": "opis po polsku",
+    "ryzyka": "opis po polsku",
+    "rekomendacja": "opis po polsku"
+  }}
+}}
+""".strip()
+
+
+def _fallback_analysis(item: Dict[str, Any], reason: str = "") -> Dict[str, Any]:
     return {
-        "play": False,
-        "ako_candidate": False,
-        "single_candidate": False,
+        "match": item.get("match", ""),
+        "bet": item.get("bet", ""),
+        "odds": item.get("odds", ""),
+        "league": item.get("league", ""),
+        "time": item.get("time", ""),
+        "decision": "SKIP",
         "confidence": 0,
-        "value_rating": 0,
-        "risk": "NO_BET",
-        "recommended_action": "SKIP",
-        "fair_odds_estimate": 0,
-        "model_probability_estimate": 0,
-        "context_summary": "Analiza GPT-web nie została wykonana.",
-        "positive_factors": [],
-        "negative_factors": [reason],
-        "missing_info": ["Brak aktualnej analizy kontekstowej z internetu."],
-        "reason": reason,
-        "sources_used": [],
-        "evaluated_at": now_iso(),
-        "match": item.match,
-        "market": item.market,
-        "odds": item.odds,
-        "league": item.league,
+        "value_score": 0,
+        "risk": "high",
+        "summary": "Brak pełnej analizy GPT — sprawdź OPENAI_API_KEY albo uruchom analizę ponownie.",
+        "analysis": {
+            "forma": "Analiza nie została wykonana.",
+            "kontuzje_kadra": "Brak danych GPT.",
+            "styl_matchup": "Brak danych GPT.",
+            "motywacja_atmosfera": "Brak danych GPT.",
+            "value_kurs": "Brak danych GPT.",
+            "ryzyka": reason or "Brak odpowiedzi modelu.",
+            "rekomendacja": "Nie grać bez ręcznej weryfikacji.",
+        },
     }
 
 
-def evaluate_match_bet(item: MatchBetInput, *, model: str = DEFAULT_MODEL, use_cache: bool = True) -> Dict[str, Any]:
-    """Evaluate one proposed bet using OpenAI web search.
-
-    Requires OPENAI_API_KEY. Returns a JSON-serializable dict.
-    """
-    if OpenAI is None:
-        return _fallback_no_api(item, "Biblioteka openai nie jest zainstalowana. Dodaj `openai` do requirements.txt.")
-    if not os.getenv("OPENAI_API_KEY"):
-        return _fallback_no_api(item, "Brak OPENAI_API_KEY w zmiennych środowiskowych.")
-
-    cache = _load_cache() if use_cache else {}
-    key = _cache_key(item)
-    if use_cache and key in cache:
-        cached = dict(cache[key])
-        cached["cache_hit"] = True
+def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, Any]:
+    cached = _load_cache(base_dir, item)
+    if cached:
         return cached
 
-    client = OpenAI()
-    payload = asdict(item)
-    prompt = f"""
-Jesteś konserwatywnym analitykiem piłkarskim i risk managerem zakładów sportowych.
-Masz ocenić JEDEN zaproponowany zakład na podstawie aktualnych publicznych informacji z internetu, NIE na podstawie wewnętrznych statystyk bota.
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        data = _fallback_analysis(item, "Nie ustawiono OPENAI_API_KEY w .env / zmiennych środowiskowych.")
+        _save_cache(base_dir, item, data)
+        return data
 
-Zadanie:
-1. Wyszukaj aktualny kontekst meczu: forma drużyn, styl gry, kontuzje, zawieszenia, przewidywane składy, rotacje, terminarz, motywacja, atmosfera/news, H2H tylko pomocniczo, pogoda jeśli istotna.
-2. Oceń, czy konkretny zakład ma value przy podanym kursie.
-3. Bądź ostrożny: jeśli brakuje świeżych informacji, obniż confidence i wpisz to w missing_info.
-4. Nie obiecuj zysku. Nie traktuj kursu jako dowodu, tylko jako cenę do oceny value.
-5. Zwróć wyłącznie JSON zgodny ze schematem.
-
-Dane zakładu:
-{json.dumps(payload, ensure_ascii=False, indent=2)}
-""".strip()
-
-    resp = client.responses.create(
-        model=model,
-        input=prompt,
-        tools=[{"type": "web_search"}],
-        text={"format": {"type": "json_schema", **EVALUATION_SCHEMA}},
-    )
-    data = _json_from_response(resp)
-    data.update({
-        "evaluated_at": now_iso(),
-        "match": item.match,
-        "market": item.market,
-        "odds": item.odds,
-        "league": item.league,
-        "country": item.country,
-        "match_date": item.match_date,
-        "bookmaker": item.bookmaker,
-        "cache_hit": False,
-    })
-    if use_cache:
-        cache[key] = data
-        _save_cache(cache)
-    return data
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        model = os.getenv("GPT_ANALYSIS_MODEL", "gpt-4.1-mini")
+        response = client.responses.create(
+            model=model,
+            tools=[{"type": "web_search_preview"}],
+            input=_prompt(item),
+        )
+        text = getattr(response, "output_text", "") or ""
+        parsed = _parse_json(text)
+        data = {
+            "match": item.get("match", ""),
+            "bet": item.get("bet", ""),
+            "odds": item.get("odds", ""),
+            "league": item.get("league", ""),
+            "time": item.get("time", ""),
+            **parsed,
+        }
+        data["confidence"] = int(float(data.get("confidence", 0) or 0))
+        data["value_score"] = float(data.get("value_score", 0) or 0)
+        data["decision"] = str(data.get("decision", "SKIP")).upper()
+        _save_cache(base_dir, item, data)
+        return data
+    except Exception as e:
+        data = _fallback_analysis(item, str(e))
+        _save_cache(base_dir, item, data)
+        return data
 
 
-def evaluate_many(items: Iterable[MatchBetInput], *, limit: int = DEFAULT_MAX_MATCHES, model: str = DEFAULT_MODEL) -> List[Dict[str, Any]]:
-    results: List[Dict[str, Any]] = []
-    for idx, item in enumerate(list(items)[:limit]):
-        results.append(evaluate_match_bet(item, model=model))
-        if idx < limit - 1 and DEFAULT_SLEEP_SECONDS > 0:
-            time.sleep(DEFAULT_SLEEP_SECONDS)
-    return results
+def _parse_json(text: str) -> Dict[str, Any]:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?", "", text).strip()
+        text = re.sub(r"```$", "", text).strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        m = re.search(r"\{.*\}", text, flags=re.S)
+        if m:
+            return json.loads(m.group(0))
+        raise ValueError("Model nie zwrócił poprawnego JSON.")
+
+
+def run_full_gpt_analysis(base_dir: Path, limit: int | None = None) -> Dict[str, Any]:
+    base_dir = Path(base_dir)
+    candidates = load_candidate_matches(base_dir, limit=limit)
+    analyses = [analyze_match_with_gpt(base_dir, item) for item in candidates]
+    coupons = build_ako_coupons(analyses)
+    report = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "count": len(analyses),
+        "analyses": analyses,
+        "coupons": coupons,
+    }
+    out = base_dir / REPORT_FILE
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    return report
+
+
+def load_latest_report(base_dir: Path) -> Dict[str, Any]:
+    path = Path(base_dir) / REPORT_FILE
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    candidates = load_candidate_matches(Path(base_dir), limit=25)
+    return {
+        "generated_at": None,
+        "count": 0,
+        "analyses": [],
+        "coupons": [],
+        "message": "Brak gotowej analizy. Kliknij 'Uruchom analizę GPT'.",
+        "candidates_found": len(candidates),
+    }
+
+
+if __name__ == "__main__":
+    print(json.dumps(run_full_gpt_analysis(Path(__file__).resolve().parent), ensure_ascii=False, indent=2))

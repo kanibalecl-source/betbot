@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANALIZA GPT</title>
+  <link rel="stylesheet" href="/static/css/gpt_analysis.css">
+</head>
+<body>
+  <main class="gpt-wrap">
+    <header class="gpt-header">
+      <div>
+        <p class="gpt-kicker">KANIBAL BOT</p>
+        <h1>ANALIZA GPT</h1>
+        <p class="gpt-sub">Opisowa ocena meczów, value, ryzyka oraz kupony AKO.</p>
+      </div>
+      <div class="gpt-actions">
+        <a class="gpt-btn ghost" href="/">← Dashboard</a>
+        <button class="gpt-btn" id="runBtn">Uruchom analizę GPT</button>
+      </div>
+    </header>
+
+    <section class="gpt-status" id="statusBox">Ładowanie danych...</section>
+
+    <section class="gpt-grid">
+      <div class="gpt-card wide">
+        <div class="gpt-card-head">
+          <h2>Mecze ocenione przez GPT</h2>
+          <span id="generatedAt"></span>
+        </div>
+        <div class="table-scroll">
+          <table class="gpt-table">
+            <thead>
+              <tr>
+                <th>Mecz</th><th>Typ</th><th>Kurs</th><th>Confidence</th><th>Value</th><th>Ryzyko</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="analysisRows"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <aside class="gpt-card">
+        <h2>Kupony AKO</h2>
+        <div id="couponsBox" class="coupons"></div>
+      </aside>
+    </section>
+
+    <section class="gpt-card report-card">
+      <h2>Opisowa analiza GPT</h2>
+      <div id="reportBox" class="report-empty">Kliknij mecz z tabeli, aby zobaczyć pełny raport opisowy.</div>
+    </section>
+  </main>
+
+  <script src="/static/js/gpt_analysis.js"></script>
+</body>
+</html>

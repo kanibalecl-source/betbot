@@ -86,6 +86,15 @@ def play():
     return redirect(url_for("index"))
 
 
+# ===== ANALIZA GPT TAB - SAFE ADDON =====
+try:
+    from gpt_analysis_tab import register_gpt_analysis_routes
+    register_gpt_analysis_routes(app, BASE_DIR)
+except Exception as e:
+    print(f"GPT ANALIZA TAB INIT ERROR: {e}")
+# ===== /ANALIZA GPT TAB =====
+
+
 @app.route("/health")
 def health():
     return {"ok": True}
