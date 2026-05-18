@@ -14,31 +14,6 @@ except Exception:
 
 st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 
-# WORKING AIWATCH BUTTON
-st.markdown("""
-<style>
-div[data-testid="stButton"] button{
-width:148px!important;
-height:58px!important;
-border-radius:18px!important;
-background:rgba(14,40,10,.92)!important;
-border:1px solid rgba(108,255,41,.35)!important;
-color:#7CFF2B!important;
-font-size:15px!important;
-font-weight:950!important;
-letter-spacing:.05em!important;
-text-transform:uppercase!important;
-box-shadow:0 0 18px rgba(108,255,41,.08)!important;
-transition:.18s ease!important;
-}
-div[data-testid="stButton"] button:hover{
-background:rgba(20,58,14,.98)!important;
-box-shadow:0 0 24px rgba(108,255,41,.18)!important;
-color:#7CFF2B!important;
-}
-</style>
-""", unsafe_allow_html=True)
-
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -475,53 +450,14 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         )
         st.markdown(row_html, unsafe_allow_html=True)
 
-        if st.button(status_label, key=f"btn_{key}"):
+        status_click = st.button(
+            status_label,
+            key=f"btn_{key}",
+            use_container_width=False
+        )
 
-            st.session_state[f"details_{key}"] = not st.session_state.get(f"details_{key}", False)
-
-        if st.session_state.get(f"details_{key}", False):
-
-            xg_home = row.get("xg_home", row.get("home_xg", 0))
-            xg_away = row.get("xg_away", row.get("away_xg", 0))
-            bot_odds = row.get("bot_odds", row.get("fair_odds", "-"))
-            market_odds = row.get("market_odds", row.get("odds", "-"))
-            bookmaker_margin = row.get("bookmaker_margin", row.get("margin", "-"))
-
-            st.markdown(f"""
-            <div class="ai-details-box">
-                <div class="ai-details-grid">
-
-                    <div class="ai-kpi">
-                        <div class="ai-kpi-label">xG HOME</div>
-                        <div class="ai-kpi-value">{xg_home}</div>
-                    </div>
-
-                    <div class="ai-kpi">
-                        <div class="ai-kpi-label">xG AWAY</div>
-                        <div class="ai-kpi-value">{xg_away}</div>
-                    </div>
-
-                    <div class="ai-kpi">
-                        <div class="ai-kpi-label">BOT ODDS</div>
-                        <div class="ai-kpi-value">{bot_odds}</div>
-                    </div>
-
-                    <div class="ai-kpi">
-                        <div class="ai-kpi-label">BOOK ODDS</div>
-                        <div class="ai-kpi-value">{market_odds}</div>
-                    </div>
-
-                    <div class="ai-kpi">
-                        <div class="ai-kpi-label">BOOKMAKER MARGIN</div>
-                        <div class="ai-kpi-value">{bookmaker_margin}</div>
-                    </div>
-
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-
-        
+        if status_click:
+            st.session_state[key] = not st.session_state[key]
 
         if st.session_state.get(key):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
