@@ -53,13 +53,6 @@ def run_prematch():
             except Exception as live_error:
                 print(f"❌ LIVE SCHEDULER PIPELINE ERROR: {live_error}")
 
-            try:
-                from ai_autonomous_picks_engine import run_once as run_ai_picks_once
-                ai_count = run_ai_picks_once()
-                print(f"✅ AI AUTONOMOUS PICKS OK | picks={ai_count}")
-            except Exception as ai_error:
-                print(f"❌ AI AUTONOMOUS PICKS ERROR: {ai_error}")
-
             print("✅ LIVE SAVED")
             print("💓 SCHEDULER LOOP OK")
 
@@ -90,3 +83,13 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# === AUTONOMOUS AI BOOTSTRAP ===
+try:
+    from ai_autonomous_runtime import bootstrap_ai_picks
+    bootstrap_ai_picks()
+    print("[AI] autonomous bootstrap active")
+except Exception as e:
+    print("[AI] bootstrap error:", e)
+
