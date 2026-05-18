@@ -47,6 +47,14 @@ def run_prematch():
             sys.stdout.flush()
 
             try:
+                from ai_autonomous_picks_engine import run_once as run_ai_picks_once
+                ai_count = run_ai_picks_once()
+                print(f"✅ AI AUTONOMOUS PICKS OK | rows={ai_count}")
+            except Exception as ai_error:
+                print(f"❌ AI AUTONOMOUS PICKS ERROR: {ai_error}")
+
+
+            try:
                 from live_pipeline_runtime import run_once as run_live_pipeline_once
                 live_count = run_live_pipeline_once()
                 print(f"✅ LIVE SCHEDULER PIPELINE OK | active={live_count}")
@@ -83,13 +91,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# === AUTONOMOUS AI BOOTSTRAP ===
-try:
-    from ai_autonomous_runtime import bootstrap_ai_picks
-    bootstrap_ai_picks()
-    print("[AI] autonomous bootstrap active")
-except Exception as e:
-    print("[AI] bootstrap error:", e)
 
