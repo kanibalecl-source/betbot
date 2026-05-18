@@ -1,30 +1,96 @@
 <!DOCTYPE html>
-<html><head><title>ANALIZA GPT</title>
+<html>
+<head>
+<meta charset="utf-8">
+<title>GPT ANALYSIS</title>
+
 <style>
-body {background:#111;color:white;font-family:Arial;padding:20px;}
-.card {background:#1d1d1d;padding:20px;margin-bottom:20px;border-radius:10px;}
-.green{color:#00ff88;}.red{color:#ff4d4d;}
-</style></head><body>
-<h1>ANALIZA GPT</h1>
-<div id="matches"></div>
+body{
+    background:#0f1117;
+    color:white;
+    font-family:Arial;
+    padding:30px;
+}
+
+.card{
+    background:#1b1f2b;
+    border-radius:16px;
+    padding:20px;
+    margin-bottom:20px;
+    box-shadow:0 0 20px rgba(0,255,136,0.08);
+}
+
+.play{
+    color:#00ff88;
+    font-weight:bold;
+}
+
+.skip{
+    color:#ff4d4d;
+    font-weight:bold;
+}
+
+.title{
+    color:#9eff00;
+}
+</style>
+
+</head>
+<body>
+
+<h1 class="title">🧠 GPT ANALYSIS</h1>
+
+<div id="app"></div>
+
 <script>
+
 fetch('/api/gpt-analysis')
 .then(r=>r.json())
 .then(data=>{
-let html='';
-data.matches.forEach(match=>{
-html += `
-<div class="card">
-<h2>${match.match}</h2>
-<p><b>Typ:</b> ${match.bet}</p>
-<p><b>Confidence:</b> ${match.confidence}%</p>
-<p><b>Value:</b> ${match.value}</p>
-<p><b>Risk:</b> ${match.risk}</p>
-<p><b>Status:</b> <span class="${match.status === 'PLAY' ? 'green' : 'red'}">${match.status}</span></p>
-<hr><p>${match.analysis}</p></div>`;
+
+    let html='';
+
+    data.matches.forEach(match=>{
+
+        html += `
+        <div class="card">
+
+            <h2>${match.match}</h2>
+
+            <p><b>BET:</b> ${match.bet}</p>
+            <p><b>CONFIDENCE:</b> ${match.confidence}%</p>
+            <p><b>VALUE:</b> ${match.value}</p>
+            <p><b>RISK:</b> ${match.risk}</p>
+
+            <p class="${match.status === 'PLAY' ? 'play' : 'skip'}">
+                ${match.status}
+            </p>
+
+            <hr>
+
+            <p style="line-height:1.7;">
+                ${match.analysis}
+            </p>
+
+        </div>
+        `;
+    });
+
+    html += `<div class="card">
+        <h2 class="title">💎 SAFE AKO</h2>
+    `;
+
+    data.ako.safe.forEach(pick=>{
+        html += `<p>${pick}</p>`;
+    });
+
+    html += `</div>`;
+
+    document.getElementById('app').innerHTML = html;
+
 });
-html += '<h2>SAFE AKO</h2>';
-data.ako.safe.forEach(pick=>{html += `<div class="card">${pick}</div>`;});
-document.getElementById('matches').innerHTML=html;
-});
-</script></body></html>
+
+</script>
+
+</body>
+</html>

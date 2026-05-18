@@ -1,22 +1,14 @@
+1. Wgraj gpt_analysis_tab.py do glownego folderu bota.
+2. Wgraj templates/gpt_analysis.html do folderu templates.
+3. W app.py dodaj IMPORT:
 
-NADPISANIE BLOKU BADGE
+from gpt_analysis_tab import register_gpt_analysis_routes
 
-1. Otwórz dashboard_streamlit.py
+4. POD:
+app = Flask(__name__)
 
-2. Znajdź:
-with st.expander(f"📊 {match_name}"):
+dodaj:
+register_gpt_analysis_routes(app)
 
-3. POD TYM wklej zawartość:
-dashboard_badge_block.py
-
-4. Usuń stare uszkodzone badge block jeśli istnieją.
-
-5. Deploy:
-git add .
-git commit -m "safe dashboard render fix"
-git push
-
-Ta wersja:
-- nie psuje renderowania,
-- pokazuje badge dla każdego meczu,
-- zachowuje obecną kolorystykę.
+5. Wejdz:
+https://twoj-bot.up.railway.app/gpt-analysis
