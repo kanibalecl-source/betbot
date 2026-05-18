@@ -1,0 +1,5 @@
+1. Wgraj wszystkie pliki na Railway.
+2. Nadpisz istniejące pliki.
+3. Railway zrobi automatyczny deploy.
+4. GPT jest odseparowane od glownego dashboardu.
+5. Oryginalny dashboard zostal przywrocony z backupu.
