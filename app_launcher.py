@@ -11,10 +11,10 @@ sys.stdout.flush()
 PORT = os.environ.get("PORT", "8080")
 
 PROCESS_SPECS = {
+    "persistence": ["python3", "persistence_runtime.py"],
     "scheduler": ["python3", "scheduler_engine.py"],
     "live_pipeline": ["python3", "live_pipeline_runtime.py"],
     "settlement": ["python3", "settle_loop.py"],
-    "persistence": ["python3", "persistence_runtime.py"],
     "retraining": ["python3", "auto_retraining_loop.py"],
     "dashboard": [
         "python3", "-m", "streamlit", "run", "dashboard_streamlit.py",
