@@ -7,6 +7,13 @@ import pandas as pd
 import streamlit as st
 
 try:
+    from gpt_streamlit_panel import render_gpt_tab
+except Exception:
+    def render_gpt_tab(base_dir=None):
+        st.warning("Moduł GPT nie został załadowany.")
+
+
+try:
     from auth_manager import require_login
 except Exception:
     def require_login():
@@ -234,7 +241,14 @@ def load_results() -> pd.DataFrame:
         df = read_csv_safe(path)
         if not df.empty:
             frames.append(df)
-    return pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
+    try:
+        from agi_storage import load_history_dataframe
+        storage_df = load_history_dataframe()
+        if storage_df is not None and not storage_df.empty:
+            frames.append(storage_df)
+    except Exception:
+        pass
+    return pd.concat(frames, ignore_index=True, sort=False).drop_duplicates() if frames else pd.DataFrame()
 
 
 def b64_image(path: Path) -> str:
@@ -293,46 +307,6 @@ margin-left:auto;
 .ai-detail-final-value{color:#fff;font-size:18px;font-weight:950}
 .ai-detail-final-note{color:#a7b8af;font-size:12px;line-height:1.45;font-weight:650;margin-top:14px}
 @media(max-width:900px){.ai-table-final-head{display:none}.ai-table-final-row{grid-template-columns:1fr;gap:6px;padding:12px 0}.ai-table-final-row div{padding:4px 14px}.ai-detail-final-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
-
-/* ===== AI ENGINE DETAILS ===== */
-.ai-engine-grid{
-display:grid;
-grid-template-columns:repeat(3,minmax(0,1fr));
-gap:16px;
-margin:18px 0 10px;
-}
-.ai-engine-card{
-background:linear-gradient(180deg,#0a0f17,#070b12);
-border:1px solid rgba(124,255,43,.18);
-border-radius:18px;
-padding:18px;
-box-shadow:0 0 24px rgba(124,255,43,.05);
-}
-.ai-engine-title{
-color:#7CFF2B;
-font-size:17px;
-font-weight:950;
-letter-spacing:.05em;
-margin-bottom:14px;
-text-transform:uppercase;
-}
-.ai-engine-line{
-display:flex;
-justify-content:space-between;
-gap:12px;
-margin-bottom:10px;
-}
-.ai-engine-label{
-color:#d6dde2;
-font-size:14px;
-font-weight:800;
-}
-.ai-engine-value{
-color:#ffffff;
-font-size:14px;
-font-weight:900;
-}
 
 </style>
 ''', unsafe_allow_html=True)
@@ -603,7 +577,7 @@ live = load_live_data(picks)
 results = load_results()
 ai_picks = load_ai_picks(picks)
 
-tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS"])
+tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS", "🤖 GPT"])
 with tabs[0]: render_live(live, picks)
 with tabs[1]: render_prematch(picks)
 with tabs[2]: render_ai(ai_picks, results)
@@ -612,4 +586,5 @@ with tabs[4]: render_history(results)
 with tabs[5]: render_ranking(picks, results)
 with tabs[6]: render_alerts(picks, live)
 with tabs[7]: render_settings()
+with tabs[8]: render_gpt_tab(BASE_DIR)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
