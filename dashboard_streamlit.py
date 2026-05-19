@@ -465,7 +465,11 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
     for idx, row in shown.iterrows():
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         edge = first_existing(row, ["ev", "edge", "value"], "-")
-        status_label = str(first_existing(row, ["status"], "AI STRONG" if conf >= 75 else "AI VALUE" if conf >= 60 else "AI WATCH"))
+        status_label = (
+            "PERFECT" if conf >= 85
+            else "NORMAL" if conf >= 65
+            else "RISK"
+        )
         league = first_existing(row, ["liga", "league"], "-")
         match = first_existing(row, ["mecz", "match"], "-")
         market = fmt_market(first_existing(row, ["typ", "market"], "-"))
@@ -494,11 +498,7 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         )
         st.markdown(row_html, unsafe_allow_html=True)
 
-        status_click = st.button(
-            status_label,
-            key=f"btn_{key}",
-            use_container_width=False
-        )
+
 
         if status_click:
             st.session_state[key] = not st.session_state[key]
