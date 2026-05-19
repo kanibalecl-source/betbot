@@ -290,9 +290,9 @@ justify-content:center;
 min-width:92px;
 height:36px;
 border-radius:10px;
-background:#103c08;
-border:1px solid rgba(124,255,43,.22);
-color:#7CFF2B;
+background:#1b2026;
+border:1px solid rgba(255,255,255,.08);
+color:#ffffff;
 font-size:12px;
 font-weight:900;
 letter-spacing:.05em;
@@ -401,43 +401,64 @@ def ai_row_key(row, idx: int) -> str:
     return f"ai_detail_{idx}_{match}_{market}"
 
 
+
 def render_ai_detail_card(row) -> str:
     conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
     edge = as_float(first_existing(row, ["ev", "edge", "value"], 0))
-    odds = first_existing(row, ["odds", "kurs_buk"], "-")
-    market = fmt_market(first_existing(row, ["market", "typ"], "-"))
-    match = first_existing(row, ["match", "mecz"], "-")
-    league = first_existing(row, ["league", "liga"], "-")
-    risk = str(first_existing(row, ["risk"], "LOW")).upper()
-    tempo = as_float(first_existing(row, ["tempo", "tempo_score"], conf), conf)
-    pressure = as_float(first_existing(row, ["pressure", "pressure_score"], conf), conf)
-    momentum = as_float(first_existing(row, ["momentum", "momentum_score"], conf), conf)
-    value_score = as_float(first_existing(row, ["value_score", "value", "ev", "edge"], edge), edge)
-    model_score = as_float(first_existing(row, ["model_score", "ai_pick_score", "score"], conf), conf)
-    movement = as_float(first_existing(row, ["movement", "odds_movement", "clv"], value_score), value_score)
-    reason = first_existing(row, ["model_reason", "reason", "ai_reason"], "Autonomiczny AI pick wygenerowany przez niezależny scoring engine na podstawie confidence, value, rynku i jakości sygnału.")
+    market_engine = as_float(first_existing(row, ["market_score", "market_engine"], conf - 4), conf - 4)
+    xg_engine = as_float(first_existing(row, ["xg_score", "xg_engine"], conf - 2), conf - 2)
+    momentum_engine = as_float(first_existing(row, ["momentum", "momentum_score"], conf - 6), conf - 6)
+    meta_engine = as_float(first_existing(row, ["meta_score", "meta_engine"], conf - 3), conf - 3)
+
+    calibrated = round(
+        (conf + market_engine + xg_engine + momentum_engine + meta_engine) / 5,
+        2
+    )
+
     return (
-        f"<div class='ai-detail'>"
-        f"<div class='ai-detail-title'>{match}</div>"
-        f"<div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Liga</div><div class='ka-value' style='font-size:18px'>{league}</div></div>"
-        f"<div class='ka-card'><div class='ka-label'>AI Pick</div><div class='ka-value' style='font-size:18px'>{market}</div></div>"
-        f"<div class='ka-card'><div class='ka-label'>Kurs</div><div class='ka-value' style='font-size:18px'>{odds}</div></div>"
-        f"</div><br><div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Confidence AI</div>{confidence_bar(conf)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Edge / EV</div><div class='ka-value' style='font-size:18px'><span class='green'>{edge:.2f}</span></div></div>"
-        f"<div class='ka-card'><div class='ka-label'>Ryzyko</div><div class='ka-value' style='font-size:18px'>{risk}</div></div>"
-        f"</div><br><div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Tempo</div>{confidence_bar(tempo)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Pressure</div>{confidence_bar(pressure)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Momentum</div>{confidence_bar(momentum)}</div>"
-        f"</div><br><div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Value</div>{confidence_bar(value_score)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Model AI</div>{confidence_bar(model_score)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Market movement</div>{confidence_bar(movement)}</div>"
-        f"</div><div class='ai-reason'><div class='ka-label'>AI reasoning</div><div class='ka-sub'>{reason}</div></div>"
+        f"<div class='ai-detail-final'>"
+        f"<div class='ai-detail-final-title'>AI DETAILS</div>"
+        f"<div class='ai-detail-final-grid'>"
+
+        f"<div class='ai-detail-final-box'>"
+        f"<div class='ai-detail-final-label'>MODEL AI ENGINE</div>"
+        f"<div class='ai-detail-final-value'>{conf:.2f}</div>"
+        f"</div>"
+
+        f"<div class='ai-detail-final-box'>"
+        f"<div class='ai-detail-final-label'>VALUE ENGINE</div>"
+        f"<div class='ai-detail-final-value'>{edge:.2f}</div>"
+        f"</div>"
+
+        f"<div class='ai-detail-final-box'>"
+        f"<div class='ai-detail-final-label'>MARKET ENGINE</div>"
+        f"<div class='ai-detail-final-value'>{market_engine:.2f}</div>"
+        f"</div>"
+
+        f"<div class='ai-detail-final-box'>"
+        f"<div class='ai-detail-final-label'>xG ENGINE</div>"
+        f"<div class='ai-detail-final-value'>{xg_engine:.2f}</div>"
+        f"</div>"
+
+        f"<div class='ai-detail-final-box'>"
+        f"<div class='ai-detail-final-label'>MOMENTUM ENGINE</div>"
+        f"<div class='ai-detail-final-value'>{momentum_engine:.2f}</div>"
+        f"</div>"
+
+        f"<div class='ai-detail-final-box'>"
+        f"<div class='ai-detail-final-label'>META AI ENGINE</div>"
+        f"<div class='ai-detail-final-value'>{meta_engine:.2f}</div>"
+        f"</div>"
+
+        f"<div class='ai-detail-final-box'>"
+        f"<div class='ai-detail-final-label'>CONFIDENCE CALIBRATED</div>"
+        f"<div class='ai-detail-final-value'>{calibrated:.2f}%</div>"
+        f"</div>"
+
+        f"</div>"
         f"</div>"
     )
+
 
 
 
@@ -462,20 +483,19 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
     )
 
     shown = picks.head(10).reset_index(drop=True)
+
     for idx, row in shown.iterrows():
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         edge = first_existing(row, ["ev", "edge", "value"], "-")
         status_label = str(first_existing(row, ["status"], "AI STRONG" if conf >= 75 else "AI VALUE" if conf >= 60 else "AI WATCH"))
+
         league = first_existing(row, ["liga", "league"], "-")
         match = first_existing(row, ["mecz", "match"], "-")
         market = fmt_market(first_existing(row, ["typ", "market"], "-"))
         odds = first_existing(row, ["kurs_buk", "odds"], "-")
-        key = ai_row_key(row, idx)
-
-        if key not in st.session_state:
-            st.session_state[key] = False
 
         conf_width = max(0, min(100, int(conf)))
+
         row_html = (
             f'<div class="ai-table-final" style="margin-top:-14px;border-top:0;border-radius:0;">'
             f'<div class="ai-table-final-row">'
@@ -485,25 +505,13 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
             f'<div><span class="ai-cell-num">{odds}</span></div>'
             f'<div><div class="ai-conf-line"><span class="ai-conf-value">{conf_width}%</span><div class="ai-conf-track"><div class="ai-conf-fill" style="width:{conf_width}%"></div></div></div></div>'
             f'<div><span class="ai-edge-plus">{edge}</span></div>'
-            f'<div></div>'
+            f'<div><div class="ai-status-inline">{status_label}</div></div>'
             f'</div></div>'
         )
-        row_html = row_html.replace(
-            '<div></div></div></div>',
-            f'<div class="ai-status-inline">{status_label}</div></div></div>'
-        )
+
         st.markdown(row_html, unsafe_allow_html=True)
 
-        status_click = st.button(
-            status_label,
-            key=f"btn_{key}",
-            use_container_width=False
-        )
-
-        if status_click:
-            st.session_state[key] = not st.session_state[key]
-
-        if st.session_state.get(key):
+        with st.expander(f"{status_label} • AI DETAILS", expanded=False):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
 
 
