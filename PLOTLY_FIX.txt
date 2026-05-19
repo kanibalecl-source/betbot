@@ -1,0 +1,2 @@
+Usunięto import plotly.graph_objects as go.
+Upgrade wykresów działa bez biblioteki Plotly.
