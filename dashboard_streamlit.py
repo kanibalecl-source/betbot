@@ -7,13 +7,6 @@ import pandas as pd
 import streamlit as st
 
 try:
-    from gpt_streamlit_panel import render_gpt_tab
-except Exception:
-    def render_gpt_tab(base_dir=None):
-        st.warning("Moduł GPT nie został załadowany.")
-
-
-try:
     from auth_manager import require_login
 except Exception:
     def require_login():
@@ -241,14 +234,7 @@ def load_results() -> pd.DataFrame:
         df = read_csv_safe(path)
         if not df.empty:
             frames.append(df)
-    try:
-        from agi_storage import load_history_dataframe
-        storage_df = load_history_dataframe()
-        if storage_df is not None and not storage_df.empty:
-            frames.append(storage_df)
-    except Exception:
-        pass
-    return pd.concat(frames, ignore_index=True, sort=False).drop_duplicates() if frames else pd.DataFrame()
+    return pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
 
 
 def b64_image(path: Path) -> str:
@@ -307,6 +293,66 @@ margin-left:auto;
 .ai-detail-final-value{color:#fff;font-size:18px;font-weight:950}
 .ai-detail-final-note{color:#a7b8af;font-size:12px;line-height:1.45;font-weight:650;margin-top:14px}
 @media(max-width:900px){.ai-table-final-head{display:none}.ai-table-final-row{grid-template-columns:1fr;gap:6px;padding:12px 0}.ai-table-final-row div{padding:4px 14px}.ai-detail-final-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* === FINAL AI DETAILS ENGINE PANEL === */
+.ai-engine-panel{
+    margin:14px 0 18px 0;
+    padding:18px;
+    border-radius:18px;
+    background:linear-gradient(180deg,rgba(8,13,22,.99),rgba(3,7,13,.99));
+    border:1px solid rgba(124,255,43,.20);
+    box-shadow:0 0 28px rgba(124,255,43,.06);
+}
+.ai-engine-grid{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:14px;
+}
+.ai-engine-card{
+    background:linear-gradient(180deg,rgba(10,16,24,.98),rgba(5,9,15,.98));
+    border:1px solid rgba(124,255,43,.18);
+    border-radius:16px;
+    padding:16px;
+}
+.ai-engine-title{
+    color:#7CFF2B;
+    font-size:16px;
+    font-weight:950;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    margin-bottom:14px;
+}
+.ai-engine-row{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:7px 0;
+    border-bottom:1px solid rgba(255,255,255,.055);
+}
+.ai-engine-row:last-child{border-bottom:0}
+.ai-engine-label{
+    color:#9aa79f;
+    font-size:12px;
+    font-weight:850;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+}
+.ai-engine-value{
+    color:#fff;
+    font-size:13px;
+    font-weight:950;
+    text-align:right;
+}
+.ai-engine-value.green{color:#7CFF2B}
+.ai-engine-note{
+    margin-top:14px;
+    color:#a7b8af;
+    font-size:12px;
+    line-height:1.45;
+    font-weight:650;
+}
+@media(max-width:1100px){.ai-engine-grid{grid-template-columns:1fr}}
 
 </style>
 ''', unsafe_allow_html=True)
@@ -371,45 +417,115 @@ def ai_row_key(row, idx: int) -> str:
     return f"ai_detail_{idx}_{match}_{market}"
 
 
+
 def render_ai_detail_card(row) -> str:
-    conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
-    edge = as_float(first_existing(row, ["ev", "edge", "value"], 0))
-    odds = first_existing(row, ["odds", "kurs_buk"], "-")
-    market = fmt_market(first_existing(row, ["market", "typ"], "-"))
-    match = first_existing(row, ["match", "mecz"], "-")
-    league = first_existing(row, ["league", "liga"], "-")
-    risk = str(first_existing(row, ["risk"], "LOW")).upper()
-    tempo = as_float(first_existing(row, ["tempo", "tempo_score"], conf), conf)
-    pressure = as_float(first_existing(row, ["pressure", "pressure_score"], conf), conf)
-    momentum = as_float(first_existing(row, ["momentum", "momentum_score"], conf), conf)
-    value_score = as_float(first_existing(row, ["value_score", "value", "ev", "edge"], edge), edge)
-    model_score = as_float(first_existing(row, ["model_score", "ai_pick_score", "score"], conf), conf)
-    movement = as_float(first_existing(row, ["movement", "odds_movement", "clv"], value_score), value_score)
-    reason = first_existing(row, ["model_reason", "reason", "ai_reason"], "Autonomiczny AI pick wygenerowany przez niezależny scoring engine na podstawie confidence, value, rynku i jakości sygnału.")
-    return (
-        f"<div class='ai-detail'>"
-        f"<div class='ai-detail-title'>{match}</div>"
-        f"<div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Liga</div><div class='ka-value' style='font-size:18px'>{league}</div></div>"
-        f"<div class='ka-card'><div class='ka-label'>AI Pick</div><div class='ka-value' style='font-size:18px'>{market}</div></div>"
-        f"<div class='ka-card'><div class='ka-label'>Kurs</div><div class='ka-value' style='font-size:18px'>{odds}</div></div>"
-        f"</div><br><div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Confidence AI</div>{confidence_bar(conf)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Edge / EV</div><div class='ka-value' style='font-size:18px'><span class='green'>{edge:.2f}</span></div></div>"
-        f"<div class='ka-card'><div class='ka-label'>Ryzyko</div><div class='ka-value' style='font-size:18px'>{risk}</div></div>"
-        f"</div><br><div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Tempo</div>{confidence_bar(tempo)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Pressure</div>{confidence_bar(pressure)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Momentum</div>{confidence_bar(momentum)}</div>"
-        f"</div><br><div class='ai-details-grid'>"
-        f"<div class='ka-card'><div class='ka-label'>Value</div>{confidence_bar(value_score)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Model AI</div>{confidence_bar(model_score)}</div>"
-        f"<div class='ka-card'><div class='ka-label'>Market movement</div>{confidence_bar(movement)}</div>"
-        f"</div><div class='ai-reason'><div class='ka-label'>AI reasoning</div><div class='ka-sub'>{reason}</div></div>"
-        f"</div>"
-    )
+    def _fmt_num(value, decimals=2, default="-"):
+        try:
+            if value is None or str(value).strip() == "" or str(value).lower() == "nan":
+                return default
+            return f"{float(value):.{decimals}f}"
+        except Exception:
+            return str(value) if value not in [None, ""] else default
 
+    def _fmt_pct(value, decimals=2, default="-"):
+        try:
+            if value is None or str(value).strip() == "" or str(value).lower() == "nan":
+                return default
+            v = float(value)
+            if abs(v) <= 1:
+                v *= 100
+            return f"{v:.{decimals}f}%"
+        except Exception:
+            return str(value) if value not in [None, ""] else default
 
+    match = first_existing(row, ["match", "mecz", "fixture"], "-")
+    market = fmt_market(first_existing(row, ["market", "typ", "ai_pick"], "-"))
+
+    confidence = first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score", "score"], 0)
+    calibrated = first_existing(row, ["calibrated", "calibrated_confidence", "calibrated_prob"], confidence)
+    model_prob = first_existing(row, ["model_prob", "model_probability", "prob_model"], confidence)
+    final_prob = first_existing(row, ["final_prob", "final_probability", "prob_final"], confidence)
+
+    ev = first_existing(row, ["ev", "EV", "value"], 0)
+    edge = first_existing(row, ["edge", "EDGE", "value_edge", "value"], ev)
+    kelly = first_existing(row, ["kelly", "kelly_fraction", "stake_kelly"], 0)
+
+    home_xg = first_existing(row, ["home_xg", "xg_home", "HOME xG", "xG HOME", "xg_gospodarze"], "-")
+    away_xg = first_existing(row, ["away_xg", "xg_away", "AWAY xG", "xG AWAY", "xg_goscie"], "-")
+
+    try:
+        adv_total_xg = float(home_xg) + float(away_xg)
+    except Exception:
+        adv_total_xg = first_existing(row, ["adv_total_xg", "total_xg", "ADV TOTAL xG"], "-")
+
+    adv_over25 = first_existing(row, ["adv_over25", "adv_over_2_5", "over25_probability", "ADV OVER 2.5"], "-")
+
+    book_odds = first_existing(row, ["book_odds", "bookmaker_odds", "buk_odds", "odds", "kurs_buk"], "-")
+    model_odds = first_existing(row, ["model_odds", "fair_odds", "model_fair_odds"], "-")
+    bot_odds = first_existing(row, ["bot_odds", "ai_odds", "bot_fair_odds"], model_odds)
+
+    sharp = first_existing(row, ["sharp", "sharp_signal", "sharp_label"], "-")
+    meta_prob = first_existing(row, ["meta_prob", "meta_probability"], final_prob)
+    dynamic_stake = first_existing(row, ["dynamic_stake", "stake", "ai_stake"], "-")
+
+    market_weight = first_existing(row, ["market_weight"], "-")
+    xg_weight = first_existing(row, ["xg_weight"], "-")
+    momentum_weight = first_existing(row, ["momentum_weight"], "-")
+
+    momentum_score = first_existing(row, ["momentum", "momentum_score"], "-")
+    pressure_score = first_existing(row, ["pressure", "pressure_score"], "-")
+    tempo_score = first_existing(row, ["tempo", "tempo_score"], "-")
+
+    return f"""
+    <div class="ai-engine-panel">
+        <div class="ai-detail-final-title">AI DETAILS · {match} · {market}</div>
+        <div class="ai-engine-grid">
+            <div class="ai-engine-card">
+                <div class="ai-engine-title">MODEL AI</div>
+                <div class="ai-engine-row"><span class="ai-engine-label">CONFIDENCE</span><span class="ai-engine-value green">{_fmt_pct(confidence)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">CALIBRATED</span><span class="ai-engine-value">{_fmt_pct(calibrated)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">MODEL PROB</span><span class="ai-engine-value">{_fmt_pct(model_prob)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">FINAL PROB</span><span class="ai-engine-value">{_fmt_pct(final_prob)}</span></div>
+            </div>
+            <div class="ai-engine-card">
+                <div class="ai-engine-title">VALUE ENGINE</div>
+                <div class="ai-engine-row"><span class="ai-engine-label">EV</span><span class="ai-engine-value green">{_fmt_num(ev, 4)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">EDGE</span><span class="ai-engine-value green">{_fmt_num(edge, 4)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">KELLY</span><span class="ai-engine-value">{_fmt_num(kelly, 4)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">DYNAMIC STAKE</span><span class="ai-engine-value">{_fmt_num(dynamic_stake, 2)}</span></div>
+            </div>
+            <div class="ai-engine-card">
+                <div class="ai-engine-title">MARKET ENGINE</div>
+                <div class="ai-engine-row"><span class="ai-engine-label">BOOK ODDS</span><span class="ai-engine-value">{book_odds}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">MODEL ODDS</span><span class="ai-engine-value">{model_odds}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">BOT ODDS</span><span class="ai-engine-value green">{bot_odds}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">SHARP</span><span class="ai-engine-value">{sharp}</span></div>
+            </div>
+            <div class="ai-engine-card">
+                <div class="ai-engine-title">xG ENGINE</div>
+                <div class="ai-engine-row"><span class="ai-engine-label">HOME xG</span><span class="ai-engine-value">{_fmt_num(home_xg, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">AWAY xG</span><span class="ai-engine-value">{_fmt_num(away_xg, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">ADV TOTAL xG</span><span class="ai-engine-value green">{_fmt_num(adv_total_xg, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">ADV OVER 2.5</span><span class="ai-engine-value">{_fmt_pct(adv_over25)}</span></div>
+            </div>
+            <div class="ai-engine-card">
+                <div class="ai-engine-title">MOMENTUM ENGINE</div>
+                <div class="ai-engine-row"><span class="ai-engine-label">MOMENTUM</span><span class="ai-engine-value">{_fmt_num(momentum_score, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">PRESSURE</span><span class="ai-engine-value">{_fmt_num(pressure_score, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">TEMPO</span><span class="ai-engine-value">{_fmt_num(tempo_score, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">MOMENTUM WEIGHT</span><span class="ai-engine-value">{_fmt_num(momentum_weight, 2)}</span></div>
+            </div>
+            <div class="ai-engine-card">
+                <div class="ai-engine-title">META AI ENGINE</div>
+                <div class="ai-engine-row"><span class="ai-engine-label">META PROB</span><span class="ai-engine-value green">{_fmt_pct(meta_prob)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">MARKET WEIGHT</span><span class="ai-engine-value">{_fmt_num(market_weight, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">xG WEIGHT</span><span class="ai-engine-value">{_fmt_num(xg_weight, 2)}</span></div>
+                <div class="ai-engine-row"><span class="ai-engine-label">DYNAMIC STAKE</span><span class="ai-engine-value">{_fmt_num(dynamic_stake, 2)}</span></div>
+            </div>
+        </div>
+        <div class="ai-engine-note">Panel pokazuje pełny rozkład decyzji AI: model, value, rynek, xG, momentum oraz meta scoring.</div>
+    </div>
+    """
 
 def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
     if picks.empty:
@@ -577,7 +693,7 @@ live = load_live_data(picks)
 results = load_results()
 ai_picks = load_ai_picks(picks)
 
-tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS", "🤖 GPT"])
+tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS"])
 with tabs[0]: render_live(live, picks)
 with tabs[1]: render_prematch(picks)
 with tabs[2]: render_ai(ai_picks, results)
@@ -586,5 +702,4 @@ with tabs[4]: render_history(results)
 with tabs[5]: render_ranking(picks, results)
 with tabs[6]: render_alerts(picks, live)
 with tabs[7]: render_settings()
-with tabs[8]: render_gpt_tab(BASE_DIR)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
