@@ -308,6 +308,36 @@ margin-left:auto;
 .ai-detail-final-note{color:#a7b8af;font-size:12px;line-height:1.45;font-weight:650;margin-top:14px}
 @media(max-width:900px){.ai-table-final-head{display:none}.ai-table-final-row{grid-template-columns:1fr;gap:6px;padding:12px 0}.ai-table-final-row div{padding:4px 14px}.ai-detail-final-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
+
+.ai-status-text{
+display:flex;
+align-items:center;
+justify-content:center;
+width:120px;
+height:42px;
+margin:0 auto;
+border-radius:14px;
+background:#1b2026;
+border:1px solid rgba(255,255,255,.08);
+color:#ffffff;
+font-size:12px;
+font-weight:950;
+letter-spacing:.08em;
+text-transform:uppercase;
+}
+
+.ai-status-text:contains("PERFECT"){
+color:#7CFF2B;
+}
+
+.ai-status-text:contains("NORMAL"){
+color:#ffd24a;
+}
+
+.ai-status-text:contains("RISK"){
+color:#ff6262;
+}
+
 </style>
 ''', unsafe_allow_html=True)
 
