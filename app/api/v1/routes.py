@@ -1,0 +1,18 @@
+from fastapi import APIRouter, Depends
+from app.core.config import get_settings
+from app.core.security import require_api_key
+from app.domain.schemas import HealthResponse, PredictionInput, PredictionOutput
+from app.services.prediction_service import PredictionService
+from app.realtime.routes import router as realtime_router
+
+router = APIRouter(prefix="/api/v1", tags=["v1"])
+router.include_router(realtime_router)
+
+@router.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    s = get_settings()
+    return HealthResponse(ok=True, app=s.app_name, environment=s.environment, model_version=s.model_version)
+
+@router.post("/predict", response_model=PredictionOutput, dependencies=[Depends(require_api_key)])
+def predict(payload: PredictionInput) -> PredictionOutput:
+    return PredictionService().predict(payload)

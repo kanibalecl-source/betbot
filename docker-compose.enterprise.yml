@@ -1,0 +1,41 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.example
+    environment:
+      REALTIME_ENABLED: "true"
+      REALTIME_TICK_SECONDS: "1.0"
+      REDIS_URL: "redis://redis:6379/0"
+      POSTGRES_DSN: "postgresql://betbot:betbot@postgres:5432/betbot"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/realtime/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: betbot
+      POSTGRES_PASSWORD: betbot
+      POSTGRES_DB: betbot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
