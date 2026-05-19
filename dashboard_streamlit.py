@@ -326,18 +326,6 @@ letter-spacing:.08em;
 text-transform:uppercase;
 }
 
-.ai-status-text:contains("PERFECT"){
-color:#7CFF2B;
-}
-
-.ai-status-text:contains("NORMAL"){
-color:#ffd24a;
-}
-
-.ai-status-text:contains("RISK"){
-color:#ff6262;
-}
-
 </style>
 ''', unsafe_allow_html=True)
 
@@ -497,7 +485,6 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
             f'<div class="ai-status-inline">{status_label}</div></div></div>'
         )
         st.markdown(row_html, unsafe_allow_html=True)
-
 
 
         if status_click:
