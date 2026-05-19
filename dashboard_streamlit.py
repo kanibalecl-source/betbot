@@ -1,3 +1,4 @@
+from gpt_streamlit_panel import render_gpt_tab
 
 import base64
 from pathlib import Path
@@ -574,5 +575,10 @@ with tabs[4]: render_history(results)
 with tabs[5]: render_ranking(picks, results)
 with tabs[6]: render_alerts(picks, live)
 with tabs[7]: render_settings()
-with tabs[8]: render_gpt_chat_tab(ai_picks, live, results)
+with tabs[8]:
+    gpt_subtabs = st.tabs(["💬 LIVE CHAT", "📊 AI ANALYSIS"])
+    with gpt_subtabs[0]:
+        render_gpt_chat_tab(ai_picks, live, results)
+    with gpt_subtabs[1]:
+        render_gpt_tab()
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
