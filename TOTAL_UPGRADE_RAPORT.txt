@@ -1,0 +1,62 @@
+TOTAL_UPGRADE — RAPORT
+
+Zrealizowane:
+1. AI DETAILS przebudowany do układu jak na screenie:
+   - MODEL AI
+   - VALUE ENGINE
+   - MARKET ENGINE
+   - xG ENGINE
+   - MOMENTUM ENGINE
+   - META AI ENGINE
+
+2. Dodane wartości:
+   - CONFIDENCE
+   - CALIBRATED
+   - MODEL PROB
+   - FINAL PROB
+   - STAGE A PROB
+   - EV
+   - EDGE
+   - KELLY
+   - RISK
+   - BOOK ODDS
+   - MODEL ODDS
+   - BOT ODDS
+   - SHARP
+   - HOME xG
+   - AWAY xG
+   - ADV TOTAL xG
+   - ADV OVER2.5
+   - MARGIN
+   - MOMENTUM SCORE
+   - MOMENTUM LABEL
+   - SHARP SCORE
+   - SHARP SIGNALS
+   - META PROB
+   - MODEL WEIGHT
+   - MARKET WEIGHT
+   - xG WEIGHT
+   - MOMENTUM WEIGHT
+   - SHARP WEIGHT
+   - DYNAMIC STAKE
+
+3. Status AI:
+   - PERFECT od 85 confidence
+   - NORMAL od 65 confidence
+   - RISK poniżej 65 confidence
+
+4. Ochrona GPT:
+   - import render_gpt_tab zostawiony bez zmian
+   - lista tabs zostawiona z GPT
+
+5. Ochrona pozostałych zakładek:
+   - LIVE bez zmian
+   - PREMATCH bez zmian
+   - ANALYTICS bez zmian
+   - HISTORY bez zmian
+   - RANKING bez zmian
+   - ALERTS bez zmian
+   - SETTINGS bez zmian
+
+Kontrola:
+- ast.parse dashboard_streamlit.py: OK

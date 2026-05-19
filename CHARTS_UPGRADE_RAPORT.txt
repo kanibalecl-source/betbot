@@ -1,0 +1,25 @@
+CHARTS UPGRADE — RAPORT
+
+Wykonano globalną przebudowę systemu wykresów.
+
+Naprawione problemy:
+1. Brak opisów wykresów.
+2. Brak interpretacji danych.
+3. Brak benchmarków.
+4. Brak opisów osi.
+5. Brak jednolitego stylu.
+6. Brak profesjonalnego kontekstu AI.
+7. Niespójny wygląd między zakładkami.
+
+Wykresy po aktualizacji:
+- mają wspólny dark premium layout,
+- mają nagłówek i opis,
+- mają status: STRONG EDGE / NEUTRAL / WATCH / NO DATA,
+- mają benchmark,
+- mają sample size,
+- mają peak value,
+- mają AI insight,
+- mają opis osi X/Y,
+- mają hover title w słupkach HTML.
+
+Kontrola składni dashboard_streamlit.py: OK.

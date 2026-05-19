@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Iterable, List
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 try:
@@ -186,86 +185,14 @@ def safe_heights(values: List[float]) -> List[float]:
         return [55 if hi else 0 for _ in vals]
     return [max(8, min(100, 18 + ((v - lo) / (hi - lo)) * 82)) for v in vals]
 
-
-def _chart_status(values: List[float]) -> str:
-    vals = [float(v) for v in values if pd.notna(v)]
-    if not vals:
-        return "NO DATA"
-    avg = sum(vals) / len(vals)
-    if avg > 65:
-        return "STRONG EDGE"
-    if avg > 45:
-        return "NEUTRAL"
-    return "WATCH"
-
-def _chart_insight(title: str, values: List[float], subtitle: str = "") -> str:
-    vals = [float(v) for v in values if pd.notna(v)]
-    if not vals:
-        return "Brak danych wejściowych. Wykres jest gotowy i automatycznie uzupełni się po pojawieniu się danych w systemie."
-    avg = sum(vals) / len(vals)
-    hi = max(vals)
-    lo = min(vals)
-    trend = vals[-1] - vals[0] if len(vals) > 1 else 0
-    direction = "rosnący" if trend > 0 else "spadkowy" if trend < 0 else "stabilny"
-    return f"Średnia wartość wynosi {avg:.2f}. Zakres danych: {lo:.2f} - {hi:.2f}. Trend końcowy jest {direction}. AI wykorzystuje ten wykres do oceny jakości sygnałów, stabilności value oraz ryzyka rynkowego."
-
-def _chart_axis_labels(title: str):
-    t = str(title).lower()
-    if "roi" in t:
-        return "SEGMENT / LIGA / OKRES", "ROI / PROFITABILITY"
-    if "win" in t or "skutecz" in t:
-        return "CONFIDENCE / MARKET BUCKET", "WIN RATE / EFFECTIVENESS"
-    if "confidence" in t or "pewno" in t:
-        return "CONFIDENCE BUCKET", "SIGNAL STRENGTH"
-    if "risk" in t or "ryzyk" in t:
-        return "RISK BUCKET", "RISK EXPOSURE"
-    if "value" in t or "ev" in t:
-        return "VALUE SEGMENT", "EV / EDGE"
-    if "live" in t:
-        return "LIVE SEGMENT", "LIVE PRESSURE"
-    return "SEGMENT", "VALUE"
-
 def chart_html(title: str, values: List[float], subtitle: str = "Dane z systemu") -> str:
-    vals = [float(v) for v in values if pd.notna(v)]
-    heights = safe_heights(vals)
-    status = _chart_status(vals)
-    insight = _chart_insight(title, vals, subtitle)
-    avg = (sum(vals) / len(vals)) if vals else 0
-    sample = len(vals)
-    maxv = max(vals) if vals else 0
-    x_title, y_title = _chart_axis_labels(title)
-
-    bars = ""
-    for i, h in enumerate(heights):
-        val = vals[i - len(heights)] if vals and i >= len(heights) - len(vals) else 0
-        color = "#7CFF2B" if val >= 0 else "#ff4d4d"
-        bars += (
-            f'<i title="Segment P{i+1} | {y_title}: {val:.2f} | Benchmark: {avg:.2f}" '
-            f'style="height:{h:.0f}%;background:linear-gradient(180deg,{color},rgba(124,255,43,.10));"></i>'
-        )
-
-    return (
-        f'<div class="pro-chart-card">'
-        f'<div class="pro-chart-head">'
-        f'<div><div class="pro-chart-title">{title}</div>'
-        f'<div class="pro-chart-subtitle">{subtitle}. Oś X: {x_title}. Oś Y: {y_title}. Benchmark pokazuje średnią wartość serii.</div></div>'
-        f'<div class="pro-chart-badge">{status}</div>'
-        f'</div>'
-        f'<div class="placeholder-bars" style="height:210px;position:relative">{bars}'
-        f'<span style="position:absolute;left:10px;right:10px;bottom:{max(8,min(92,55))}%;border-top:1px dashed rgba(255,255,255,.38);"></span>'
-        f'</div>'
-        f'<div class="pro-chart-meta">'
-        f'<div><strong>Benchmark</strong>Średnia: {avg:.2f}</div>'
-        f'<div><strong>Sample size</strong>Liczba punktów: {sample}</div>'
-        f'<div><strong>Peak value</strong>Maksimum: {maxv:.2f}</div>'
-        f'</div>'
-        f'<div class="pro-chart-insight"><b>AI insight:</b> {insight}</div>'
-        f'</div>'
-    )
+    heights = safe_heights(values)
+    bars = ''.join(f'<i style="height:{h:.0f}%"></i>' for h in heights)
+    sub = subtitle if any(h > 0 for h in heights) else "Brak danych — wykres gotowy"
+    return f'<h3>{title}</h3><div class="placeholder-bars">{bars}</div><div class="ka-sub">{sub}</div>'
 
 def chart_card(title: str, values: List[float], subtitle: str = "Dane z systemu") -> str:
-    return chart_html(title, values, subtitle)
-
+    return f'<div class="ka-panel">{chart_html(title, values, subtitle)}</div>'
 
 def pick_confidence_values(picks: pd.DataFrame) -> List[float]:
     return real_values(picks, ["confidence", "advanced_confidence", "ai_pick_score", "score"], default=group_counts(picks, ["league", "liga", "market", "typ"]))
@@ -411,148 +338,6 @@ color:#ffd24a;
 color:#ff6262;
 }
 
-
-/* === TOTAL UPGRADE — AI VALUE / AI DETAILS ONLY === */
-.ai-detail-final{
-background:linear-gradient(180deg,rgba(8,13,22,.99),rgba(3,7,13,.99))!important;
-border:1px solid rgba(124,255,43,.18)!important;
-border-radius:18px!important;
-padding:16px!important;
-margin:10px 0 18px!important;
-box-shadow:0 0 28px rgba(124,255,43,.05)!important;
-}
-.ai-detail-final-grid{
-display:grid!important;
-grid-template-columns:repeat(3,minmax(0,1fr))!important;
-gap:16px!important;
-}
-.ai-detail-final-box{
-background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.014))!important;
-border:1px solid rgba(124,255,43,.16)!important;
-border-radius:14px!important;
-padding:18px!important;
-min-height:145px!important;
-box-shadow:inset 0 0 0 1px rgba(255,255,255,.015)!important;
-}
-.ai-detail-final-title{
-color:#7CFF2B!important;
-font-size:20px!important;
-font-weight:950!important;
-letter-spacing:.02em!important;
-text-transform:uppercase!important;
-margin:0 0 18px 0!important;
-}
-.ai-engine-line{
-color:#f6fff6!important;
-font-size:14px!important;
-font-weight:800!important;
-line-height:1.7!important;
-}
-.ai-engine-line b{
-color:#ffffff!important;
-font-weight:950!important;
-}
-.ai-status-inline{
-background:#1b2026!important;
-border:1px solid rgba(255,255,255,.08)!important;
-color:#ffffff!important;
-}
-@media(max-width:1100px){
-.ai-detail-final-grid{grid-template-columns:1fr!important;}
-}
-
-
-/* === PROFESSIONAL CHART SYSTEM === */
-.pro-chart-card{
-background:linear-gradient(180deg,rgba(9,15,24,.98),rgba(4,8,14,.99));
-border:1px solid rgba(124,255,43,.16);
-border-radius:18px;
-padding:18px 18px 12px;
-margin-bottom:16px;
-box-shadow:0 18px 42px rgba(0,0,0,.32),0 0 28px rgba(124,255,43,.045);
-}
-.pro-chart-head{
-display:flex;
-align-items:flex-start;
-justify-content:space-between;
-gap:14px;
-margin-bottom:12px;
-}
-.pro-chart-title{
-color:#fff;
-font-size:17px;
-font-weight:950;
-letter-spacing:.04em;
-text-transform:uppercase;
-line-height:1.2;
-}
-.pro-chart-subtitle{
-color:#91a099;
-font-size:12px;
-font-weight:700;
-line-height:1.45;
-margin-top:5px;
-}
-.pro-chart-badge{
-white-space:nowrap;
-display:inline-flex;
-align-items:center;
-justify-content:center;
-min-width:96px;
-height:32px;
-padding:0 12px;
-border-radius:999px;
-background:rgba(124,255,43,.09);
-border:1px solid rgba(124,255,43,.18);
-color:#7CFF2B;
-font-size:11px;
-font-weight:950;
-letter-spacing:.08em;
-text-transform:uppercase;
-}
-.pro-chart-insight{
-margin-top:10px;
-padding:12px 14px;
-border-radius:12px;
-background:rgba(255,255,255,.026);
-border:1px solid rgba(255,255,255,.065);
-color:#aebbb4;
-font-size:12px;
-font-weight:700;
-line-height:1.45;
-}
-.pro-chart-insight b{
-color:#7CFF2B;
-}
-.pro-chart-meta{
-display:grid;
-grid-template-columns:repeat(3,minmax(0,1fr));
-gap:10px;
-margin-top:10px;
-}
-.pro-chart-meta div{
-padding:9px 11px;
-border-radius:10px;
-background:rgba(0,0,0,.18);
-border:1px solid rgba(255,255,255,.055);
-color:#8fa099;
-font-size:11px;
-font-weight:800;
-line-height:1.35;
-}
-.pro-chart-meta strong{
-display:block;
-color:#fff;
-font-size:12px;
-font-weight:950;
-margin-bottom:3px;
-}
-@media(max-width:900px){
-.pro-chart-head{display:block}
-.pro-chart-badge{margin-top:10px}
-.pro-chart-meta{grid-template-columns:1fr}
-}
-
 </style>
 ''', unsafe_allow_html=True)
 
@@ -618,41 +403,40 @@ def ai_row_key(row, idx: int) -> str:
 
 
 
-
 def render_ai_detail_card(row) -> str:
     conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 62.93))
     calibrated = as_float(first_existing(row, ["calibrated_confidence", "calibrated"], conf + 0.64))
-    model_prob = as_float(first_existing(row, ["model_prob", "model_probability"], 0.7055))
-    final_prob = as_float(first_existing(row, ["final_prob", "final_probability"], 0.6293))
+    model_prob = as_float(first_existing(row, ["model_prob"], 0.7055))
+    final_prob = as_float(first_existing(row, ["final_prob"], 0.6293))
 
     ev = as_float(first_existing(row, ["ev", "value", "edge"], 0.1767))
     edge = as_float(first_existing(row, ["edge", "ev", "value"], 0.1767))
-    kelly = as_float(first_existing(row, ["kelly", "kelly_fraction"], 0.05))
+    kelly = as_float(first_existing(row, ["kelly"], 0.05))
     risk = str(first_existing(row, ["risk"], "HIGH")).upper()
 
     book_odds = as_float(first_existing(row, ["book_odds", "odds", "kurs_buk"], 1.87))
-    model_odds = as_float(first_existing(row, ["model_odds", "fair_odds"], 1.42))
-    bot_odds = as_float(first_existing(row, ["bot_odds", "ai_odds"], 1.59))
-    sharp = str(first_existing(row, ["sharp", "sharp_signal"], "NEUTRAL")).upper()
+    model_odds = as_float(first_existing(row, ["model_odds"], 1.42))
+    bot_odds = as_float(first_existing(row, ["bot_odds"], 1.59))
+    sharp = str(first_existing(row, ["sharp"], "NEUTRAL")).upper()
 
-    home_xg = as_float(first_existing(row, ["home_xg", "xg_home"], 1.15))
-    away_xg = as_float(first_existing(row, ["away_xg", "xg_away"], 1.41))
-    adv_total_xg = as_float(first_existing(row, ["adv_total_xg", "total_xg"], home_xg + away_xg))
-    adv_over = as_float(first_existing(row, ["adv_over25", "adv_over_2_5", "over25_probability"], 85.33))
-    margin = as_float(first_existing(row, ["margin", "bookmaker_margin"], 0.0))
+    home_xg = as_float(first_existing(row, ["home_xg"], 1.15))
+    away_xg = as_float(first_existing(row, ["away_xg"], 1.41))
+    adv_total_xg = as_float(first_existing(row, ["adv_total_xg"], 2.56))
+    adv_over = as_float(first_existing(row, ["adv_over25"], 85.33))
+    margin = as_float(first_existing(row, ["margin"], 0.0))
 
-    momentum_score = as_float(first_existing(row, ["momentum_score", "momentum"], 25.0))
+    momentum_score = as_float(first_existing(row, ["momentum_score"], 25.0))
     momentum_label = str(first_existing(row, ["momentum_label"], "LOW")).upper()
     sharp_score = as_float(first_existing(row, ["sharp_score"], 0))
-    sharp_signals = str(first_existing(row, ["sharp_signals", "sharp_signal"], "NO_SHARP_SIGNAL"))
+    sharp_signals = str(first_existing(row, ["sharp_signals"], "NO_SHARP_SIGNAL"))
 
-    meta_prob = as_float(first_existing(row, ["meta_prob", "meta_probability"], 67.9))
+    meta_prob = as_float(first_existing(row, ["meta_prob"], 67.9))
     model_weight = as_float(first_existing(row, ["model_weight"], 0.3))
     market_weight = as_float(first_existing(row, ["market_weight"], 0.2))
     xg_weight = as_float(first_existing(row, ["xg_weight"], 0.2))
     momentum_weight = as_float(first_existing(row, ["momentum_weight"], 0.15))
     sharp_weight = as_float(first_existing(row, ["sharp_weight"], 0.15))
-    dynamic_stake = as_float(first_existing(row, ["dynamic_stake", "stake"], 23.0))
+    dynamic_stake = as_float(first_existing(row, ["dynamic_stake"], 23.0))
 
     return (
         f"<div class='ai-detail-final'>"
@@ -660,55 +444,55 @@ def render_ai_detail_card(row) -> str:
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>MODEL AI</div>"
-        f"<div class='ai-engine-line'><b>CONFIDENCE:</b> {conf:.2f}</div>"
-        f"<div class='ai-engine-line'><b>CALIBRATED:</b> {calibrated:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MODEL PROB:</b> {model_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>FINAL PROB:</b> {final_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>STAGE A PROB:</b> {final_prob:.4f}</div>"
+        f"<div><b>CONFIDENCE:</b> {conf:.2f}</div>"
+        f"<div><b>CALIBRATED:</b> {calibrated:.2f}</div>"
+        f"<div><b>MODEL PROB:</b> {model_prob:.4f}</div>"
+        f"<div><b>FINAL PROB:</b> {final_prob:.4f}</div>"
+        f"<div><b>STAGE A PROB:</b> {final_prob:.4f}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>VALUE ENGINE</div>"
-        f"<div class='ai-engine-line'><b>EV:</b> {ev:.4f}</div>"
-        f"<div class='ai-engine-line'><b>EDGE:</b> {edge:.4f}</div>"
-        f"<div class='ai-engine-line'><b>KELLY:</b> {kelly:.2f}</div>"
-        f"<div class='ai-engine-line'><b>RISK:</b> {risk}</div>"
+        f"<div><b>EV:</b> {ev:.4f}</div>"
+        f"<div><b>EDGE:</b> {edge:.4f}</div>"
+        f"<div><b>KELLY:</b> {kelly:.2f}</div>"
+        f"<div><b>RISK:</b> {risk}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>MARKET ENGINE</div>"
-        f"<div class='ai-engine-line'><b>BOOK ODDS:</b> {book_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MODEL ODDS:</b> {model_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>BOT ODDS:</b> {bot_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>SHARP:</b> {sharp}</div>"
+        f"<div><b>BOOK ODDS:</b> {book_odds:.2f}</div>"
+        f"<div><b>MODEL ODDS:</b> {model_odds:.2f}</div>"
+        f"<div><b>BOT ODDS:</b> {bot_odds:.2f}</div>"
+        f"<div><b>SHARP:</b> {sharp}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>xG ENGINE</div>"
-        f"<div class='ai-engine-line'><b>HOME xG:</b> {home_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>AWAY xG:</b> {away_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>ADV TOTAL xG:</b> {adv_total_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>ADV OVER2.5:</b> {adv_over:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MARGIN:</b> {margin:.1f}</div>"
+        f"<div><b>HOME xG:</b> {home_xg:.2f}</div>"
+        f"<div><b>AWAY xG:</b> {away_xg:.2f}</div>"
+        f"<div><b>ADV TOTAL xG:</b> {adv_total_xg:.2f}</div>"
+        f"<div><b>ADV OVER2.5:</b> {adv_over:.2f}</div>"
+        f"<div><b>MARGIN:</b> {margin:.1f}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>MOMENTUM ENGINE</div>"
-        f"<div class='ai-engine-line'><b>MOMENTUM SCORE:</b> {momentum_score:.1f}</div>"
-        f"<div class='ai-engine-line'><b>MOMENTUM LABEL:</b> {momentum_label}</div>"
-        f"<div class='ai-engine-line'><b>SHARP SCORE:</b> {sharp_score:.0f}</div>"
-        f"<div class='ai-engine-line'><b>SHARP SIGNALS:</b> {sharp_signals}</div>"
+        f"<div><b>MOMENTUM SCORE:</b> {momentum_score:.1f}</div>"
+        f"<div><b>MOMENTUM LABEL:</b> {momentum_label}</div>"
+        f"<div><b>SHARP SCORE:</b> {sharp_score:.0f}</div>"
+        f"<div><b>SHARP SIGNALS:</b> {sharp_signals}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>META AI ENGINE</div>"
-        f"<div class='ai-engine-line'><b>META PROB:</b> {meta_prob:.1f}</div>"
-        f"<div class='ai-engine-line'><b>MODEL WEIGHT:</b> {model_weight}</div>"
-        f"<div class='ai-engine-line'><b>MARKET WEIGHT:</b> {market_weight}</div>"
-        f"<div class='ai-engine-line'><b>xG WEIGHT:</b> {xg_weight}</div>"
-        f"<div class='ai-engine-line'><b>MOMENTUM WEIGHT:</b> {momentum_weight}</div>"
-        f"<div class='ai-engine-line'><b>SHARP WEIGHT:</b> {sharp_weight}</div>"
-        f"<div class='ai-engine-line'><b>DYNAMIC STAKE:</b> {dynamic_stake:.1f}</div>"
+        f"<div><b>META PROB:</b> {meta_prob:.1f}</div>"
+        f"<div><b>MODEL WEIGHT:</b> {model_weight}</div>"
+        f"<div><b>MARKET WEIGHT:</b> {market_weight}</div>"
+        f"<div><b>xG WEIGHT:</b> {xg_weight}</div>"
+        f"<div><b>MOMENTUM WEIGHT:</b> {momentum_weight}</div>"
+        f"<div><b>SHARP WEIGHT:</b> {sharp_weight}</div>"
+        f"<div><b>DYNAMIC STAKE:</b> {dynamic_stake:.1f}</div>"
         f"</div>"
 
         f"</div></div>"
@@ -741,16 +525,13 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
     for idx, row in shown.iterrows():
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         edge = first_existing(row, ["ev", "edge", "value"], "-")
-        status_label = (
-            "PERFECT" if conf >= 85
-            else "NORMAL" if conf >= 65
-            else "RISK"
-        )
+        status_label = str(first_existing(row, ["status"], "AI STRONG" if conf >= 75 else "AI VALUE" if conf >= 60 else "AI WATCH"))
 
         league = first_existing(row, ["liga", "league"], "-")
         match = first_existing(row, ["mecz", "match"], "-")
         market = fmt_market(first_existing(row, ["typ", "market"], "-"))
         odds = first_existing(row, ["kurs_buk", "odds"], "-")
+
         conf_width = max(0, min(100, int(conf)))
 
         row_html = (

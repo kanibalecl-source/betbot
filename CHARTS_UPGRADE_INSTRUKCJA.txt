@@ -1,0 +1,29 @@
+CHARTS UPGRADE — INSTRUKCJA WDROŻENIA
+
+1. Rozpakuj charts_total_upgrade.zip.
+2. Wgraj pliki z katalogu betbot-main na serwer / GitHub / Railway.
+3. Najważniejszy plik: dashboard_streamlit.py
+4. Po wgraniu zrestartuj aplikację.
+5. Sprawdź wszystkie zakładki:
+   - LIVE
+   - PREMATCH
+   - AI
+   - ANALYTICS
+   - HISTORY
+   - RANKING
+   - ALERTS
+
+CO ZMIENIONO:
+- wszystkie wykresy oparte o chart_card/chart_html mają teraz jeden profesjonalny wygląd,
+- każdy wykres ma tytuł,
+- każdy wykres ma opis,
+- każdy wykres ma opis osi X/Y,
+- każdy wykres ma benchmark,
+- każdy wykres ma sample size,
+- każdy wykres ma peak value,
+- każdy wykres ma AI insight,
+- zachowano ciemny premium styl,
+- nie ruszano GPT, loginu, AI runtime ani backendu.
+
+Backup starego dashboardu:
+dashboard_streamlit_BACKUP_BEFORE_CHARTS_UPGRADE.py

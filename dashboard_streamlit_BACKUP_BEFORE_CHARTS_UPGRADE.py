@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Iterable, List
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 try:
@@ -186,86 +185,14 @@ def safe_heights(values: List[float]) -> List[float]:
         return [55 if hi else 0 for _ in vals]
     return [max(8, min(100, 18 + ((v - lo) / (hi - lo)) * 82)) for v in vals]
 
-
-def _chart_status(values: List[float]) -> str:
-    vals = [float(v) for v in values if pd.notna(v)]
-    if not vals:
-        return "NO DATA"
-    avg = sum(vals) / len(vals)
-    if avg > 65:
-        return "STRONG EDGE"
-    if avg > 45:
-        return "NEUTRAL"
-    return "WATCH"
-
-def _chart_insight(title: str, values: List[float], subtitle: str = "") -> str:
-    vals = [float(v) for v in values if pd.notna(v)]
-    if not vals:
-        return "Brak danych wejściowych. Wykres jest gotowy i automatycznie uzupełni się po pojawieniu się danych w systemie."
-    avg = sum(vals) / len(vals)
-    hi = max(vals)
-    lo = min(vals)
-    trend = vals[-1] - vals[0] if len(vals) > 1 else 0
-    direction = "rosnący" if trend > 0 else "spadkowy" if trend < 0 else "stabilny"
-    return f"Średnia wartość wynosi {avg:.2f}. Zakres danych: {lo:.2f} - {hi:.2f}. Trend końcowy jest {direction}. AI wykorzystuje ten wykres do oceny jakości sygnałów, stabilności value oraz ryzyka rynkowego."
-
-def _chart_axis_labels(title: str):
-    t = str(title).lower()
-    if "roi" in t:
-        return "SEGMENT / LIGA / OKRES", "ROI / PROFITABILITY"
-    if "win" in t or "skutecz" in t:
-        return "CONFIDENCE / MARKET BUCKET", "WIN RATE / EFFECTIVENESS"
-    if "confidence" in t or "pewno" in t:
-        return "CONFIDENCE BUCKET", "SIGNAL STRENGTH"
-    if "risk" in t or "ryzyk" in t:
-        return "RISK BUCKET", "RISK EXPOSURE"
-    if "value" in t or "ev" in t:
-        return "VALUE SEGMENT", "EV / EDGE"
-    if "live" in t:
-        return "LIVE SEGMENT", "LIVE PRESSURE"
-    return "SEGMENT", "VALUE"
-
 def chart_html(title: str, values: List[float], subtitle: str = "Dane z systemu") -> str:
-    vals = [float(v) for v in values if pd.notna(v)]
-    heights = safe_heights(vals)
-    status = _chart_status(vals)
-    insight = _chart_insight(title, vals, subtitle)
-    avg = (sum(vals) / len(vals)) if vals else 0
-    sample = len(vals)
-    maxv = max(vals) if vals else 0
-    x_title, y_title = _chart_axis_labels(title)
-
-    bars = ""
-    for i, h in enumerate(heights):
-        val = vals[i - len(heights)] if vals and i >= len(heights) - len(vals) else 0
-        color = "#7CFF2B" if val >= 0 else "#ff4d4d"
-        bars += (
-            f'<i title="Segment P{i+1} | {y_title}: {val:.2f} | Benchmark: {avg:.2f}" '
-            f'style="height:{h:.0f}%;background:linear-gradient(180deg,{color},rgba(124,255,43,.10));"></i>'
-        )
-
-    return (
-        f'<div class="pro-chart-card">'
-        f'<div class="pro-chart-head">'
-        f'<div><div class="pro-chart-title">{title}</div>'
-        f'<div class="pro-chart-subtitle">{subtitle}. Oś X: {x_title}. Oś Y: {y_title}. Benchmark pokazuje średnią wartość serii.</div></div>'
-        f'<div class="pro-chart-badge">{status}</div>'
-        f'</div>'
-        f'<div class="placeholder-bars" style="height:210px;position:relative">{bars}'
-        f'<span style="position:absolute;left:10px;right:10px;bottom:{max(8,min(92,55))}%;border-top:1px dashed rgba(255,255,255,.38);"></span>'
-        f'</div>'
-        f'<div class="pro-chart-meta">'
-        f'<div><strong>Benchmark</strong>Średnia: {avg:.2f}</div>'
-        f'<div><strong>Sample size</strong>Liczba punktów: {sample}</div>'
-        f'<div><strong>Peak value</strong>Maksimum: {maxv:.2f}</div>'
-        f'</div>'
-        f'<div class="pro-chart-insight"><b>AI insight:</b> {insight}</div>'
-        f'</div>'
-    )
+    heights = safe_heights(values)
+    bars = ''.join(f'<i style="height:{h:.0f}%"></i>' for h in heights)
+    sub = subtitle if any(h > 0 for h in heights) else "Brak danych — wykres gotowy"
+    return f'<h3>{title}</h3><div class="placeholder-bars">{bars}</div><div class="ka-sub">{sub}</div>'
 
 def chart_card(title: str, values: List[float], subtitle: str = "Dane z systemu") -> str:
-    return chart_html(title, values, subtitle)
-
+    return f'<div class="ka-panel">{chart_html(title, values, subtitle)}</div>'
 
 def pick_confidence_values(picks: pd.DataFrame) -> List[float]:
     return real_values(picks, ["confidence", "advanced_confidence", "ai_pick_score", "score"], default=group_counts(picks, ["league", "liga", "market", "typ"]))
@@ -459,98 +386,6 @@ color:#ffffff!important;
 }
 @media(max-width:1100px){
 .ai-detail-final-grid{grid-template-columns:1fr!important;}
-}
-
-
-/* === PROFESSIONAL CHART SYSTEM === */
-.pro-chart-card{
-background:linear-gradient(180deg,rgba(9,15,24,.98),rgba(4,8,14,.99));
-border:1px solid rgba(124,255,43,.16);
-border-radius:18px;
-padding:18px 18px 12px;
-margin-bottom:16px;
-box-shadow:0 18px 42px rgba(0,0,0,.32),0 0 28px rgba(124,255,43,.045);
-}
-.pro-chart-head{
-display:flex;
-align-items:flex-start;
-justify-content:space-between;
-gap:14px;
-margin-bottom:12px;
-}
-.pro-chart-title{
-color:#fff;
-font-size:17px;
-font-weight:950;
-letter-spacing:.04em;
-text-transform:uppercase;
-line-height:1.2;
-}
-.pro-chart-subtitle{
-color:#91a099;
-font-size:12px;
-font-weight:700;
-line-height:1.45;
-margin-top:5px;
-}
-.pro-chart-badge{
-white-space:nowrap;
-display:inline-flex;
-align-items:center;
-justify-content:center;
-min-width:96px;
-height:32px;
-padding:0 12px;
-border-radius:999px;
-background:rgba(124,255,43,.09);
-border:1px solid rgba(124,255,43,.18);
-color:#7CFF2B;
-font-size:11px;
-font-weight:950;
-letter-spacing:.08em;
-text-transform:uppercase;
-}
-.pro-chart-insight{
-margin-top:10px;
-padding:12px 14px;
-border-radius:12px;
-background:rgba(255,255,255,.026);
-border:1px solid rgba(255,255,255,.065);
-color:#aebbb4;
-font-size:12px;
-font-weight:700;
-line-height:1.45;
-}
-.pro-chart-insight b{
-color:#7CFF2B;
-}
-.pro-chart-meta{
-display:grid;
-grid-template-columns:repeat(3,minmax(0,1fr));
-gap:10px;
-margin-top:10px;
-}
-.pro-chart-meta div{
-padding:9px 11px;
-border-radius:10px;
-background:rgba(0,0,0,.18);
-border:1px solid rgba(255,255,255,.055);
-color:#8fa099;
-font-size:11px;
-font-weight:800;
-line-height:1.35;
-}
-.pro-chart-meta strong{
-display:block;
-color:#fff;
-font-size:12px;
-font-weight:950;
-margin-bottom:3px;
-}
-@media(max-width:900px){
-.pro-chart-head{display:block}
-.pro-chart-badge{margin-top:10px}
-.pro-chart-meta{grid-template-columns:1fr}
 }
 
 </style>

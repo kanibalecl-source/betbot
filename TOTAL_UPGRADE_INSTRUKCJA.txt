@@ -1,0 +1,26 @@
+TOTAL_UPGRADE — INSTRUKCJA WDROŻENIA
+
+1. Rozpakuj total_upgrade.zip.
+2. Wgraj całą zawartość katalogu betbot-main na serwer / repozytorium.
+3. Najważniejszy plik do nadpisania: dashboard_streamlit.py
+4. Zostaw istniejące pliki .env i dane produkcyjne, jeśli na serwerze masz inne hasła/API.
+5. Zrestartuj aplikację Streamlit/Railway.
+6. Sprawdź:
+   - zakładka GPT nadal istnieje,
+   - zakładka AI działa,
+   - AI DETAILS rozwija się po kliknięciu expanderu,
+   - panel AI DETAILS pokazuje: MODEL AI, VALUE ENGINE, MARKET ENGINE, xG ENGINE, MOMENTUM ENGINE, META AI ENGINE,
+   - statusy pokazują PERFECT / NORMAL / RISK zamiast AI VALUE / AI WATCH / AI STRONG.
+
+CO ZMIENIONO:
+- naprawiono AI DETAILS,
+- usunięto zależność od st.button w statusie AI,
+- status jest tekstowy,
+- dodano docelowy układ 3x2 kart AI DETAILS,
+- zachowano GPT TAB,
+- zachowano login,
+- zachowano LIVE/PREMATCH/ANALYTICS/HISTORY/RANKING/ALERTS/SETTINGS,
+- dodano backup starego dashboardu: dashboard_streamlit_BACKUP_BEFORE_TOTAL_UPGRADE.py
+
+WAŻNE:
+To jest upgrade bezpieczny: zmiany runtime dotyczą zakładki AI i AI DETAILS.
