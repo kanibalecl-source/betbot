@@ -7,6 +7,14 @@ import pandas as pd
 import streamlit as st
 
 try:
+    from gpt_betting_assistant import render_gpt_chat_tab
+except Exception:
+    def render_gpt_chat_tab(picks=None, live=None, results=None):
+        import streamlit as st
+        st.warning("Moduł GPT CHAT nie został załadowany.")
+
+
+try:
     from gpt_streamlit_panel import render_gpt_tab
 except Exception:
     def render_gpt_tab(base_dir=None):
@@ -942,7 +950,7 @@ live = load_live_data(picks)
 results = load_results()
 ai_picks = load_ai_picks(picks)
 
-tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS", "🤖 GPT"])
+tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS", "🤖 GPT CHAT"])
 with tabs[0]: render_live(live, picks)
 with tabs[1]: render_prematch(picks)
 with tabs[2]: render_ai(ai_picks, results)
@@ -951,5 +959,10 @@ with tabs[4]: render_history(results)
 with tabs[5]: render_ranking(picks, results)
 with tabs[6]: render_alerts(picks, live)
 with tabs[7]: render_settings()
-with tabs[8]: render_gpt_tab(BASE_DIR)
+with tabs[8]:
+    gpt_subtabs = st.tabs(["💬 LIVE CHAT", "📊 AI ANALYSIS"])
+    with gpt_subtabs[0]:
+        render_gpt_chat_tab(ai_picks, live, results)
+    with gpt_subtabs[1]:
+        render_gpt_tab(BASE_DIR)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)

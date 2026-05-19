@@ -1,0 +1,48 @@
+GPT_ONLY_UPGRADE — RAPORT KONTROLI
+
+Zakres paczki:
+- dashboard_streamlit.py
+- gpt_betting_assistant.py
+- persistent_storage.py
+- README_WDROZ_GPT_ONLY.txt
+
+Cel:
+Po wdrożeniu zmienia się wyłącznie zakładka GPT.
+
+Co zmienia dashboard_streamlit.py:
+1. Dodaje bezpieczny import:
+   render_gpt_chat_tab z gpt_betting_assistant.py
+2. Zmienia nazwę ostatniej zakładki:
+   🤖 GPT -> 🤖 GPT CHAT
+3. Wewnątrz zakładki GPT dodaje 2 podzakładki:
+   - 💬 LIVE CHAT
+   - 📊 AI ANALYSIS
+4. Stary panel GPT zostaje zachowany jako 📊 AI ANALYSIS.
+5. Nowy chat GPT używa aktualnych danych AI PICKS / LIVE / RESULTS.
+
+Czego NIE zmieniono:
+- AI tab
+- AI DETAILS
+- statusy
+- LIVE
+- PREMATCH
+- ANALYTICS
+- HISTORY
+- RANKING
+- ALERTS
+- SETTINGS
+- login
+- wykresy
+- scheduler
+- backend typów
+- pliki danych
+- .env
+- requirements.txt
+
+Kontrola:
+- dashboard_streamlit.py: składnia OK
+- gpt_betting_assistant.py: składnia OK
+- persistent_storage.py: składnia OK
+
+Ważne:
+Ta paczka jest mała i celowa. Nie zawiera całego bota, żeby nie nadpisywać obecnej wersji.
