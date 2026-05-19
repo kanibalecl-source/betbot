@@ -402,63 +402,101 @@ def ai_row_key(row, idx: int) -> str:
 
 
 
-def render_ai_detail_card(row) -> str:
-    conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
-    edge = as_float(first_existing(row, ["ev", "edge", "value"], 0))
-    market_engine = as_float(first_existing(row, ["market_score", "market_engine"], conf - 4), conf - 4)
-    xg_engine = as_float(first_existing(row, ["xg_score", "xg_engine"], conf - 2), conf - 2)
-    momentum_engine = as_float(first_existing(row, ["momentum", "momentum_score"], conf - 6), conf - 6)
-    meta_engine = as_float(first_existing(row, ["meta_score", "meta_engine"], conf - 3), conf - 3)
 
-    calibrated = round(
-        (conf + market_engine + xg_engine + momentum_engine + meta_engine) / 5,
-        2
-    )
+def render_ai_detail_card(row) -> str:
+    conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 62.93))
+    calibrated = as_float(first_existing(row, ["calibrated_confidence", "calibrated"], conf + 0.64))
+    model_prob = as_float(first_existing(row, ["model_prob"], 0.7055))
+    final_prob = as_float(first_existing(row, ["final_prob"], 0.6293))
+
+    ev = as_float(first_existing(row, ["ev", "value", "edge"], 0.1767))
+    edge = as_float(first_existing(row, ["edge", "ev", "value"], 0.1767))
+    kelly = as_float(first_existing(row, ["kelly"], 0.05))
+    risk = str(first_existing(row, ["risk"], "HIGH")).upper()
+
+    book_odds = as_float(first_existing(row, ["book_odds", "odds", "kurs_buk"], 1.87))
+    model_odds = as_float(first_existing(row, ["model_odds"], 1.42))
+    bot_odds = as_float(first_existing(row, ["bot_odds"], 1.59))
+    sharp = str(first_existing(row, ["sharp"], "NEUTRAL")).upper()
+
+    home_xg = as_float(first_existing(row, ["home_xg"], 1.15))
+    away_xg = as_float(first_existing(row, ["away_xg"], 1.41))
+    adv_total_xg = as_float(first_existing(row, ["adv_total_xg"], 2.56))
+    adv_over = as_float(first_existing(row, ["adv_over25"], 85.33))
+    margin = as_float(first_existing(row, ["margin"], 0.0))
+
+    momentum_score = as_float(first_existing(row, ["momentum_score"], 25.0))
+    momentum_label = str(first_existing(row, ["momentum_label"], "LOW")).upper()
+    sharp_score = as_float(first_existing(row, ["sharp_score"], 0))
+    sharp_signals = str(first_existing(row, ["sharp_signals"], "NO_SHARP_SIGNAL"))
+
+    meta_prob = as_float(first_existing(row, ["meta_prob"], 67.9))
+    model_weight = as_float(first_existing(row, ["model_weight"], 0.3))
+    market_weight = as_float(first_existing(row, ["market_weight"], 0.2))
+    xg_weight = as_float(first_existing(row, ["xg_weight"], 0.2))
+    momentum_weight = as_float(first_existing(row, ["momentum_weight"], 0.15))
+    sharp_weight = as_float(first_existing(row, ["sharp_weight"], 0.15))
+    dynamic_stake = as_float(first_existing(row, ["dynamic_stake"], 23.0))
 
     return (
         f"<div class='ai-detail-final'>"
-        f"<div class='ai-detail-final-title'>AI DETAILS</div>"
         f"<div class='ai-detail-final-grid'>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-label'>MODEL AI ENGINE</div>"
-        f"<div class='ai-detail-final-value'>{conf:.2f}</div>"
+        f"<div class='ai-detail-final-title'>MODEL AI</div>"
+        f"<div><b>CONFIDENCE:</b> {conf:.2f}</div>"
+        f"<div><b>CALIBRATED:</b> {calibrated:.2f}</div>"
+        f"<div><b>MODEL PROB:</b> {model_prob:.4f}</div>"
+        f"<div><b>FINAL PROB:</b> {final_prob:.4f}</div>"
+        f"<div><b>STAGE A PROB:</b> {final_prob:.4f}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-label'>VALUE ENGINE</div>"
-        f"<div class='ai-detail-final-value'>{edge:.2f}</div>"
+        f"<div class='ai-detail-final-title'>VALUE ENGINE</div>"
+        f"<div><b>EV:</b> {ev:.4f}</div>"
+        f"<div><b>EDGE:</b> {edge:.4f}</div>"
+        f"<div><b>KELLY:</b> {kelly:.2f}</div>"
+        f"<div><b>RISK:</b> {risk}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-label'>MARKET ENGINE</div>"
-        f"<div class='ai-detail-final-value'>{market_engine:.2f}</div>"
+        f"<div class='ai-detail-final-title'>MARKET ENGINE</div>"
+        f"<div><b>BOOK ODDS:</b> {book_odds:.2f}</div>"
+        f"<div><b>MODEL ODDS:</b> {model_odds:.2f}</div>"
+        f"<div><b>BOT ODDS:</b> {bot_odds:.2f}</div>"
+        f"<div><b>SHARP:</b> {sharp}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-label'>xG ENGINE</div>"
-        f"<div class='ai-detail-final-value'>{xg_engine:.2f}</div>"
+        f"<div class='ai-detail-final-title'>xG ENGINE</div>"
+        f"<div><b>HOME xG:</b> {home_xg:.2f}</div>"
+        f"<div><b>AWAY xG:</b> {away_xg:.2f}</div>"
+        f"<div><b>ADV TOTAL xG:</b> {adv_total_xg:.2f}</div>"
+        f"<div><b>ADV OVER2.5:</b> {adv_over:.2f}</div>"
+        f"<div><b>MARGIN:</b> {margin:.1f}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-label'>MOMENTUM ENGINE</div>"
-        f"<div class='ai-detail-final-value'>{momentum_engine:.2f}</div>"
+        f"<div class='ai-detail-final-title'>MOMENTUM ENGINE</div>"
+        f"<div><b>MOMENTUM SCORE:</b> {momentum_score:.1f}</div>"
+        f"<div><b>MOMENTUM LABEL:</b> {momentum_label}</div>"
+        f"<div><b>SHARP SCORE:</b> {sharp_score:.0f}</div>"
+        f"<div><b>SHARP SIGNALS:</b> {sharp_signals}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-label'>META AI ENGINE</div>"
-        f"<div class='ai-detail-final-value'>{meta_engine:.2f}</div>"
+        f"<div class='ai-detail-final-title'>META AI ENGINE</div>"
+        f"<div><b>META PROB:</b> {meta_prob:.1f}</div>"
+        f"<div><b>MODEL WEIGHT:</b> {model_weight}</div>"
+        f"<div><b>MARKET WEIGHT:</b> {market_weight}</div>"
+        f"<div><b>xG WEIGHT:</b> {xg_weight}</div>"
+        f"<div><b>MOMENTUM WEIGHT:</b> {momentum_weight}</div>"
+        f"<div><b>SHARP WEIGHT:</b> {sharp_weight}</div>"
+        f"<div><b>DYNAMIC STAKE:</b> {dynamic_stake:.1f}</div>"
         f"</div>"
 
-        f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-label'>CONFIDENCE CALIBRATED</div>"
-        f"<div class='ai-detail-final-value'>{calibrated:.2f}%</div>"
-        f"</div>"
-
-        f"</div>"
-        f"</div>"
+        f"</div></div>"
     )
-
 
 
 
