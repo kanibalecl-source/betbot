@@ -7,6 +7,13 @@ import pandas as pd
 import streamlit as st
 
 try:
+    from gpt_streamlit_panel import render_gpt_tab
+except Exception:
+    def render_gpt_tab(base_dir=None):
+        st.warning("Moduł GPT nie został załadowany.")
+
+
+try:
     from auth_manager import require_login
 except Exception:
     def require_login():
@@ -234,7 +241,14 @@ def load_results() -> pd.DataFrame:
         df = read_csv_safe(path)
         if not df.empty:
             frames.append(df)
-    return pd.concat(frames, ignore_index=True, sort=False) if frames else pd.DataFrame()
+    try:
+        from agi_storage import load_history_dataframe
+        storage_df = load_history_dataframe()
+        if storage_df is not None and not storage_df.empty:
+            frames.append(storage_df)
+    except Exception:
+        pass
+    return pd.concat(frames, ignore_index=True, sort=False).drop_duplicates() if frames else pd.DataFrame()
 
 
 def b64_image(path: Path) -> str:
@@ -563,7 +577,7 @@ live = load_live_data(picks)
 results = load_results()
 ai_picks = load_ai_picks(picks)
 
-tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS"])
+tabs = st.tabs(["📡 LIVE", "⚽ PREMATCH", "🧠 AI", "📊 ANALYTICS", "🕘 HISTORY", "🏆 RANKING", "🔔 ALERTS", "⚙️ SETTINGS", "🤖 GPT"])
 with tabs[0]: render_live(live, picks)
 with tabs[1]: render_prematch(picks)
 with tabs[2]: render_ai(ai_picks, results)
@@ -572,4 +586,5 @@ with tabs[4]: render_history(results)
 with tabs[5]: render_ranking(picks, results)
 with tabs[6]: render_alerts(picks, live)
 with tabs[7]: render_settings()
+with tabs[8]: render_gpt_tab(BASE_DIR)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)

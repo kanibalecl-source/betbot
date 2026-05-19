@@ -67,6 +67,13 @@ def run_prematch():
                 print(f"✅ AI RETRAINING CHECK | status={retrain_result.get('status')}")
             except Exception as retrain_error:
                 print(f"⚠️ AI RETRAINING CHECK ERROR: {retrain_error}")
+
+            try:
+                from persistence_runtime import run_once as persistence_run_once
+                persistence_result = persistence_run_once()
+                print(f"✅ PERSISTENCE/HISTORY OK | {persistence_result}")
+            except Exception as persistence_error:
+                print(f"⚠️ PERSISTENCE/HISTORY ERROR: {persistence_error}")
             print("💓 SCHEDULER LOOP OK")
 
             sys.stdout.flush()

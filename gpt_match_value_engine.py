@@ -241,6 +241,12 @@ def run_full_gpt_analysis(base_dir: Path, limit: int | None = None) -> Dict[str,
     out = base_dir / REPORT_FILE
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        from agi_storage import upsert_gpt_analysis
+        for item in analyses:
+            upsert_gpt_analysis(item)
+    except Exception:
+        pass
     return report
 
 
