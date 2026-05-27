@@ -1,4 +1,3 @@
-from shadow.shadow_logger import log_shadow_event
 from stage_a_value_layer import StageAValueLayer
 from stage_b_model_layer import StageBModelLayer
 from stage_c_meta_layer import StageCMetaLayer

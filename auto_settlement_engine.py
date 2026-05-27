@@ -1,4 +1,3 @@
-from shadow.shadow_logger import log_shadow_event
 from pathlib import Path
 import pandas as pd
 from datetime import datetime

@@ -1,4 +1,3 @@
-from shadow.shadow_logger import log_shadow_event
 
 import base64
 from pathlib import Path

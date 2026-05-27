@@ -1,4 +1,3 @@
-from shadow.shadow_logger import log_shadow_event
 from __future__ import annotations
 
 import csv

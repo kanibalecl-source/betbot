@@ -3,6 +3,11 @@ from app.core.config import get_settings
 from app.domain.schemas import PredictionInput, PredictionOutput
 
 try:
+    from app.services.safe_upgrades.shadow_mode import run_shadow_mode
+except Exception:  # pragma: no cover
+    run_shadow_mode = None
+
+try:
     from master_prediction_engine import MasterPredictionEngine
 except Exception:  # pragma: no cover
     MasterPredictionEngine = None
@@ -35,7 +40,7 @@ class PredictionService:
         recommendation = "BET" if edge >= self.settings.min_edge and risk_level in {"LOW", "MEDIUM"} else "PASS"
         stake_pct = min(self.settings.max_stake_pct, max(0.0, edge / 10)) if recommendation == "BET" else 0.0
 
-        return PredictionOutput(
+        output = PredictionOutput(
             model_version=self.settings.model_version,
             match_name=f"{payload.home_team} vs {payload.away_team}",
             market=payload.market or raw.get("market") or "UNKNOWN",
@@ -50,3 +55,14 @@ class PredictionService:
             stake_pct=round(stake_pct, 4),
             generated_at=datetime.now(UTC),
         )
+
+        # Passive shadow-mode integration. It computes the proposed upgrade
+        # diagnostics in parallel, but never changes the API response,
+        # recommendation, stake, risk, probability, UI, or existing bot logic.
+        if run_shadow_mode is not None:
+            try:
+                run_shadow_mode(raw=raw, current_output=output.model_dump())
+            except Exception:
+                pass
+
+        return output
