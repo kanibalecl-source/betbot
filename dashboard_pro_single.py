@@ -1,3 +1,4 @@
+from shadow.shadow_logger import log_shadow_event
 import streamlit as st
 import pandas as pd
 

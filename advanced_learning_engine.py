@@ -1,3 +1,4 @@
+from shadow.shadow_logger import log_shadow_event
 """
 Advanced Learning Engine
 

@@ -1,3 +1,4 @@
+from shadow.shadow_logger import log_shadow_event
 """Full self-learning runtime for KANIBAL ANALYTICS.
 
 This module runs in the background scheduler and closes the loop:
