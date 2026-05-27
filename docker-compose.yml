@@ -1,14 +1,28 @@
 services:
-  api:
+  betbot-web:
     build: .
+    container_name: betbot-web
+    restart: always
     ports:
-      - "8080:8080"
-    env_file:
-      - .env.example
+      - "8000:8000"
     volumes:
       - ./data:/app/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      - ./reports:/app/reports
+
+  betbot-loop:
+    build: .
+    container_name: betbot-loop
+    restart: always
+    command: python bot_loop.py
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+
+  betbot-settle:
+    build: .
+    container_name: betbot-settle
+    restart: always
+    command: python settle_loop.py
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports

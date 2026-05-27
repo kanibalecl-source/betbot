@@ -54,6 +54,26 @@ def run_prematch():
                 print(f"❌ LIVE SCHEDULER PIPELINE ERROR: {live_error}")
 
             print("✅ LIVE SAVED")
+            try:
+                from ai_self_learning_runtime import run_self_learning_cycle
+                ai_result = run_self_learning_cycle()
+                print(f"✅ AI SELF-LEARNING LOOP OK | picks={ai_result.get('ai_picks')} | mode={ai_result.get('mode')} | settled={ai_result.get('settled_samples')}")
+            except Exception as ai_error:
+                print(f"❌ AI SELF-LEARNING LOOP ERROR: {ai_error}")
+
+            try:
+                from auto_retraining_runtime import AutoRetrainingRuntime
+                retrain_result = AutoRetrainingRuntime().run_if_due()
+                print(f"✅ AI RETRAINING CHECK | status={retrain_result.get('status')}")
+            except Exception as retrain_error:
+                print(f"⚠️ AI RETRAINING CHECK ERROR: {retrain_error}")
+
+            try:
+                from persistence_runtime import run_once as persistence_run_once
+                persistence_result = persistence_run_once()
+                print(f"✅ PERSISTENCE/HISTORY OK | {persistence_result}")
+            except Exception as persistence_error:
+                print(f"⚠️ PERSISTENCE/HISTORY ERROR: {persistence_error}")
             print("💓 SCHEDULER LOOP OK")
 
             sys.stdout.flush()
@@ -83,3 +103,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
