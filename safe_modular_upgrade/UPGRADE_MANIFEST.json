@@ -1,0 +1,28 @@
+{
+  "source_zip": "betbot-main (81)(1).zip",
+  "source_zip_sha256": "d5b93b7a8ec1ffcc1e1513b2b6d4fe1dcbd8c87b3873e79caa1d2760f7b7d81e",
+  "created_zip": "betbot-safe-modular-upgrade.zip",
+  "original_file_count": 860,
+  "changed_original_files": [],
+  "added_files": [
+    "safe_modular_upgrade/__init__.py",
+    "safe_modular_upgrade/README.md",
+    "safe_modular_upgrade/run_all.py",
+    "safe_modular_upgrade/run_safe_upgrade_audit.cmd",
+    "safe_modular_upgrade/run_safe_upgrade_audit.sh",
+    "safe_modular_upgrade/modules/__init__.py",
+    "safe_modular_upgrade/modules/common.py",
+    "safe_modular_upgrade/modules/confidence_audit.py",
+    "safe_modular_upgrade/modules/league_profile_audit.py",
+    "safe_modular_upgrade/modules/clv_audit.py",
+    "safe_modular_upgrade/modules/market_movement_audit.py",
+    "safe_modular_upgrade/modules/risk_audit.py",
+    "safe_modular_upgrade/modules/self_learning_audit.py"
+  ],
+  "self_check": {
+    "returncode": 0,
+    "stdout": "OK: modules.confidence_audit -> /mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/confidence_audit.json\nOK: modules.league_profile_audit -> /mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/league_profile_audit.json\nOK: modules.clv_audit -> /mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/clv_audit.json\nOK: modules.market_movement_audit -> /mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/market_movement_audit.json\nOK: modules.risk_audit -> /mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/risk_audit.json\nOK: modules.self_learning_audit -> /mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/self_learning_audit.json\n",
+    "stderr": "Spreadsheet runtime warmup failed during python startup\nTraceback (most recent call last):\n  File \"/tmp/tmp.9eeVjt35CN/artifact_tool_v2-2.7.5/artifact_tool/patches/warm_spreadsheet_runtime_on_startup.py\", line 26, in warm_spreadsheet_runtime_on_startup\n  File \"/tmp/tmp.9eeVjt35CN/artifact_tool_v2-2.7.5/artifact_tool/spreadsheet_warmup.py\", line 785, in warm_spreadsheet_runtime\n  File \"/tmp/tmp.9eeVjt35CN/artifact_tool_v2-2.7.5/artifact_tool/spreadsheet_warmup.py\", line 720, in _warm_feature_flows\n  File \"/tmp/tmp.9eeVjt35CN/artifact_tool_v2-2.7.5/artifact_tool/spreadsheet_warmup.py\", line 704, in _warm_collaboration_flows\n  File \"/tmp/tmp.9eeVjt35CN/artifact_tool_v2-2.7.5/artifact_tool/generated/interface/models.py\", line 48821, in hydrate_crdt_from_proto\n  File \"/tmp/tmp.9eeVjt35CN/artifact_tool_v2-2.7.5/artifact_tool/rpc/remote.py\", line 747, in __call__\n  File \"/tmp/tmp.9eeVjt35CN/artifact_tool_v2-2.7.5/artifact_tool/rpc/client.py\", line 150, in call\nartifact_tool.rpc.client.RemoteError: hydrateCrdtFromProto requires an empty collaborative document.\n"
+  },
+  "guarantee_scope": "Existing project files are not modified. Only safe_modular_upgrade directory and its output reports are added."
+}

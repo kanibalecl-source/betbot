@@ -1,0 +1,15 @@
+{
+  "module": "league_profile_audit",
+  "status": "no_league_column",
+  "source": "/mnt/data/betbot_upgrade_safe_work/betbot-main/data/results_history.csv",
+  "columns": [
+    "date",
+    "match",
+    "market",
+    "result",
+    "profit",
+    "roi",
+    "settled_at"
+  ],
+  "generated_at": "2026-05-27T11:32:49.457456"
+}
