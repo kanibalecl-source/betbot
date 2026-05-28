@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BetBot - typy</title>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #101418; color: #eef3f7; }
+        header { padding: 18px 24px; border-bottom: 1px solid #28323c; display: flex; gap: 18px; align-items: center; }
+        a { color: #8fd06b; text-decoration: none; }
+        main { padding: 24px; }
+        table { width: 100%; border-collapse: collapse; background: #151b21; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #27313a; text-align: left; font-size: 14px; }
+        th { color: #aab7c4; font-weight: 600; }
+        input { width: 78px; padding: 7px; border: 1px solid #36424e; background: #0f1419; color: #eef3f7; }
+        button { padding: 8px 12px; border: 0; background: #8fd06b; color: #111; font-weight: 700; cursor: pointer; }
+        .empty { color: #aab7c4; }
+    </style>
+</head>
+<body>
+<header>
+    <strong>BetBot</strong>
+    <a href="/">Typy</a>
+    <a href="/bets">Zagrane</a>
+</header>
+<main>
+    {% if picks %}
+    <table>
+        <thead>
+        <tr>
+            <th>Mecz</th>
+            <th>Liga</th>
+            <th>Typ</th>
+            <th>Kurs</th>
+            <th>Prawd.</th>
+            <th>Edge</th>
+            <th>Ryzyko</th>
+            <th>Stawka</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for pick in picks %}
+        <tr>
+            <td>{{ pick.get("mecz") or pick.get("match") }}</td>
+            <td>{{ pick.get("liga") or pick.get("league") }}</td>
+            <td>{{ pick.get("typ") or pick.get("market") }}</td>
+            <td>{{ pick.get("kurs_buk") or pick.get("odds") }}</td>
+            <td>{{ pick.get("prawd_final") or pick.get("confidence") }}</td>
+            <td>{{ pick.get("edge") }}</td>
+            <td>{{ pick.get("risk_level") or pick.get("risk") }}</td>
+            <td>
+                <form method="post" action="/play">
+                    <input type="hidden" name="pick_id" value="{{ pick.get('pick_id') }}">
+                    <input name="stake" type="number" step="0.01" min="0.01" value="10">
+                    <button type="submit">Graj</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Brak typow do wyswietlenia. Uruchom bota, aby utworzyc data/auto_all_picks.csv.</p>
+    {% endif %}
+</main>
+</body>
+</html>

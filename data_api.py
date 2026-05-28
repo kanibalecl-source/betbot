@@ -2,7 +2,7 @@ import os
 import requests
 from datetime import datetime, timedelta
 
-API_KEY = os.getenv("API_FOOTBALL_KEY", "5fa34697895a8e2dc8a46e91bcd6dc81")
+API_KEY = os.getenv("API_FOOTBALL_KEY", "")
 
 BASE_URL = "https://v3.football.api-sports.io"
 

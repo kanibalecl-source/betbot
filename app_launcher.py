@@ -9,15 +9,16 @@ print("🚀 APP LAUNCHER START")
 sys.stdout.flush()
 
 PORT = os.environ.get("PORT", "8080")
+PYTHON = sys.executable or "python3"
 
 PROCESS_SPECS = {
-    "scheduler": ["python3", "scheduler_engine.py"],
-    "live_pipeline": ["python3", "live_pipeline_runtime.py"],
-    "settlement": ["python3", "settle_loop.py"],
-    "persistence": ["python3", "persistence_runtime.py"],
-    "retraining": ["python3", "auto_retraining_loop.py"],
+    "scheduler": [PYTHON, "scheduler_engine.py"],
+    "live_pipeline": [PYTHON, "live_pipeline_runtime.py"],
+    "settlement": [PYTHON, "settle_loop.py"],
+    "persistence": [PYTHON, "persistence_runtime.py"],
+    "retraining": [PYTHON, "auto_retraining_loop.py"],
     "dashboard": [
-        "python3", "-m", "streamlit", "run", "dashboard_streamlit.py",
+        PYTHON, "-m", "streamlit", "run", "dashboard_streamlit.py",
         "--server.port", str(PORT),
         "--server.address", "0.0.0.0",
         "--server.headless", "true",

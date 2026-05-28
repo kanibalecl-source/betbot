@@ -9,17 +9,21 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-PICKS_FILE = DATA_DIR / "live_matches.csv"
+PICK_CANDIDATES = [
+    DATA_DIR / "auto_all_picks.csv",
+    DATA_DIR / "live_matches.csv",
+]
 
 app = Flask(__name__)
 
 
 def load_picks():
-    if not PICKS_FILE.exists():
+    picks_file = next((path for path in PICK_CANDIDATES if path.exists()), None)
+    if picks_file is None:
         return []
 
     try:
-        df = pd.read_csv(PICKS_FILE)
+        df = pd.read_csv(picks_file)
         df = df.fillna("")
         return df.to_dict(orient="records")
 

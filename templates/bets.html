@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BetBot - zagrane</title>
+    <style>
+        body { margin: 0; font-family: Arial, sans-serif; background: #101418; color: #eef3f7; }
+        header { padding: 18px 24px; border-bottom: 1px solid #28323c; display: flex; gap: 18px; align-items: center; }
+        a { color: #8fd06b; text-decoration: none; }
+        main { padding: 24px; }
+        table { width: 100%; border-collapse: collapse; background: #151b21; }
+        th, td { padding: 10px 12px; border-bottom: 1px solid #27313a; text-align: left; font-size: 14px; }
+        th { color: #aab7c4; font-weight: 600; }
+        .empty { color: #aab7c4; }
+    </style>
+</head>
+<body>
+<header>
+    <strong>BetBot</strong>
+    <a href="/">Typy</a>
+    <a href="/bets">Zagrane</a>
+</header>
+<main>
+    {% if bets %}
+    <table>
+        <thead>
+        <tr>
+            <th>Data</th>
+            <th>Mecz</th>
+            <th>Typ</th>
+            <th>Kurs</th>
+            <th>Stawka</th>
+            <th>Status</th>
+            <th>Profit</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for bet in bets %}
+        <tr>
+            <td>{{ bet["created_at"] }}</td>
+            <td>{{ bet["match_name"] }}</td>
+            <td>{{ bet["bet_name"] }}</td>
+            <td>{{ bet["odds"] }}</td>
+            <td>{{ bet["stake"] }}</td>
+            <td>{{ bet["status"] }}</td>
+            <td>{{ bet["profit"] }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">Brak zapisanych zakladow.</p>
+    {% endif %}
+</main>
+</body>
+</html>

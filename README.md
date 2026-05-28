@@ -36,3 +36,8 @@ python main.py loop
 
 ## Dashboard
 streamlit run dashboard.py
+
+## Alternatywne komendy
+python bot.py
+python bot_loop.py
+streamlit run dashboard_streamlit.py

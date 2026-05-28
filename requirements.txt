@@ -6,3 +6,7 @@ numpy
 flask
 gunicorn
 openai>=1.0.0
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic>=2.7
+pydantic-settings>=2.3
