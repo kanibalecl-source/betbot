@@ -1109,10 +1109,16 @@ def render_manual_betting(picks_source: pd.DataFrame) -> None:
         stat_cols = st.columns(2)
         with stat_cols[0]:
             st.subheader("Single według ligi")
-            st.dataframe(league_stats, use_container_width=True, hide_index=True) if not league_stats.empty else st.info("Brak rozliczonych singli.")
+            if league_stats.empty:
+                st.info("Brak rozliczonych singli.")
+            else:
+                st.dataframe(league_stats, use_container_width=True, hide_index=True)
         with stat_cols[1]:
             st.subheader("Single według typu")
-            st.dataframe(market_stats, use_container_width=True, hide_index=True) if not market_stats.empty else st.info("Brak rozliczonych singli.")
+            if market_stats.empty:
+                st.info("Brak rozliczonych singli.")
+            else:
+                st.dataframe(market_stats, use_container_width=True, hide_index=True)
 
 
 css()
