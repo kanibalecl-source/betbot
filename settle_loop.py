@@ -4,6 +4,11 @@ from datetime import datetime
 
 from settle_results import settle_open_bets
 
+try:
+    from manual_betting import settle_all_manual
+except Exception:
+    settle_all_manual = None
+
 
 def get_loop_minutes():
     try:
@@ -21,6 +26,9 @@ def main():
             print(f"\n[{datetime.now()}] Sprawdzam wyniki")
             updated = settle_open_bets()
             print(f"Rozliczono: {updated}")
+            if settle_all_manual:
+                manual_updated = settle_all_manual()
+                print(f"Rozliczono manualne: {manual_updated}")
         except Exception as exc:
             print(f"[BŁĄD SETTLE LOOP] {exc}")
 
