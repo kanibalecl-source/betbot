@@ -27,6 +27,7 @@ except Exception:
     def require_login():
         return True
 
+
 try:
     from manual_betting import (
         MANUAL_MARKETS,
@@ -966,7 +967,7 @@ def _manual_pick_label(row, idx: int) -> str:
     return f"{idx + 1}. {match} | {league} | bot: {bot_market} @ {odds}"
 
 
-def render_manual_betting(picks: pd.DataFrame) -> None:
+def render_manual_betting(picks_source: pd.DataFrame) -> None:
     title("MOJE ZAKLADY")
 
     if not all([add_manual_bet, grouped_manual_stats, manual_bets_dataframe, manual_summary]):
@@ -989,10 +990,10 @@ def render_manual_betting(picks: pd.DataFrame) -> None:
     with form_col:
         st.markdown('<div class="ka-panel"><h3>DODAJ MOJ ZAKLAD</h3></div>', unsafe_allow_html=True)
 
-        if picks.empty:
+        if picks_source.empty:
             st.warning("Brak meczow z selekcji bota. Uruchom bota, aby uzupelnic auto_all_picks.csv.")
         else:
-            shown = picks.reset_index(drop=True)
+            shown = picks_source.reset_index(drop=True)
             labels = [_manual_pick_label(row, idx) for idx, row in shown.iterrows()]
 
             with st.form("manual_bet_form", clear_on_submit=False):
@@ -1012,24 +1013,16 @@ def render_manual_betting(picks: pd.DataFrame) -> None:
                 submitted = st.form_submit_button("Zapisz moj zaklad")
                 if submitted:
                     try:
-                        bet_id = add_manual_bet(
-                            selected_pick,
-                            selected_market,
-                            odds,
-                            stake,
-                            bookmaker=bookmaker,
-                            note=note,
-                        )
+                        bet_id = add_manual_bet(selected_pick, selected_market, odds, stake, bookmaker=bookmaker, note=note)
                         st.success(f"Zapisano zaklad manualny #{bet_id}.")
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Nie udalo sie zapisac zakladu: {exc}")
 
-            if settle_manual_open_bets:
-                if st.button("Sprawdz wyniki manualnych teraz"):
-                    updated = settle_manual_open_bets()
-                    st.success(f"Rozliczono manualnych: {updated}")
-                    st.rerun()
+            if settle_manual_open_bets and st.button("Sprawdz wyniki manualnych teraz"):
+                updated = settle_manual_open_bets()
+                st.success(f"Rozliczono manualnych: {updated}")
+                st.rerun()
 
     with stats_col:
         st.markdown('<div class="ka-panel"><h3>ANALIZA MOJEJ GRY</h3></div>', unsafe_allow_html=True)
@@ -1039,8 +1032,8 @@ def render_manual_betting(picks: pd.DataFrame) -> None:
         else:
             league_stats = grouped_manual_stats(manual_df, "league")
             market_stats = grouped_manual_stats(manual_df, "manual_market_label")
-
             stat_tabs = st.tabs(["Historia", "Ligi", "Typy zakladow"])
+
             with stat_tabs[0]:
                 show_cols = [
                     "created_at", "match_name", "league", "manual_market_label",

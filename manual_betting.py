@@ -248,26 +248,14 @@ def settle_manual_open_bets(limit: int = 300) -> int:
 def manual_bets_dataframe(limit: int = 1000) -> pd.DataFrame:
     init_manual_db()
     conn = get_conn()
-    rows = conn.execute(
-        "SELECT * FROM manual_bets ORDER BY id DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM manual_bets ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
     conn.close()
     return pd.DataFrame([dict(row) for row in rows])
 
 
 def manual_summary(df: pd.DataFrame) -> dict:
     if df is None or df.empty:
-        return {
-            "total": 0,
-            "open": 0,
-            "closed": 0,
-            "wins": 0,
-            "profit": 0.0,
-            "stake": 0.0,
-            "roi": 0.0,
-            "winrate": 0.0,
-        }
+        return {"total": 0, "open": 0, "closed": 0, "wins": 0, "profit": 0.0, "stake": 0.0, "roi": 0.0, "winrate": 0.0}
 
     closed = df[df["status"].astype(str).str.upper() == "CLOSED"].copy()
     wins = int((closed["result"].astype(str).str.upper() == "WIN").sum()) if not closed.empty else 0
@@ -297,7 +285,6 @@ def grouped_manual_stats(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
     closed["stake_num"] = pd.to_numeric(closed["stake"], errors="coerce").fillna(0)
     closed["profit_num"] = pd.to_numeric(closed["profit"], errors="coerce").fillna(0)
     closed["win_num"] = (closed["result"].astype(str).str.upper() == "WIN").astype(int)
-
     grouped = closed.groupby(group_col, dropna=False).agg(
         bets=("id", "count"),
         wins=("win_num", "sum"),
@@ -305,10 +292,7 @@ def grouped_manual_stats(df: pd.DataFrame, group_col: str) -> pd.DataFrame:
         profit=("profit_num", "sum"),
     ).reset_index()
     grouped["winrate_%"] = (grouped["wins"] / grouped["bets"] * 100).round(2)
-    grouped["roi_%"] = grouped.apply(
-        lambda row: round((row["profit"] / row["stake"]) * 100, 2) if row["stake"] else 0.0,
-        axis=1,
-    )
+    grouped["roi_%"] = grouped.apply(lambda row: round((row["profit"] / row["stake"]) * 100, 2) if row["stake"] else 0.0, axis=1)
     grouped["profit"] = grouped["profit"].round(2)
     grouped["stake"] = grouped["stake"].round(2)
     return grouped.sort_values(["profit", "roi_%"], ascending=False)
