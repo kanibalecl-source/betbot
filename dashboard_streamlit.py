@@ -31,7 +31,8 @@ except Exception:
 try:
     from manual_betting import (
         MANUAL_MARKETS, add_manual_bet, add_ako_coupon, ako_coupons_dataframe,
-        ako_legs_dataframe, grouped_manual_stats, manual_bets_dataframe,
+        ako_legs_dataframe, delete_ako_coupon, delete_manual_bet,
+        grouped_manual_stats, manual_bets_dataframe,
         manual_summary, settle_all_manual,
     )
 except Exception:
@@ -40,6 +41,8 @@ except Exception:
     add_ako_coupon = None
     ako_coupons_dataframe = None
     ako_legs_dataframe = None
+    delete_ako_coupon = None
+    delete_manual_bet = None
     grouped_manual_stats = None
     manual_bets_dataframe = None
     manual_summary = None
@@ -1036,7 +1039,15 @@ def render_manual_betting(picks_source: pd.DataFrame) -> None:
                     st.error(f"Nie udało się zapisać zakładu: {exc}")
 
     with mode_tabs[1]:
-        leg_count = st.number_input("Liczba spotkań na kuponie AKO", min_value=2, max_value=10, value=3, step=1)
+        leg_count = st.number_input(
+            "Ile pozycji chcesz dodać do kuponu AKO?",
+            min_value=2,
+            max_value=10,
+            value=3,
+            step=1,
+            help="Zmieniasz tę liczbę i panel pokaże dokładnie tyle pól zdarzeń na kuponie.",
+        )
+        st.caption(f"Ten kupon będzie miał {int(leg_count)} pozycji.")
         with st.form("manual_ako_form", clear_on_submit=False):
             coupon_name = st.text_input("Nazwa kuponu", value="Kupon AKO")
             coupon_bookmaker = st.text_input("Bukmacher kuponu", value="", key="ako_bookmaker")
@@ -1082,7 +1093,7 @@ def render_manual_betting(picks_source: pd.DataFrame) -> None:
             st.rerun()
 
     with mode_tabs[2]:
-        hist_tabs = st.tabs(["Single", "AKO", "Pozycje AKO"])
+        hist_tabs = st.tabs(["Single", "AKO", "Pozycje AKO", "Usuń"])
         with hist_tabs[0]:
             if manual_df.empty:
                 st.info("Brak zapisanych zakładów single.")
@@ -1102,6 +1113,37 @@ def render_manual_betting(picks_source: pd.DataFrame) -> None:
             else:
                 cols = [c for c in ["coupon_id", "match_name", "league", "manual_market_label", "odds", "status", "result", "score"] if c in legs_df.columns]
                 st.dataframe(legs_df[cols], use_container_width=True, hide_index=True)
+        with hist_tabs[3]:
+            delete_cols = st.columns(2)
+            with delete_cols[0]:
+                st.subheader("Usuń single")
+                if manual_df.empty or delete_manual_bet is None:
+                    st.info("Brak zapisanych zakładów single.")
+                else:
+                    single_options = {
+                        f"#{int(row['id'])} | {row.get('match_name', '-')} | {row.get('manual_market_label', '-')} | {row.get('status', '-')}" : int(row["id"])
+                        for _, row in manual_df.iterrows()
+                    }
+                    selected_single = st.selectbox("Wybierz single do usunięcia", list(single_options.keys()), key="delete_single_select")
+                    if st.button("Usuń wybrany single", key="delete_single_button"):
+                        delete_manual_bet(single_options[selected_single])
+                        st.success("Usunięto zakład single.")
+                        st.rerun()
+
+            with delete_cols[1]:
+                st.subheader("Usuń kupon AKO")
+                if ako_df.empty or delete_ako_coupon is None:
+                    st.info("Brak zapisanych kuponów AKO.")
+                else:
+                    ako_options = {
+                        f"#{int(row['id'])} | {row.get('name', 'Kupon AKO')} | {row.get('status', '-')} | kurs {row.get('total_odds', '-')}" : int(row["id"])
+                        for _, row in ako_df.iterrows()
+                    }
+                    selected_coupon = st.selectbox("Wybierz kupon AKO do usunięcia", list(ako_options.keys()), key="delete_ako_select")
+                    if st.button("Usuń wybrany kupon AKO", key="delete_ako_button"):
+                        delete_ako_coupon(ako_options[selected_coupon])
+                        st.success("Usunięto kupon AKO razem z jego pozycjami.")
+                        st.rerun()
 
     with mode_tabs[3]:
         league_stats = grouped_manual_stats(manual_df, "league")

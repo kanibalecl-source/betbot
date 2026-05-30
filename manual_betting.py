@@ -437,6 +437,23 @@ def ako_legs_dataframe(coupon_id: int | None = None) -> pd.DataFrame:
     return pd.DataFrame([dict(row) for row in rows])
 
 
+def delete_manual_bet(bet_id: int) -> None:
+    init_manual_db()
+    conn = get_conn()
+    conn.execute("DELETE FROM manual_bets WHERE id=?", (int(bet_id),))
+    conn.commit()
+    conn.close()
+
+
+def delete_ako_coupon(coupon_id: int) -> None:
+    init_manual_db()
+    conn = get_conn()
+    conn.execute("DELETE FROM manual_ako_legs WHERE coupon_id=?", (int(coupon_id),))
+    conn.execute("DELETE FROM manual_ako_coupons WHERE id=?", (int(coupon_id),))
+    conn.commit()
+    conn.close()
+
+
 def manual_summary(df: pd.DataFrame) -> dict:
     if df is None or df.empty:
         return {"total": 0, "open": 0, "closed": 0, "wins": 0, "profit": 0.0, "stake": 0.0, "roi": 0.0, "winrate": 0.0}
