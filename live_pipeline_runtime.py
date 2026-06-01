@@ -8,7 +8,6 @@ from typing import Any, Dict, List
 
 import pandas as pd
 import requests
-from storage_paths import DATA_DIR
 
 try:
     from config import API_FOOTBALL_KEY
@@ -21,6 +20,7 @@ except Exception:
     AdvancedLiveEngine = None
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 

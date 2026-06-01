@@ -110,6 +110,12 @@ def _normalize_match(f):
 def _filter_and_normalize(fixtures):
 
     matches = []
+    skipped = {
+        "finished_or_cancelled": 0,
+        "league_not_top": 0,
+        "not_real_match": 0,
+        "bad_payload": 0,
+    }
 
     for f in fixtures:
 
@@ -131,6 +137,7 @@ def _filter_and_normalize(fixtures):
             )
 
         except Exception:
+            skipped["bad_payload"] += 1
             continue
 
         if status in [
@@ -140,15 +147,20 @@ def _filter_and_normalize(fixtures):
             "CANC",
             "PST"
         ]:
+            skipped["finished_or_cancelled"] += 1
             continue
 
         if league_id not in TOP_LEAGUE_IDS:
+            skipped["league_not_top"] += 1
             continue
 
         if not is_real_match(f):
+            skipped["not_real_match"] += 1
             continue
 
         matches.append(_normalize_match(f))
+
+    print(f"NORMALIZE SKIP STATS: {skipped}")
 
     return matches
 
@@ -198,18 +210,8 @@ def get_matches():
         if matches:
             return matches
 
-    print("NO DATE MATCHES -> TRY NEXT=100")
-
-    fixtures = _request(
-        "fixtures",
-        {"next": 100}
-    )
-
-    matches = _filter_and_normalize(fixtures)
-
-    print(f"NEXT MATCHES: {len(matches)}")
-
-    return matches
+    print("NO DATE MATCHES -> zachowuje poprzedni auto_all_picks.csv")
+    return []
 
 
 # =========================

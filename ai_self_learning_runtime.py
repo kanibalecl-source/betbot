@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 import pandas as pd
-from storage_paths import DATA_DIR
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"

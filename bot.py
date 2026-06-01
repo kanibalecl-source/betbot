@@ -10,7 +10,6 @@ from pathlib import Path
 from data_api import get_matches, get_odds_market_data
 from model_goals import build_model
 from team_stats import get_match_xg
-from storage_paths import DATA_DIR
 
 # =========================
 # OPTIONAL STAGE IMPORTS
@@ -73,6 +72,7 @@ except Exception:
 
 
 BASE_DIR = Path(__file__).parent
+DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 ALL_FILE = DATA_DIR / "auto_all_picks.csv"
@@ -109,7 +109,21 @@ TARGET_MARKETS = {
 
 def load_config():
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        cfg = json.load(f)
+    apply_active_filter_profile(cfg)
+    return cfg
+
+
+def apply_active_filter_profile(cfg):
+    profiles = cfg.get("filter_profiles", {}) or {}
+    active = str(cfg.get("active_filter_profile", "medium")).lower()
+    profile = profiles.get(active) or profiles.get("medium") or {}
+    filters = cfg.setdefault("filters", {})
+    if "min_book_odds" in profile:
+        filters["min_book_odds"] = safe_float(profile.get("min_book_odds"), filters.get("min_book_odds", 1.0))
+    if "max_book_odds" in profile:
+        filters["max_book_odds"] = safe_float(profile.get("max_book_odds"), filters.get("max_book_odds", 3.5))
+    cfg["active_filter_profile"] = active if active in profiles else "medium"
 
 
 # =========================
@@ -590,6 +604,12 @@ def run_bot():
     active_markets = cfg["active_markets"]
     thresholds = cfg["risk_thresholds"]
     bankroll_size = safe_float(cfg.get("bankroll", 1000), 1000)
+    active_profile = str(cfg.get("active_filter_profile", "medium")).upper()
+    print(
+        f"FILTER PROFILE: {active_profile} | odds "
+        f"{safe_float(filters.get('min_book_odds'), 1.0):.2f}-"
+        f"{safe_float(filters.get('max_book_odds'), 3.5):.2f}"
+    )
 
     engines = build_stage_engines()
 

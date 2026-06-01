@@ -1,11 +1,11 @@
 ﻿
 import base64
+import json
 from pathlib import Path
 from typing import Iterable, List
 
 import pandas as pd
 import streamlit as st
-from storage_paths import DATA_DIR
 
 try:
     from gpt_betting_assistant import render_gpt_chat_tab
@@ -52,6 +52,7 @@ except Exception:
 st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="đź“", layout="wide", initial_sidebar_state="collapsed")
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
 AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"
@@ -60,6 +61,7 @@ LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
 BANNER_FILE = BASE_DIR / "kanibal_banner.png"
+CONFIG_FILE = BASE_DIR / "config_strategy.json"
 
 DISPLAY_MARKETS = {
     "DOUBLE_1X": "1X", "DOUBLE_X2": "X2", "DOUBLE_12": "12",
@@ -81,6 +83,23 @@ def read_csv_safe(path: Path) -> pd.DataFrame:
         except Exception:
             return pd.DataFrame()
     return pd.DataFrame()
+
+
+def streamlit_df(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame()
+    out = df.copy()
+    text_cols = [
+        "fixture_id", "odds_event_id", "pick_id", "id", "coupon_id",
+        "home_id", "away_id", "league_id",
+    ]
+    for col in text_cols:
+        if col in out.columns:
+            out[col] = out[col].astype(str)
+    for col in out.columns:
+        if out[col].dtype == "object":
+            out[col] = out[col].astype(str)
+    return out
 
 
 def first_existing(row, names: Iterable[str], default="-"):
@@ -138,8 +157,36 @@ def normalize_picks(df: pd.DataFrame) -> pd.DataFrame:
     if "kurs_buk" in out.columns:
         odds = pd.to_numeric(out["kurs_buk"], errors="coerce")
         if odds.notna().any():
-            out = out[(odds >= 1.00) & (odds <= 2.80)].copy()
+            out = out[(odds >= 1.00) & (odds <= 5.00)].copy()
     return out.reset_index(drop=True)
+
+
+def load_strategy_config() -> dict:
+    try:
+        return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_strategy_config(cfg: dict) -> None:
+    CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def filter_profile_options(cfg: dict) -> dict:
+    profiles = cfg.get("filter_profiles") or {}
+    if profiles:
+        return profiles
+    return {
+        "safe": {"label": "Filtry Safe", "min_book_odds": 1.0, "max_book_odds": 2.5},
+        "medium": {"label": "Filtry Medium", "min_book_odds": 1.0, "max_book_odds": 3.5},
+        "risk": {"label": "Filtry Risk", "min_book_odds": 1.0, "max_book_odds": 5.0},
+    }
+
+
+def active_filter_profile(cfg: dict) -> str:
+    active = str(cfg.get("active_filter_profile", "medium")).lower()
+    profiles = filter_profile_options(cfg)
+    return active if active in profiles else "medium"
 
 
 
@@ -920,7 +967,7 @@ def render_history(results: pd.DataFrame) -> None:
         wins = str((results["result"].astype(str).str.lower().str.contains("win|wygr|won|1", regex=True)).sum())
     metrics([("Liczba typĂłw", str(len(results)), "rozliczenia"), ("Wygrane", wins, "historia"), ("Zysk", money(numeric_series(results, 'profit').sum() if not results.empty else 0), "profit"), ("ROI", f"{as_float(numeric_series(results, 'roi').mean(), 0):+.1f}%", "Ĺ›rednio"), ("CLV", "4.2%", "tracking")])
     if not results.empty:
-        st.dataframe(results, use_container_width=True, hide_index=True)
+        st.dataframe(streamlit_df(results), use_container_width=True, hide_index=True)
     st.markdown('<div class="ka-two">' + chart_card("Zysk w czasie", result_roi_values(results), "Profit / ROI") + chart_card("Statystyki szczegĂłĹ‚owe", group_counts(results, ["result", "market", "league"], 10), "Historia wynikĂłw") + '</div>', unsafe_allow_html=True)
 
 
@@ -960,7 +1007,49 @@ def render_alerts(picks: pd.DataFrame, live: pd.DataFrame) -> None:
 
 def render_settings() -> None:
     title("USTAWIENIA")
-    st.markdown('<div class="ka-three"><div class="ka-panel"><h3>Ustawienia ogĂłlne</h3><p>Panel wizualny aktywny. Logika systemu bez zmian.</p></div><div class="ka-panel"><h3>ZarzÄ…dzanie bankrollem</h3><p>Parametry pobierane z obecnego systemu.</p></div><div class="ka-panel"><h3>Filtry lig</h3><p>Bez ingerencji w backend.</p></div></div>', unsafe_allow_html=True)
+    cfg = load_strategy_config()
+    profiles = filter_profile_options(cfg)
+    active = active_filter_profile(cfg)
+    profile_keys = list(profiles.keys())
+    current_idx = profile_keys.index(active) if active in profile_keys else 0
+
+    def profile_label(key: str) -> str:
+        profile = profiles.get(key, {})
+        return (
+            f"{profile.get('label', key.title())} "
+            f"({float(profile.get('min_book_odds', 1.0)):.2f}-"
+            f"{float(profile.get('max_book_odds', 3.5)):.2f})"
+        )
+
+    selected = st.radio(
+        "Zakres filtrów bota",
+        profile_keys,
+        index=current_idx,
+        horizontal=True,
+        format_func=profile_label,
+        key="filter_profile_select",
+    )
+
+    selected_profile = profiles[selected]
+    metrics([
+        ("Aktywny profil", str(profiles[active].get("label", active.title())), "obecnie zapisany"),
+        ("Wybrany zakres", f"{float(selected_profile.get('min_book_odds', 1.0)):.2f}-{float(selected_profile.get('max_book_odds', 3.5)):.2f}", "po zapisie"),
+        ("Historia", "bez zmian", "nie kasuje danych"),
+        ("Zastosowanie", "kolejny cykl", "scheduler/bot"),
+        ("Plik", "config", "config_strategy.json"),
+    ])
+
+    if st.button("Zapisz profil filtrów", type="primary", use_container_width=True):
+        cfg["filter_profiles"] = profiles
+        cfg["active_filter_profile"] = selected
+        cfg.setdefault("filters", {})
+        cfg["filters"]["min_book_odds"] = float(selected_profile.get("min_book_odds", 1.0))
+        cfg["filters"]["max_book_odds"] = float(selected_profile.get("max_book_odds", 3.5))
+        save_strategy_config(cfg)
+        st.success(f"Zapisano: {profile_label(selected)}. Bot użyje tego zakresu przy następnym uruchomieniu.")
+        st.rerun()
+
+    st.info("Zmiana profilu nie usuwa historii. Zmienia tylko zakres kursów używany przez bota przy kolejnym pobraniu typów.")
 
 def _manual_pick_label(row, idx: int) -> str:
     league = first_existing(row, ["liga", "league"], "-")
@@ -1099,20 +1188,20 @@ def render_manual_betting(picks_source: pd.DataFrame) -> None:
                 st.info("Brak zapisanych zakładów single.")
             else:
                 cols = [c for c in ["created_at", "match_name", "league", "manual_market_label", "odds", "stake", "status", "result", "score", "profit", "roi"] if c in manual_df.columns]
-                st.dataframe(manual_df[cols], use_container_width=True, hide_index=True)
+                st.dataframe(streamlit_df(manual_df[cols]), use_container_width=True, hide_index=True)
         with hist_tabs[1]:
             if ako_df.empty:
                 st.info("Brak zapisanych kuponów AKO.")
             else:
                 cols = [c for c in ["created_at", "name", "stake", "total_odds", "calculated_odds", "status", "result", "profit", "roi", "bookmaker"] if c in ako_df.columns]
-                st.dataframe(ako_df[cols], use_container_width=True, hide_index=True)
+                st.dataframe(streamlit_df(ako_df[cols]), use_container_width=True, hide_index=True)
         with hist_tabs[2]:
             legs_df = ako_legs_dataframe() if ako_legs_dataframe else pd.DataFrame()
             if legs_df.empty:
                 st.info("Brak pozycji AKO.")
             else:
                 cols = [c for c in ["coupon_id", "match_name", "league", "manual_market_label", "odds", "status", "result", "score"] if c in legs_df.columns]
-                st.dataframe(legs_df[cols], use_container_width=True, hide_index=True)
+                st.dataframe(streamlit_df(legs_df[cols]), use_container_width=True, hide_index=True)
         with hist_tabs[3]:
             delete_cols = st.columns(2)
             with delete_cols[0]:
@@ -1154,13 +1243,13 @@ def render_manual_betting(picks_source: pd.DataFrame) -> None:
             if league_stats.empty:
                 st.info("Brak rozliczonych singli.")
             else:
-                st.dataframe(league_stats, use_container_width=True, hide_index=True)
+                st.dataframe(streamlit_df(league_stats), use_container_width=True, hide_index=True)
         with stat_cols[1]:
             st.subheader("Single według typu")
             if market_stats.empty:
                 st.info("Brak rozliczonych singli.")
             else:
-                st.dataframe(market_stats, use_container_width=True, hide_index=True)
+                st.dataframe(streamlit_df(market_stats), use_container_width=True, hide_index=True)
 
 
 css()

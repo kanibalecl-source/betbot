@@ -11,6 +11,24 @@
     "min_book_odds": 1.0,
     "max_book_odds": 3.5
   },
+  "active_filter_profile": "medium",
+  "filter_profiles": {
+    "safe": {
+      "label": "Filtry Safe",
+      "min_book_odds": 1.0,
+      "max_book_odds": 2.5
+    },
+    "medium": {
+      "label": "Filtry Medium",
+      "min_book_odds": 1.0,
+      "max_book_odds": 3.5
+    },
+    "risk": {
+      "label": "Filtry Risk",
+      "min_book_odds": 1.0,
+      "max_book_odds": 5.0
+    }
+  },
   "risk_thresholds": {
     "top": {
       "min_edge": 0.1,
