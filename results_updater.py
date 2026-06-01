@@ -1,12 +1,12 @@
 import pandas as pd
 import requests
 from pathlib import Path
+from storage_paths import DATA_DIR
 
 API_KEY = "272be17b5c62994697794e6fc017996c".strip()
 BASE_URL = "https://v3.football.api-sports.io"
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
 PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
 HISTORY_FILE = DATA_DIR / "history_results.csv"
 

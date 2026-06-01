@@ -10,6 +10,7 @@ from pathlib import Path
 from data_api import get_matches, get_odds_market_data
 from model_goals import build_model
 from team_stats import get_match_xg
+from storage_paths import DATA_DIR
 
 # =========================
 # OPTIONAL STAGE IMPORTS
@@ -72,7 +73,6 @@ except Exception:
 
 
 BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 ALL_FILE = DATA_DIR / "auto_all_picks.csv"

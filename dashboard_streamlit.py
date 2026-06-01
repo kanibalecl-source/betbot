@@ -5,6 +5,7 @@ from typing import Iterable, List
 
 import pandas as pd
 import streamlit as st
+from storage_paths import DATA_DIR
 
 try:
     from gpt_betting_assistant import render_gpt_chat_tab
@@ -51,7 +52,6 @@ except Exception:
 st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="đź“", layout="wide", initial_sidebar_state="collapsed")
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
 AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"

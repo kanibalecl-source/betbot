@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from ako_coupon_builder import build_ako_coupons
+from storage_paths import DATA_DIR
 
 try:
     from dotenv import load_dotenv
@@ -17,7 +18,7 @@ try:
 except Exception:
     pass
 
-REPORT_FILE = Path("data/gpt_analysis_report.json")
+REPORT_FILE = DATA_DIR / "gpt_analysis_report.json"
 CACHE_DIR = Path("cache/gpt_analysis")
 
 
@@ -33,8 +34,8 @@ def _read_csv(path: Path) -> List[Dict[str, Any]]:
 
 def load_candidate_matches(base_dir: Path, limit: int | None = None) -> List[Dict[str, Any]]:
     files = [
-        base_dir / "data" / "auto_all_picks.csv",
-        base_dir / "data" / "live_matches.csv",
+        DATA_DIR / "auto_all_picks.csv",
+        DATA_DIR / "live_matches.csv",
         base_dir / "auto_all_picks.csv",
         base_dir / "live_matches.csv",
     ]

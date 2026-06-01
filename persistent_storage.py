@@ -7,6 +7,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
+from storage_paths import DATA_DIR
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -20,9 +21,8 @@ def _data_dir() -> Path:
             path.mkdir(parents=True, exist_ok=True)
             return path
     # Fallback: obecny folder data. Działa od razu, ale na Railway bez volume może znikać po redeploy.
-    path = BASE_DIR / "data"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return DATA_DIR
 
 
 DATA_DIR = _data_dir()
