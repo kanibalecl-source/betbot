@@ -8,8 +8,8 @@
     "min_ev": 0.02,
     "max_edge": 0.35,
     "max_margin_sum": 1.2,
-    "min_book_odds": 1.2,
-    "max_book_odds": 15.0
+    "min_book_odds": 1.0,
+    "max_book_odds": 3.5
   },
   "risk_thresholds": {
     "top": {

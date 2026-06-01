@@ -685,9 +685,12 @@ def run_bot():
             bookmaker = data.get("bookmaker", data.get("site", ""))
 
             # =========================
-            # ODDS RANGE FILTER 1.00–2.50
+            # ODDS RANGE FILTER
             # =========================
-            if not book_odds or book_odds < 1.00 or book_odds > 2.50:
+            min_book_odds = safe_float(filters.get("min_book_odds"), 1.00)
+            max_book_odds = safe_float(filters.get("max_book_odds"), 3.50)
+
+            if not book_odds or book_odds < min_book_odds or book_odds > max_book_odds:
                 skip_stats["odds_range"] += 1
                 continue
 
