@@ -29,6 +29,60 @@
       "max_book_odds": 5.0
     }
   },
+  "bot_modes": {
+    "main": {
+      "label": "Bot obecny",
+      "output_file": "auto_all_picks.csv",
+      "history_file": "auto_all_picks_history.csv",
+      "include_all_real_leagues": false
+    },
+    "low": {
+      "label": "Mecze LOW",
+      "output_file": "auto_low_picks.csv",
+      "history_file": "auto_low_picks_history.csv",
+      "filter_profile": "medium",
+      "include_all_real_leagues": true,
+      "filters": {
+        "min_edge": 0.01,
+        "min_ev": 0.0,
+        "max_edge": 0.5,
+        "max_margin_sum": 1.25,
+        "min_book_odds": 1.0,
+        "max_book_odds": 3.5
+      },
+      "risk_thresholds": {
+        "risk": {
+          "min_edge": 0.01,
+          "min_ev": 0.0,
+          "min_probability": 0.38,
+          "max_margin_sum": 1.25
+        }
+      }
+    },
+    "risk": {
+      "label": "Mecze RISK",
+      "output_file": "auto_risk_picks.csv",
+      "history_file": "auto_risk_picks_history.csv",
+      "filter_profile": "risk",
+      "include_all_real_leagues": true,
+      "filters": {
+        "min_edge": 0.0,
+        "min_ev": -0.02,
+        "max_edge": 0.65,
+        "max_margin_sum": 1.35,
+        "min_book_odds": 1.0,
+        "max_book_odds": 5.0
+      },
+      "risk_thresholds": {
+        "risk": {
+          "min_edge": 0.0,
+          "min_ev": -0.02,
+          "min_probability": 0.35,
+          "max_margin_sum": 1.35
+        }
+      }
+    }
+  },
   "risk_thresholds": {
     "top": {
       "min_edge": 0.1,

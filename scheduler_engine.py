@@ -2,6 +2,7 @@ import subprocess
 import time
 import traceback
 import sys
+import os
 from datetime import datetime
 
 print("🚨 SCHEDULER FILE STARTED")
@@ -9,42 +10,57 @@ print("🚨 SCHEDULER FILE STARTED")
 sys.stdout.flush()
 
 
+BOT_MODES = [
+    ("main", "BOT OBECNY"),
+    ("low", "MECZE LOW"),
+    ("risk", "MECZE RISK"),
+]
+
+
+def run_bot_mode(mode, label):
+    print(f"🚀 START {label}")
+    print(f"⏰ {datetime.now()}")
+
+    sys.stdout.flush()
+
+    env = os.environ.copy()
+    env["KANIBAL_BOT_MODE"] = mode
+    env["KANIBAL_INCLUDE_ALL_LEAGUES"] = "1" if mode in {"low", "risk"} else ""
+
+    process = subprocess.Popen(
+        ["python3", "bot.py", "--mode", mode],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        env=env,
+    )
+
+    while True:
+        output = process.stdout.readline()
+
+        if output == "" and process.poll() is not None:
+            break
+
+        if output:
+            print(f"[{label}] {output.strip()}")
+            sys.stdout.flush()
+
+    return_code = process.poll()
+    print(f"✅ {label} EXECUTED | CODE={return_code}")
+    sys.stdout.flush()
+    return return_code
+
+
 def run_prematch():
     while True:
         try:
-            print("🚀 START PREMATCH BOT")
-            print(f"⏰ {datetime.now()}")
-
-            sys.stdout.flush()
-
             print("📡 FETCHING MATCHES")
 
             sys.stdout.flush()
 
-            process = subprocess.Popen(
-                ["python3", "bot.py"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-
-            while True:
-                output = process.stdout.readline()
-
-                if output == "" and process.poll() is not None:
-                    break
-
-                if output:
-                    print(f"[BOT] {output.strip()}")
-
-                    sys.stdout.flush()
-
-            return_code = process.poll()
-
-            print(f"✅ BOT EXECUTED | CODE={return_code}")
-
-            sys.stdout.flush()
+            for mode, label in BOT_MODES:
+                run_bot_mode(mode, label)
 
             try:
                 from live_pipeline_runtime import run_once as run_live_pipeline_once
@@ -103,4 +119,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

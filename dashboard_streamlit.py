@@ -57,6 +57,23 @@ DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
 AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"
 PICK_CANDIDATES = [DATA_DIR / "auto_all_picks.csv", BASE_DIR / "auto_all_picks.csv"]
+BOT_VIEWS = {
+    "main": {
+        "label": "Bot obecny",
+        "file": "auto_all_picks.csv",
+        "history": "auto_all_picks_history.csv",
+    },
+    "low": {
+        "label": "Mecze LOW",
+        "file": "auto_low_picks.csv",
+        "history": "auto_low_picks_history.csv",
+    },
+    "risk": {
+        "label": "Mecze RISK",
+        "file": "auto_risk_picks.csv",
+        "history": "auto_risk_picks_history.csv",
+    },
+}
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
@@ -191,8 +208,14 @@ def active_filter_profile(cfg: dict) -> str:
 
 
 
-def load_picks() -> pd.DataFrame:
-    for path in PICK_CANDIDATES:
+def pick_candidates(view_key: str = "main") -> list[Path]:
+    view = BOT_VIEWS.get(view_key, BOT_VIEWS["main"])
+    name = view["file"]
+    return [DATA_DIR / name, BASE_DIR / name]
+
+
+def load_picks(view_key: str = "main") -> pd.DataFrame:
+    for path in pick_candidates(view_key):
         df = read_csv_safe(path)
         if not df.empty:
             return df
@@ -1255,7 +1278,12 @@ def render_manual_betting(picks_source: pd.DataFrame) -> None:
 css()
 require_login()
 hero()
-raw_picks = load_picks()
+view_labels = {data["label"]: key for key, data in BOT_VIEWS.items()}
+selected_label = st.sidebar.radio("MENU", list(view_labels.keys()), index=0)
+selected_view = view_labels[selected_label]
+st.sidebar.caption("Każdy widok czyta osobny plik typów.")
+
+raw_picks = load_picks(selected_view)
 picks = normalize_picks(raw_picks)
 live = load_live_data(picks)
 results = load_results()
@@ -1263,7 +1291,9 @@ ai_picks = load_ai_picks(picks)
 
 tabs = st.tabs(["LIVE", "PREMATCH", "AI", "ANALYTICS", "HISTORY", "MOJE ZAKŁADY", "RANKING", "ALERTS", "SETTINGS", "GPT CHAT"])
 with tabs[0]: render_live(live, picks)
-with tabs[1]: render_prematch(picks)
+with tabs[1]:
+    st.caption(f"Aktywny widok: {selected_label}")
+    render_prematch(picks)
 with tabs[2]: render_ai(ai_picks, results)
 with tabs[3]: render_analytics(picks, results, "ANALITYKA")
 with tabs[4]: render_history(results)

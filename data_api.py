@@ -110,6 +110,7 @@ def _normalize_match(f):
 def _filter_and_normalize(fixtures):
 
     matches = []
+    include_all_real_leagues = os.getenv("KANIBAL_INCLUDE_ALL_LEAGUES", "").strip() == "1"
     skipped = {
         "finished_or_cancelled": 0,
         "league_not_top": 0,
@@ -150,7 +151,7 @@ def _filter_and_normalize(fixtures):
             skipped["finished_or_cancelled"] += 1
             continue
 
-        if league_id not in TOP_LEAGUE_IDS:
+        if not include_all_real_leagues and league_id not in TOP_LEAGUE_IDS:
             skipped["league_not_top"] += 1
             continue
 
@@ -160,7 +161,7 @@ def _filter_and_normalize(fixtures):
 
         matches.append(_normalize_match(f))
 
-    print(f"NORMALIZE SKIP STATS: {skipped}")
+    print(f"NORMALIZE SKIP STATS: {skipped} | include_all_real_leagues={include_all_real_leagues}")
 
     return matches
 

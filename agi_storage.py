@@ -17,9 +17,13 @@ DB_FILE = Path(os.getenv("KANIBAL_SQLITE_PATH", str(DATA_DIR / "kanibal_persiste
 
 PICK_FILES = [
     DATA_DIR / "auto_all_picks.csv",
+    DATA_DIR / "auto_low_picks.csv",
+    DATA_DIR / "auto_risk_picks.csv",
     DATA_DIR / "ai_picks.csv",
     DATA_DIR / "live_matches.csv",
     BASE_DIR / "auto_all_picks.csv",
+    BASE_DIR / "auto_low_picks.csv",
+    BASE_DIR / "auto_risk_picks.csv",
     BASE_DIR / "live_matches.csv",
 ]
 HISTORY_EXPORT = DATA_DIR / "results_history.csv"

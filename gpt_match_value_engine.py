@@ -34,8 +34,12 @@ def _read_csv(path: Path) -> List[Dict[str, Any]]:
 def load_candidate_matches(base_dir: Path, limit: int | None = None) -> List[Dict[str, Any]]:
     files = [
         base_dir / "data" / "auto_all_picks.csv",
+        base_dir / "data" / "auto_low_picks.csv",
+        base_dir / "data" / "auto_risk_picks.csv",
         base_dir / "data" / "live_matches.csv",
         base_dir / "auto_all_picks.csv",
+        base_dir / "auto_low_picks.csv",
+        base_dir / "auto_risk_picks.csv",
         base_dir / "live_matches.csv",
     ]
     rows: List[Dict[str, Any]] = []

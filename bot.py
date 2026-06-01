@@ -1,8 +1,10 @@
 from stage_a_value_layer import StageAValueLayer
 from stage_b_model_layer import StageBModelLayer
 from stage_c_meta_layer import StageCMetaLayer
+import argparse
 import json
 import hashlib
+import os
 import pandas as pd
 from datetime import datetime
 from pathlib import Path
@@ -79,6 +81,11 @@ ALL_FILE = DATA_DIR / "auto_all_picks.csv"
 HISTORY_FILE = DATA_DIR / "auto_all_picks_history.csv"
 CLV_FILE = DATA_DIR / "clv_history.csv"
 CONFIG_FILE = BASE_DIR / "config_strategy.json"
+BOT_MODE_FILES = {
+    "main": ("auto_all_picks.csv", "auto_all_picks_history.csv"),
+    "low": ("auto_low_picks.csv", "auto_low_picks_history.csv"),
+    "risk": ("auto_risk_picks.csv", "auto_risk_picks_history.csv"),
+}
 
 TARGET_MARKETS = {
     "DOUBLE_1X",
@@ -107,10 +114,10 @@ TARGET_MARKETS = {
 # CONFIG
 # =========================
 
-def load_config():
+def load_config(mode="main"):
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         cfg = json.load(f)
-    apply_active_filter_profile(cfg)
+    apply_bot_mode(cfg, mode)
     return cfg
 
 
@@ -124,6 +131,35 @@ def apply_active_filter_profile(cfg):
     if "max_book_odds" in profile:
         filters["max_book_odds"] = safe_float(profile.get("max_book_odds"), filters.get("max_book_odds", 3.5))
     cfg["active_filter_profile"] = active if active in profiles else "medium"
+
+
+def apply_bot_mode(cfg, mode="main"):
+    modes = cfg.get("bot_modes", {}) or {}
+    mode = str(mode or "main").lower()
+    mode_cfg = modes.get(mode, {})
+    if mode_cfg.get("filter_profile"):
+        cfg["active_filter_profile"] = str(mode_cfg["filter_profile"]).lower()
+    apply_active_filter_profile(cfg)
+    cfg["bot_mode"] = mode if mode in BOT_MODE_FILES or mode in modes else "main"
+    cfg["bot_mode_label"] = mode_cfg.get("label", "Bot obecny")
+    cfg["include_all_real_leagues"] = bool(mode_cfg.get("include_all_real_leagues", False))
+    if mode_cfg.get("filters"):
+        cfg.setdefault("filters", {}).update(mode_cfg["filters"])
+    if mode_cfg.get("risk_thresholds"):
+        cfg.setdefault("risk_thresholds", {})
+        for key, values in mode_cfg["risk_thresholds"].items():
+            cfg["risk_thresholds"].setdefault(key, {}).update(values)
+    if mode_cfg.get("output_file") and mode_cfg.get("history_file"):
+        cfg["output_file"] = mode_cfg["output_file"]
+        cfg["history_file"] = mode_cfg["history_file"]
+
+
+def mode_paths(cfg):
+    mode = str(cfg.get("bot_mode", "main")).lower()
+    output_name, history_name = BOT_MODE_FILES.get(mode, BOT_MODE_FILES["main"])
+    output_name = cfg.get("output_file", output_name)
+    history_name = cfg.get("history_file", history_name)
+    return DATA_DIR / output_name, DATA_DIR / history_name
 
 
 # =========================
@@ -339,6 +375,15 @@ def preserve_existing_file_when_empty():
 
     pd.DataFrame([]).to_csv(ALL_FILE, index=False)
     print("⚠️ Brak typów i brak starego pliku — utworzono pusty CSV")
+
+
+def preserve_existing_file_when_empty(path=ALL_FILE):
+    if path.exists():
+        print(f"Brak nowych typow - zachowuje poprzedni {path.name}")
+        return
+
+    pd.DataFrame([]).to_csv(path, index=False)
+    print(f"Brak typow i brak starego pliku - utworzono pusty CSV: {path.name}")
 
 
 def clamp_probability(value):
@@ -594,10 +639,11 @@ def stage_clv(engines, book_odds, closing_odds=None):
 # MAIN BOT
 # =========================
 
-def run_bot():
+def run_bot(mode="main"):
     print("=== BOT START: CORE + STAGES 1-10 INTEGRATED ===")
 
-    cfg = load_config()
+    cfg = load_config(mode)
+    all_file, history_file = mode_paths(cfg)
     filters = cfg["filters"]
     model_weight = cfg["model"]["model_weight"]
     market_weight = cfg["model"]["market_weight"]
@@ -605,6 +651,10 @@ def run_bot():
     thresholds = cfg["risk_thresholds"]
     bankroll_size = safe_float(cfg.get("bankroll", 1000), 1000)
     active_profile = str(cfg.get("active_filter_profile", "medium")).upper()
+    bot_mode = str(cfg.get("bot_mode", mode)).lower()
+    bot_label = str(cfg.get("bot_mode_label", bot_mode.upper()))
+    os.environ["KANIBAL_INCLUDE_ALL_LEAGUES"] = "1" if cfg.get("include_all_real_leagues") else ""
+    print(f"BOT MODE: {bot_mode.upper()} | {bot_label}")
     print(
         f"FILTER PROFILE: {active_profile} | odds "
         f"{safe_float(filters.get('min_book_odds'), 1.0):.2f}-"
@@ -641,11 +691,11 @@ def run_bot():
 
     if not matches:
         print("⚠️ BRAK MECZÓW Z API — nie nadpisuję starego CSV")
-        preserve_existing_file_when_empty()
+        preserve_existing_file_when_empty(all_file)
         print(f"📈 SKIP STATS: {skip_stats}")
         print("✅ GOTOWE")
         print("📊 0 nowych typów zapisanych")
-        print(f"📁 {ALL_FILE}")
+        print(f"📁 {all_file}")
         return
 
     for match in matches:
@@ -898,6 +948,8 @@ def run_bot():
 
             rows.append({
                 "pick_id": pick_id,
+                "bot_mode": bot_mode,
+                "bot_label": bot_label,
                 "fixture_id": fixture_id,
                 "odds_event_id": odds_event_id,
                 "home_team": home_team,
@@ -1006,22 +1058,25 @@ def run_bot():
         )
         df = df.drop(columns=["_risk_sort"])
 
-        df.to_csv(ALL_FILE, index=False)
+        df.to_csv(all_file, index=False)
 
-        if HISTORY_FILE.exists():
-            df.to_csv(HISTORY_FILE, mode="a", index=False, header=False)
+        if history_file.exists():
+            df.to_csv(history_file, mode="a", index=False, header=False)
         else:
-            df.to_csv(HISTORY_FILE, index=False)
+            df.to_csv(history_file, index=False)
 
     else:
-        preserve_existing_file_when_empty()
+        preserve_existing_file_when_empty(all_file)
 
     print(f"📈 SKIP STATS: {skip_stats}")
     print("✅ GOTOWE")
     print(f"📊 {len(df)} typów zapisanych")
-    print(f"📁 {ALL_FILE}")
+    print(f"📁 {all_file}")
     print("✅ ETAPY AKTYWNE: tempo, confidence, xg, market movement, bayesian, ensemble, filter, bankroll, clv, stage_a, stage_b, stage_c, target_markets, best_pick_ranking")
 
 
 if __name__ == "__main__":
-    run_bot()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=["main", "low", "risk"], default=os.getenv("KANIBAL_BOT_MODE", "main"))
+    args = parser.parse_args()
+    run_bot(args.mode)

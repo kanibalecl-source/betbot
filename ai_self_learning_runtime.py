@@ -18,6 +18,8 @@ DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
+LOW_PREMATCH_FILE = DATA_DIR / "auto_low_picks.csv"
+RISK_PREMATCH_FILE = DATA_DIR / "auto_risk_picks.csv"
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
@@ -234,6 +236,16 @@ def candidates() -> pd.DataFrame:
         pre = pre.copy()
         pre["_source"] = "FIXTURE_UNIVERSE"
         frames.append(pre)
+    low = read_csv(LOW_PREMATCH_FILE)
+    if not low.empty:
+        low = low.copy()
+        low["_source"] = "FIXTURE_UNIVERSE_LOW"
+        frames.append(low)
+    risk = read_csv(RISK_PREMATCH_FILE)
+    if not risk.empty:
+        risk = risk.copy()
+        risk["_source"] = "FIXTURE_UNIVERSE_RISK"
+        frames.append(risk)
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True, sort=False)
