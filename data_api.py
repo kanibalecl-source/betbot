@@ -1,4 +1,4 @@
-import os
+﻿import os
 import requests
 from datetime import datetime, timedelta
 
@@ -110,7 +110,6 @@ def _normalize_match(f):
 def _filter_and_normalize(fixtures):
 
     matches = []
-    include_all_real_leagues = os.getenv("KANIBAL_INCLUDE_ALL_LEAGUES", "").strip() == "1"
     skipped = {
         "finished_or_cancelled": 0,
         "league_not_top": 0,
@@ -151,7 +150,8 @@ def _filter_and_normalize(fixtures):
             skipped["finished_or_cancelled"] += 1
             continue
 
-        if not include_all_real_leagues and league_id not in TOP_LEAGUE_IDS:
+        include_all_leagues = str(os.getenv("KANIBAL_INCLUDE_ALL_LEAGUES", "0")).lower() in {"1", "true", "yes", "on"}
+        if not include_all_leagues and league_id not in TOP_LEAGUE_IDS:
             skipped["league_not_top"] += 1
             continue
 
@@ -161,7 +161,7 @@ def _filter_and_normalize(fixtures):
 
         matches.append(_normalize_match(f))
 
-    print(f"NORMALIZE SKIP STATS: {skipped} | include_all_real_leagues={include_all_real_leagues}")
+    print(f"NORMALIZE SKIP STATS: {skipped}")
 
     return matches
 
@@ -169,7 +169,7 @@ def _filter_and_normalize(fixtures):
 def get_matches():
 
     if not API_KEY or API_KEY == "YOUR_API_KEY":
-        print("⚠️ BRAK API_FOOTBALL_KEY")
+        print("BRAK API_FOOTBALL_KEY")
         return []
 
     date_candidates = []
@@ -267,122 +267,102 @@ def _normalize_double_chance(value):
     return None
 
 
-def get_odds_market_data(match):
+def _iter_fixture_odds(match):
 
     fixture_id = match.get("fixture_id")
 
     if not fixture_id:
-        return {}
+        return []
 
     url = f"{BASE_URL}/odds"
+    params = {"fixture": fixture_id}
 
-    params = {
-        "fixture": fixture_id
-    }
+    response = requests.get(
+        url,
+        headers=HEADERS,
+        params=params,
+        timeout=25
+    )
+
+    print(f"ODDS STATUS: {response.status_code} | fixture={fixture_id}")
+
+    data = response.json()
+
+    if data.get("errors"):
+        print(f"ODDS API ERRORS: {data.get('errors')}")
+
+    response_data = data.get("response")
+
+    if not response_data:
+        return []
+
+    rows = []
+
+    for bookmaker in response_data[0].get("bookmakers", []):
+
+        bookmaker_name = str(bookmaker.get("name", "")).strip()
+
+        for bet in bookmaker.get("bets", []):
+
+            market_name = str(bet.get("name") or "").strip()
+
+            for value in bet.get("values", []):
+
+                try:
+                    odd = float(value.get("odd", 0))
+                except Exception:
+                    continue
+
+                if odd <= 1:
+                    continue
+
+                outcome = str(value.get("value") or "").strip()
+                key = None
+
+                if market_name == "Match Winner":
+                    if outcome == "Home":
+                        key = "HOME_WIN"
+                    elif outcome == "Draw":
+                        key = "DRAW"
+                    elif outcome == "Away":
+                        key = "AWAY_WIN"
+
+                elif market_name == "Double Chance":
+                    key = _normalize_double_chance(outcome)
+
+                elif market_name == "Both Teams Score":
+                    if outcome == "Yes":
+                        key = "BTTS_YES"
+                    elif outcome == "No":
+                        key = "BTTS_NO"
+
+                elif market_name and "Over/Under" in market_name:
+                    line = _normalize_total_line(outcome)
+                    if line in {"0.5", "1.5", "2.5", "3.5", "4.5"}:
+                        if "Over" in outcome:
+                            key = f"OVER_{line}"
+                        elif "Under" in outcome:
+                            key = f"UNDER_{line}"
+
+                if key:
+                    rows.append({"market": key, "odds": odd, "bookmaker": bookmaker_name})
+
+    return rows
+
+
+def get_odds_market_data(match):
 
     try:
-
-        response = requests.get(
-            url,
-            headers=HEADERS,
-            params=params,
-            timeout=25
-        )
-
-        print(f"ODDS STATUS: {response.status_code} | fixture={fixture_id}")
-
-        data = response.json()
-
-        if data.get("errors"):
-            print(f"ODDS API ERRORS: {data.get('errors')}")
-
-        response_data = data.get("response")
-
-        if not response_data:
-            return {}
-
-        bookmakers = response_data[0].get("bookmakers", [])
-
+        rows = _iter_fixture_odds(match)
         markets = {}
 
-        for bookmaker in bookmakers:
-
-            bookmaker_name = bookmaker.get("name", "")
-
-            for bet in bookmaker.get("bets", []):
-
-                market_name = str(bet.get("name") or "").strip()
-
-                for value in bet.get("values", []):
-
-                    try:
-                        odd = float(value.get("odd", 0))
-                    except Exception:
-                        continue
-
-                    if odd <= 1:
-                        continue
-
-                    outcome = str(value.get("value") or "").strip()
-
-                    key = None
-
-                    # 1X2
-                    if market_name == "Match Winner":
-
-                        if outcome == "Home":
-                            key = "HOME_WIN"
-
-                        elif outcome == "Draw":
-                            key = "DRAW"
-
-                        elif outcome == "Away":
-                            key = "AWAY_WIN"
-
-                    # Double Chance: 1X / X2 / 12
-                    elif market_name == "Double Chance":
-
-                        key = _normalize_double_chance(outcome)
-
-                    # BTTS
-                    elif market_name == "Both Teams Score":
-
-                        if outcome == "Yes":
-                            key = "BTTS_YES"
-
-                        elif outcome == "No":
-                            key = "BTTS_NO"
-
-                    # Totals: Over/Under 0.5–4.5
-                    elif market_name and "Over/Under" in market_name:
-
-                        line = _normalize_total_line(outcome)
-
-                        if line in {"0.5", "1.5", "2.5", "3.5", "4.5"}:
-
-                            if "Over" in outcome:
-                                key = f"OVER_{line}"
-
-                            elif "Under" in outcome:
-                                key = f"UNDER_{line}"
-
-                    if key:
-
-                        if key not in markets:
-
-                            markets[key] = {
-                                "best_odds": odd,
-                                "bookmaker": bookmaker_name
-                            }
-
-                        else:
-
-                            if odd > markets[key]["best_odds"]:
-
-                                markets[key] = {
-                                    "best_odds": odd,
-                                    "bookmaker": bookmaker_name
-                                }
+        for row in rows:
+            key = row["market"]
+            if key not in markets or row["odds"] > markets[key]["best_odds"]:
+                markets[key] = {
+                    "best_odds": row["odds"],
+                    "bookmaker": row["bookmaker"]
+                }
 
         if markets:
             print(f"ODDS MARKETS: {sorted(list(markets.keys()))}")
@@ -390,11 +370,36 @@ def get_odds_market_data(match):
         return markets
 
     except Exception as e:
-
         print("ODDS ERROR:", e)
-
         return {}
 
+
+def get_bookmaker_market_odds(match, market_key, bookmaker_query="superbet"):
+
+    target_market = str(market_key or "").strip().upper()
+    wanted = str(bookmaker_query or "").strip().lower()
+
+    if not target_market:
+        return None
+
+    try:
+        best_fallback = None
+
+        for row in _iter_fixture_odds(match):
+            if row["market"] != target_market:
+                continue
+
+            if wanted and wanted in str(row["bookmaker"]).lower():
+                return row
+
+            if best_fallback is None or row["odds"] > best_fallback["odds"]:
+                best_fallback = row
+
+        return best_fallback
+
+    except Exception as e:
+        print("BOOKMAKER ODDS ERROR:", e)
+        return None
 
 if __name__ == "__main__":
 
@@ -402,3 +407,4 @@ if __name__ == "__main__":
 
     print(f"FINAL MATCHES: {len(matches)}")
     print(matches[:3])
+

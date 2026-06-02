@@ -14,8 +14,8 @@ def run_gpt_context_ako(limit: int = 20) -> dict:
     return run_gpt_ako_cycle(limit=limit)
 
 
-def run_once(limit: int = 12) -> int:
-    result = run_self_learning_cycle(limit=limit)
+def run_once(limit: int = 12, mode: str = "main") -> int:
+    result = run_self_learning_cycle(limit=limit, mode=mode)
     return int(result.get("ai_picks", 0))
 
 

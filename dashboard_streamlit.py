@@ -1,5 +1,5 @@
-﻿
-import base64
+﻿import base64
+import html
 import json
 from pathlib import Path
 from typing import Iterable, List
@@ -8,18 +8,24 @@ import pandas as pd
 import streamlit as st
 
 try:
+    from betbot.dashboard.data_service import read_csv_safe as modular_read_csv_safe
+    from betbot.dashboard.data_service import normalize_streamlit_df as modular_streamlit_df
+except Exception:
+    modular_read_csv_safe = None
+    modular_streamlit_df = None
+
+try:
     from gpt_betting_assistant import render_gpt_chat_tab
 except Exception:
     def render_gpt_chat_tab(picks=None, live=None, results=None):
         import streamlit as st
-        st.warning("ModuĹ‚ GPT CHAT nie zostaĹ‚ zaĹ‚adowany.")
-
+        st.warning("Moduł GPT nie został załadowany.")
 
 try:
     from gpt_streamlit_panel import render_gpt_tab
 except Exception:
     def render_gpt_tab(base_dir=None):
-        st.warning("ModuĹ‚ GPT nie zostaĹ‚ zaĹ‚adowany.")
+        st.warning("Moduł GPT nie został załadowany.")
 
 
 try:
@@ -49,31 +55,21 @@ except Exception:
     manual_summary = None
     settle_all_manual = None
 
-st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="đź“", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="📊", layout="wide", initial_sidebar_state="collapsed")
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
+try:
+    from storage_paths import DATA_DIR
+except Exception:
+    DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
 AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"
+LOW_AI_PICKS_FILE = DATA_DIR / "ai_low_picks.csv"
+RISK_AI_PICKS_FILE = DATA_DIR / "ai_risk_picks.csv"
 PICK_CANDIDATES = [DATA_DIR / "auto_all_picks.csv", BASE_DIR / "auto_all_picks.csv"]
-BOT_VIEWS = {
-    "main": {
-        "label": "Bot obecny",
-        "file": "auto_all_picks.csv",
-        "history": "auto_all_picks_history.csv",
-    },
-    "low": {
-        "label": "Mecze LOW",
-        "file": "auto_low_picks.csv",
-        "history": "auto_low_picks_history.csv",
-    },
-    "risk": {
-        "label": "Mecze RISK",
-        "file": "auto_risk_picks.csv",
-        "history": "auto_risk_picks_history.csv",
-    },
-}
+LOW_PICK_CANDIDATES = [DATA_DIR / "auto_low_picks.csv", BASE_DIR / "auto_low_picks.csv"]
+RISK_PICK_CANDIDATES = [DATA_DIR / "auto_risk_picks.csv", BASE_DIR / "auto_risk_picks.csv"]
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
@@ -85,12 +81,62 @@ DISPLAY_MARKETS = {
     "BTTS_YES": "BTTS Tak", "BTTS_NO": "BTTS Nie",
     "OVER_0.5": "Over 0.5", "OVER_1.5": "Over 1.5", "OVER_2.5": "Over 2.5", "OVER_3.5": "Over 3.5", "OVER_4.5": "Over 4.5",
     "UNDER_0.5": "Under 0.5", "UNDER_1.5": "Under 1.5", "UNDER_2.5": "Under 2.5", "UNDER_3.5": "Under 3.5", "UNDER_4.5": "Under 4.5",
-    "HOME_WIN": "Home Win", "AWAY_WIN": "Away Win", "DRAW": "Draw",
+    "HOME_WIN": "Wygrana gospodarzy", "AWAY_WIN": "Wygrana gości", "DRAW": "Remis",
 }
 TARGET_MARKETS = set(DISPLAY_MARKETS)
 
+DISPLAY_COLUMNS = {
+    "created_at": "Data utworzenia",
+    "updated_at": "Data aktualizacji",
+    "written_at": "Data zapisu",
+    "match_date": "Data meczu",
+    "league": "Liga",
+    "liga": "Liga",
+    "match": "Mecz",
+    "mecz": "Mecz",
+    "match_name": "Mecz",
+    "market": "Rynek",
+    "typ": "Typ",
+    "bet_name": "Nazwa zakładu",
+    "manual_market_label": "Typ zakładu",
+    "odds": "Kurs",
+    "kurs_buk": "Kurs",
+    "confidence": "Pewność",
+    "advanced_confidence": "Pewność zaawansowana",
+    "ai_pick_score": "Wynik AI",
+    "edge": "Przewaga",
+    "ev": "EV",
+    "value": "Wartość",
+    "stake": "Stawka",
+    "status": "Status",
+    "result": "Wynik",
+    "profit": "Zysk",
+    "roi": "ROI",
+    "score": "Rezultat",
+    "name": "Nazwa",
+    "bookmaker": "Bukmacher",
+    "coupon_id": "ID kuponu",
+    "total_odds": "Kurs łączny",
+    "calculated_odds": "Kurs wyliczony",
+    "bets": "Zakłady",
+    "wins": "Wygrane",
+    "winrate": "Skuteczność",
+    "event": "Zdarzenie",
+    "payload_json": "Dane zdarzenia",
+    "plik": "Plik",
+    "risk": "Ryzyko",
+    "risk_level": "Poziom ryzyka",
+    "source": "Źródło",
+    "liga_typ": "Liga i typ",
+}
+
 
 def read_csv_safe(path: Path) -> pd.DataFrame:
+    if modular_read_csv_safe:
+        try:
+            return modular_read_csv_safe(path)
+        except Exception:
+            pass
     try:
         if path.exists() and path.stat().st_size > 0:
             return pd.read_csv(path)
@@ -103,6 +149,11 @@ def read_csv_safe(path: Path) -> pd.DataFrame:
 
 
 def streamlit_df(df: pd.DataFrame) -> pd.DataFrame:
+    if modular_streamlit_df:
+        try:
+            return modular_streamlit_df(df)
+        except Exception:
+            pass
     if df is None or df.empty:
         return pd.DataFrame()
     out = df.copy()
@@ -116,6 +167,7 @@ def streamlit_df(df: pd.DataFrame) -> pd.DataFrame:
     for col in out.columns:
         if out[col].dtype == "object":
             out[col] = out[col].astype(str)
+    out = out.rename(columns={col: DISPLAY_COLUMNS.get(col, col) for col in out.columns})
     return out
 
 
@@ -153,9 +205,9 @@ def pct(value) -> str:
 
 def money(value) -> str:
     try:
-        return f"{float(value):,.2f} zĹ‚".replace(",", " ")
+        return f"{float(value):,.2f} zł".replace(",", " ")
     except Exception:
-        return "0.00 zĹ‚"
+        return "0.00 zł"
 
 
 def fmt_market(value) -> str:
@@ -196,7 +248,7 @@ def filter_profile_options(cfg: dict) -> dict:
     return {
         "safe": {"label": "Filtry Safe", "min_book_odds": 1.0, "max_book_odds": 2.5},
         "medium": {"label": "Filtry Medium", "min_book_odds": 1.0, "max_book_odds": 3.5},
-        "risk": {"label": "Filtry Risk", "min_book_odds": 1.0, "max_book_odds": 5.0},
+        "risk": {"label": "Filtry ryzyka", "min_book_odds": 1.0, "max_book_odds": 5.0},
     }
 
 
@@ -208,14 +260,16 @@ def active_filter_profile(cfg: dict) -> str:
 
 
 
-def pick_candidates(view_key: str = "main") -> list[Path]:
-    view = BOT_VIEWS.get(view_key, BOT_VIEWS["main"])
-    name = view["file"]
-    return [DATA_DIR / name, BASE_DIR / name]
+def load_picks() -> pd.DataFrame:
+    for path in PICK_CANDIDATES:
+        df = read_csv_safe(path)
+        if not df.empty:
+            return df
+    return pd.DataFrame()
 
 
-def load_picks(view_key: str = "main") -> pd.DataFrame:
-    for path in pick_candidates(view_key):
+def load_pick_candidates(paths) -> pd.DataFrame:
+    for path in paths:
         df = read_csv_safe(path)
         if not df.empty:
             return df
@@ -223,15 +277,15 @@ def load_picks(view_key: str = "main") -> pd.DataFrame:
 
 
 
-def load_ai_picks(prematch: pd.DataFrame) -> pd.DataFrame:
+def load_ai_picks(prematch: pd.DataFrame, path: Path = AI_PICKS_FILE, mode: str = "main") -> pd.DataFrame:
     """Load autonomous AI picks. If the file is missing, generate it once on demand."""
-    df = read_csv_safe(AI_PICKS_FILE)
+    df = read_csv_safe(path)
     if not df.empty:
         return df
     try:
         from ai_autonomous_picks_engine import run_once as run_ai_picks_once
-        run_ai_picks_once()
-        df = read_csv_safe(AI_PICKS_FILE)
+        run_ai_picks_once(mode=mode)
+        df = read_csv_safe(path)
         if not df.empty:
             return df
     except Exception:
@@ -299,24 +353,24 @@ def _chart_status(values: List[float]) -> str:
 def _chart_insight(title: str, values: List[float], subtitle: str = "") -> str:
     vals = [float(v) for v in values if pd.notna(v)]
     if not vals:
-        return "Brak danych wejĹ›ciowych. Wykres jest gotowy i automatycznie uzupeĹ‚ni siÄ™ po pojawieniu siÄ™ danych w systemie."
+        return "Brak danych wejściowych. Wykres jest gotowy i automatycznie uzupełni się po pojawieniu się danych w systemie."
     avg = sum(vals) / len(vals)
     hi = max(vals)
     lo = min(vals)
     trend = vals[-1] - vals[0] if len(vals) > 1 else 0
-    direction = "rosnÄ…cy" if trend > 0 else "spadkowy" if trend < 0 else "stabilny"
-    return f"Ĺšrednia wartoĹ›Ä‡ wynosi {avg:.2f}. Zakres danych: {lo:.2f} - {hi:.2f}. Trend koĹ„cowy jest {direction}. AI wykorzystuje ten wykres do oceny jakoĹ›ci sygnaĹ‚Ăłw, stabilnoĹ›ci value oraz ryzyka rynkowego."
+    direction = "rosnący" if trend > 0 else "spadkowy" if trend < 0 else "stabilny"
+    return f"Średnia wartość wynosi {avg:.2f}. Zakres danych: {lo:.2f} - {hi:.2f}. Trend końcowy jest {direction}. AI wykorzystuje ten wykres do oceny jakości sygnałów, stabilności wartości oraz ryzyka rynkowego."
 
 def _chart_axis_labels(title: str):
     t = str(title).lower()
     if "roi" in t:
         return "SEGMENT / LIGA / OKRES", "ROI / PROFITABILITY"
     if "win" in t or "skutecz" in t:
-        return "CONFIDENCE / MARKET BUCKET", "WIN RATE / EFFECTIVENESS"
+        return "PEWNOŚĆ / SEGMENT RYNKU", "SKUTECZNOŚĆ"
     if "confidence" in t or "pewno" in t:
-        return "CONFIDENCE BUCKET", "SIGNAL STRENGTH"
+        return "SEGMENT PEWNOŚCI", "SIŁA SYGNAŁU"
     if "risk" in t or "ryzyk" in t:
-        return "RISK BUCKET", "RISK EXPOSURE"
+        return "SEGMENT RYZYKA", "EKSPOZYCJA NA RYZYKO"
     if "value" in t or "ev" in t:
         return "VALUE SEGMENT", "EV / EDGE"
     if "live" in t:
@@ -346,15 +400,15 @@ def chart_html(title: str, values: List[float], subtitle: str = "Dane z systemu"
         f'<div class="pro-chart-card">'
         f'<div class="pro-chart-head">'
         f'<div><div class="pro-chart-title">{title}</div>'
-        f'<div class="pro-chart-subtitle">{subtitle}. OĹ› X: {x_title}. OĹ› Y: {y_title}. Benchmark pokazuje Ĺ›redniÄ… wartoĹ›Ä‡ serii.</div></div>'
+        f'<div class="pro-chart-subtitle">{subtitle}. Oś X: {x_title}. Oś Y: {y_title}. Punkt odniesienia pokazuje średnią wartość serii.</div></div>'
         f'<div class="pro-chart-badge">{status}</div>'
         f'</div>'
         f'<div class="placeholder-bars" style="height:210px;position:relative">{bars}'
         f'<span style="position:absolute;left:10px;right:10px;bottom:{max(8,min(92,55))}%;border-top:1px dashed rgba(255,255,255,.38);"></span>'
         f'</div>'
         f'<div class="pro-chart-meta">'
-        f'<div><strong>Benchmark</strong>Ĺšrednia: {avg:.2f}</div>'
-        f'<div><strong>Sample size</strong>Liczba punktĂłw: {sample}</div>'
+        f'<div><strong>Punkt odniesienia</strong>Średnia: {avg:.2f}</div>'
+        f'<div><strong>Próba</strong>Liczba punktów: {sample}</div>'
         f'<div><strong>Peak value</strong>Maksimum: {maxv:.2f}</div>'
         f'</div>'
         f'<div class="pro-chart-insight"><b>AI insight:</b> {insight}</div>'
@@ -510,7 +564,7 @@ color:#ff6262;
 }
 
 
-/* === TOTAL UPGRADE â€” AI VALUE / AI DETAILS ONLY === */
+/* === POPRAWKA: AI WARTOSC I SZCZEGOLY === */
 .ai-detail-final{
 background:linear-gradient(180deg,rgba(8,13,22,.99),rgba(3,7,13,.99))!important;
 border:1px solid rgba(124,255,43,.18)!important;
@@ -722,6 +776,424 @@ font-size:12px!important;
 line-height:1.55!important;
 }
 
+
+
+/* === ETAP 5 PROFESSIONAL WWW DESIGN === */
+.block-container{max-width:1680px!important;padding:.85rem 1.15rem 1.4rem!important;}
+.ka-page-banner{position:relative;width:100%;min-height:260px;border:1px solid rgba(124,255,43,.20);border-radius:18px;overflow:hidden;background:#050607;margin:4px 0 18px;box-shadow:0 20px 70px rgba(0,0,0,.38)}
+.ka-page-banner img{display:block;width:100%;height:270px;object-fit:cover;object-position:center;opacity:.92;filter:saturate(1.04) contrast(1.04)}
+.ka-page-banner:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.84),rgba(0,0,0,.30) 58%,rgba(0,0,0,.70));pointer-events:none}
+.ka-page-banner-content{position:absolute;inset:0;z-index:2;padding:34px 38px;display:flex;flex-direction:column;justify-content:flex-end}
+.ka-page-eyebrow{color:var(--green);font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.18em;margin-bottom:12px}
+.ka-page-banner h1{font-size:44px;line-height:1;margin:0 0 10px;font-weight:1000;letter-spacing:0;text-transform:uppercase;color:#fff;text-shadow:0 3px 0 #000}
+.ka-page-banner p{font-size:15px;line-height:1.55;color:#d7e3d9;margin:0;max-width:860px;font-weight:750}
+.ka-mini-banner{position:relative;min-height:145px;border:1px solid rgba(124,255,43,.16);border-radius:14px;overflow:hidden;background:#050607;margin:0 0 14px}
+.ka-mini-banner img{width:100%;height:150px;object-fit:cover;object-position:center;opacity:.72;display:block}
+.ka-mini-banner:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.86),rgba(0,0,0,.38));pointer-events:none}
+.ka-mini-banner-content{position:absolute;inset:0;z-index:2;padding:22px 24px;display:flex;flex-direction:column;justify-content:flex-end}
+.ka-mini-banner h2{font-size:26px!important;margin:0 0 6px!important;color:#fff!important;font-weight:1000!important;text-transform:uppercase!important;letter-spacing:0!important}
+.ka-mini-banner p{font-size:13px;color:#d7e3d9;margin:0;max-width:780px;font-weight:750;line-height:1.45}
+.ka-title{font-size:30px;margin:18px 0 16px;}
+.ka-card,.ka-panel{border-radius:12px!important;background:linear-gradient(180deg,rgba(255,255,255,.044),rgba(255,255,255,.016))!important;box-shadow:0 16px 36px rgba(0,0,0,.34)!important;}
+.ka-grid{gap:14px;margin:0 0 14px;}
+.ka-table th{font-size:11px;letter-spacing:.06em;}
+.ka-table td{font-size:13px;}
+.stTabs [data-baseweb="tab-list"]{border-radius:12px!important;box-shadow:0 18px 44px rgba(0,0,0,.36)!important;}
+.stTabs [data-baseweb="tab"]{height:58px!important;font-size:12px!important;letter-spacing:.03em!important;}
+div[data-testid="stDataFrame"]{border:1px solid rgba(255,255,255,.08);border-radius:12px;overflow:hidden;background:rgba(2,6,8,.50)}
+.ka-professional-note{padding:14px;border:1px solid rgba(124,255,43,.18);background:rgba(124,255,43,.055);border-radius:12px;color:#c9d8cf;font-size:13px;line-height:1.55;font-weight:750;margin:0 0 14px}
+@media(max-width:1100px){.ka-page-banner h1{font-size:34px}.ka-page-banner img{height:230px}.ka-page-banner-content{padding:26px 22px}.ka-mini-banner h2{font-size:22px!important}}
+
+/* === ETAP 7 WWW PROFESSIONAL COCKPIT === */
+:root{
+  --bg:#050708;
+  --surface:#0a0f10;
+  --surface-2:#0f1517;
+  --surface-3:#151b1e;
+  --line:rgba(219,230,224,.12);
+  --line-strong:rgba(124,255,43,.24);
+  --green:#7CFF2B;
+  --green-soft:rgba(124,255,43,.10);
+  --amber:#ffca45;
+  --cyan:#42d9ff;
+  --red:#ff5b5b;
+  --muted:#94a39b;
+  --text:#f4f8f2;
+}
+html,body,.stApp{
+  background:
+    linear-gradient(180deg,#050708 0%,#07100b 42%,#050708 100%)!important;
+  color:var(--text)!important;
+}
+.block-container{
+  max-width:1760px!important;
+  padding:14px 18px 22px!important;
+}
+header[data-testid="stHeader"]{
+  background:linear-gradient(180deg,rgba(5,7,8,.94),rgba(5,7,8,0))!important;
+}
+.ka-page-banner{
+  min-height:230px!important;
+  border-radius:8px!important;
+  border:1px solid rgba(124,255,43,.20)!important;
+  margin:0 0 14px!important;
+  box-shadow:0 18px 48px rgba(0,0,0,.42)!important;
+}
+/* Full bitmap banner mode: show the whole designed banner, do not crop it. */
+.ka-image-banner{
+  min-height:0!important;
+  height:auto!important;
+  background:#020303!important;
+}
+.ka-image-banner img{
+  width:100%!important;
+  height:auto!important;
+  max-height:none!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+  opacity:1!important;
+  filter:none!important;
+}
+.ka-image-banner:after{
+  display:none!important;
+}
+.ka-image-banner .ka-page-banner-content{
+  display:none!important;
+}
+.ka-page-banner img{
+  height:238px!important;
+  opacity:.82!important;
+  filter:saturate(1.06) contrast(1.08) brightness(.86)!important;
+}
+.ka-page-banner:after{
+  background:linear-gradient(90deg,rgba(0,0,0,.90) 0%,rgba(0,0,0,.58) 52%,rgba(0,0,0,.82) 100%)!important;
+}
+.ka-page-banner-content{
+  padding:28px 32px!important;
+  justify-content:flex-end!important;
+}
+.ka-page-eyebrow{
+  color:var(--green)!important;
+  font-size:11px!important;
+  letter-spacing:.16em!important;
+  margin-bottom:10px!important;
+}
+.ka-page-banner h1{
+  font-size:38px!important;
+  line-height:1.02!important;
+  text-shadow:none!important;
+  letter-spacing:0!important;
+}
+.ka-page-banner p{
+  color:#d5dfd9!important;
+  font-size:14px!important;
+  max-width:980px!important;
+  font-weight:650!important;
+}
+.ka-mini-banner{
+  min-height:116px!important;
+  border-radius:8px!important;
+  border-color:rgba(124,255,43,.14)!important;
+  margin:0 0 12px!important;
+}
+.ka-mini-image-banner{
+  min-height:0!important;
+  height:auto!important;
+  background:#020303!important;
+}
+.ka-mini-image-banner img{
+  width:100%!important;
+  height:auto!important;
+  max-height:none!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+  opacity:1!important;
+  filter:none!important;
+}
+.ka-mini-image-banner:after{
+  display:none!important;
+}
+.ka-mini-image-banner .ka-mini-banner-content{
+  display:none!important;
+}
+.ka-mini-banner img{
+  height:118px!important;
+  opacity:.58!important;
+}
+.ka-mini-banner-content{
+  padding:18px 20px!important;
+}
+.ka-mini-banner h2{
+  font-size:22px!important;
+  line-height:1.05!important;
+  text-shadow:none!important;
+}
+.ka-mini-banner p{
+  font-size:12px!important;
+  color:#cbd7d0!important;
+}
+.stTabs [data-baseweb="tab-list"]{
+  position:sticky!important;
+  top:0!important;
+  z-index:20!important;
+  display:grid!important;
+  grid-auto-flow:column!important;
+  grid-auto-columns:minmax(118px,1fr)!important;
+  gap:0!important;
+  background:#070a0b!important;
+  border:1px solid rgba(219,230,224,.12)!important;
+  border-radius:8px!important;
+  overflow:auto!important;
+  margin:0 0 14px!important;
+  box-shadow:0 14px 32px rgba(0,0,0,.34)!important;
+}
+.stTabs [data-baseweb="tab"]{
+  height:48px!important;
+  min-width:118px!important;
+  padding:0 12px!important;
+  background:#080c0d!important;
+  border-right:1px solid rgba(219,230,224,.08)!important;
+  color:#d8e4dd!important;
+  font-size:11px!important;
+  font-weight:900!important;
+  letter-spacing:.04em!important;
+  text-transform:uppercase!important;
+}
+.stTabs [aria-selected="true"]{
+  background:linear-gradient(180deg,rgba(124,255,43,.16),rgba(124,255,43,.045))!important;
+  color:#bfff83!important;
+  border-bottom:2px solid var(--green)!important;
+}
+.ka-title{
+  margin:18px 0 12px!important;
+  font-size:24px!important;
+  font-weight:950!important;
+  text-shadow:none!important;
+}
+.ka-dot{
+  width:14px!important;
+  height:14px!important;
+  border-radius:3px!important;
+  background:linear-gradient(135deg,var(--green),var(--cyan))!important;
+  box-shadow:0 0 14px rgba(124,255,43,.35)!important;
+}
+.ka-grid{
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  gap:10px!important;
+  margin:0 0 12px!important;
+}
+.ka-card{
+  min-height:106px!important;
+  border-radius:8px!important;
+  border:1px solid rgba(219,230,224,.11)!important;
+  background:linear-gradient(180deg,rgba(18,25,27,.96),rgba(9,14,15,.98))!important;
+  padding:14px!important;
+  box-shadow:0 12px 28px rgba(0,0,0,.28)!important;
+}
+.ka-card:before{
+  content:"";
+  display:block;
+  height:2px;
+  width:42px;
+  margin:0 0 12px;
+  background:linear-gradient(90deg,var(--green),var(--cyan));
+  border-radius:2px;
+}
+.ka-label{
+  font-size:10px!important;
+  color:#a8b5ae!important;
+  letter-spacing:.10em!important;
+}
+.ka-value{
+  font-size:28px!important;
+  line-height:1.05!important;
+  letter-spacing:0!important;
+}
+.ka-sub{
+  min-height:16px!important;
+  font-size:11px!important;
+  color:#95ff69!important;
+}
+.sparkline{display:none!important;}
+.ka-panel{
+  border-radius:8px!important;
+  border:1px solid rgba(219,230,224,.11)!important;
+  background:linear-gradient(180deg,rgba(14,20,22,.98),rgba(7,11,12,.98))!important;
+  padding:16px!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.30)!important;
+}
+.ka-panel h3{
+  margin:0 0 12px!important;
+  font-size:15px!important;
+  line-height:1.2!important;
+  letter-spacing:.05em!important;
+  text-transform:uppercase!important;
+  color:#f6fff7!important;
+}
+.ka-table{
+  table-layout:auto!important;
+  font-size:13px!important;
+  border-collapse:separate!important;
+  border-spacing:0!important;
+}
+.ka-table th{
+  position:sticky!important;
+  top:49px!important;
+  z-index:5!important;
+  background:#111819!important;
+  color:#aebbb4!important;
+  padding:10px 11px!important;
+  font-size:10px!important;
+  letter-spacing:.08em!important;
+  border-bottom:1px solid rgba(124,255,43,.16)!important;
+}
+.ka-table td{
+  background:#091011!important;
+  border-bottom:1px solid rgba(219,230,224,.07)!important;
+  padding:11px!important;
+  color:#eef6f0!important;
+}
+.ka-table tr:nth-child(even) td{
+  background:#0c1314!important;
+}
+.ka-table tr:hover td{
+  background:rgba(124,255,43,.055)!important;
+}
+.ka-table-scroll{
+  width:100%!important;
+  overflow:auto!important;
+  border:1px solid rgba(219,230,224,.11)!important;
+  border-radius:8px!important;
+  background:#091011!important;
+}
+.ka-table-scroll .ka-table{
+  min-width:760px!important;
+}
+.ka-table-scroll .ka-table th{
+  top:0!important;
+}
+.pill{
+  border-radius:6px!important;
+  padding:5px 9px!important;
+  white-space:nowrap!important;
+}
+.progress{
+  height:7px!important;
+  background:#202829!important;
+}
+.progress span{
+  background:linear-gradient(90deg,var(--green),var(--amber))!important;
+}
+.ai-table-final{
+  border-radius:8px!important;
+  border:1px solid rgba(219,230,224,.12)!important;
+  background:#091011!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.30)!important;
+}
+.ai-table-final-head{
+  min-height:44px!important;
+  background:#111819!important;
+  color:#bfff83!important;
+  font-size:10px!important;
+}
+.ai-table-final-row{
+  min-height:58px!important;
+  background:#091011!important;
+  font-size:13px!important;
+}
+.ai-table-final-row:hover{
+  background:rgba(124,255,43,.055)!important;
+}
+.ai-cell-main{
+  font-size:14px!important;
+}
+.ai-cell-sub{
+  color:#95a49b!important;
+}
+.ai-status-inline{
+  height:30px!important;
+  min-width:82px!important;
+  border-radius:6px!important;
+  background:#151d1f!important;
+}
+.ai-detail-final,
+.ai-detail-final-box{
+  border-radius:8px!important;
+}
+div[data-testid="stDataFrame"]{
+  border-radius:8px!important;
+  border:1px solid rgba(219,230,224,.11)!important;
+  background:#091011!important;
+}
+div[data-testid="stMetric"]{
+  background:#0d1415!important;
+  border:1px solid rgba(219,230,224,.11)!important;
+  border-radius:8px!important;
+  padding:12px!important;
+}
+.stButton>button,
+button[kind="secondary"],
+button[kind="primary"]{
+  border-radius:6px!important;
+  border:1px solid rgba(124,255,43,.26)!important;
+  background:linear-gradient(180deg,rgba(124,255,43,.16),rgba(124,255,43,.07))!important;
+  color:#f4fff1!important;
+  font-weight:850!important;
+}
+.stButton>button:hover,
+button[kind="secondary"]:hover,
+button[kind="primary"]:hover{
+  border-color:rgba(124,255,43,.54)!important;
+  background:linear-gradient(180deg,rgba(124,255,43,.22),rgba(124,255,43,.09))!important;
+}
+input,textarea,select{
+  border-radius:6px!important;
+}
+.footer-ka{
+  border-top:1px solid rgba(219,230,224,.10)!important;
+  margin-top:16px!important;
+  padding:14px 2px 4px!important;
+}
+.ka-page-banner.ka-image-banner,
+.ka-mini-banner.ka-mini-image-banner{
+  min-height:0!important;
+  height:auto!important;
+  background:#020303!important;
+}
+.ka-page-banner.ka-image-banner img,
+.ka-mini-banner.ka-mini-image-banner img{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  max-height:none!important;
+  object-fit:contain!important;
+  object-position:center center!important;
+  opacity:1!important;
+  filter:none!important;
+}
+.ka-page-banner.ka-image-banner:after,
+.ka-mini-banner.ka-mini-image-banner:after,
+.ka-page-banner.ka-image-banner .ka-page-banner-content,
+.ka-mini-banner.ka-mini-image-banner .ka-mini-banner-content{
+  display:none!important;
+}
+@media(max-width:1200px){
+  .ka-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;}
+  .ka-page-banner h1{font-size:31px!important;}
+  .ka-page-banner-content{padding:24px 22px!important;}
+}
+@media(max-width:760px){
+  .block-container{padding:10px 10px 18px!important;}
+  .ka-grid{grid-template-columns:1fr!important;}
+  .ka-page-banner{min-height:210px!important;}
+  .ka-page-banner img{height:214px!important;}
+  .ka-image-banner{min-height:0!important;}
+  .ka-image-banner img{height:auto!important;}
+  .ka-page-banner h1{font-size:25px!important;}
+  .ka-page-banner p{font-size:12px!important;}
+  .stTabs [data-baseweb="tab-list"]{grid-auto-columns:minmax(104px,1fr)!important;}
+  .stTabs [data-baseweb="tab"]{min-width:104px!important;height:44px!important;font-size:10px!important;}
+}
 </style>
 ''', unsafe_allow_html=True)
 
@@ -748,24 +1220,57 @@ def html_table(headers: List[str], rows: List[List[str]]) -> str:
     return f'<table class="ka-table"><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table>'
 
 
+def _format_table_value(value) -> str:
+    if value is None or pd.isna(value):
+        return "-"
+    if isinstance(value, float):
+        return f"{value:.4f}".rstrip("0").rstrip(".")
+    return str(value)
+
+
+def dataframe_html_table(df: pd.DataFrame, limit: int | None = None) -> str:
+    if df is None or df.empty:
+        return html_table(["Informacja"], [["Brak danych."]])
+    out = streamlit_df(df)
+    if limit:
+        out = out.head(limit)
+    headers = [html.escape(str(col)) for col in out.columns]
+    rows = []
+    for _, row in out.iterrows():
+        rows.append([html.escape(_format_table_value(row[col])) for col in out.columns])
+    return '<div class="ka-table-scroll">' + html_table(headers, rows) + '</div>'
+
+
 def confidence_bar(value: float) -> str:
     value = max(0.0, min(100.0, float(value)))
     return f'<div style="display:flex;align-items:center;gap:10px"><b>{value:.0f}%</b><div class="progress"><span style="width:{value:.0f}%"></span></div></div>'
 
 
-def placeholder_chart(title: str, subtitle: str = "Wykres gotowy â€” oczekuje na dane") -> str:
+def placeholder_chart(title: str, subtitle: str = "Wykres gotowy - oczekuje na dane") -> str:
     return chart_card(title, [], subtitle)
 
 
 def live_rows(live: pd.DataFrame) -> List[List[str]]:
     rows = []
-    for _, row in live.head(8).iterrows():
-        conf = as_float(first_existing(row, ["confidence", "advanced_confidence"], 0))
+    for _, row in live.head(30).iterrows():
+        conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         risk = str(first_existing(row, ["risk"], "LOW")).upper()
         klass = "pill-red" if "HIGH" in risk else "pill-yellow" if "MED" in risk else "pill-green"
-        sig = fmt_market(first_existing(row, ["signal", "advanced_signal", "typ", "market"], "-"))
+        market = fmt_market(first_existing(row, ["market", "typ", "bet", "bet_name", "signal", "advanced_signal"], "LIVE"))
+        if str(market).strip().lower() in {"", "-", "no signal", "nosignal", "none", "nan"}:
+            market = "LIVE"
         sigcls = "green" if conf >= 70 else "yellow" if conf >= 50 else "red"
-        rows.append([str(first_existing(row, ["league", "liga"], "-")), f'<b>{first_existing(row, ["match", "mecz"], "-")}</b>', f'<span class="green">{first_existing(row, ["minute", "minuta"], "-")}</span>', f'<b>{first_existing(row, ["score", "wynik"], "-")}</b>', f'<span class="{sigcls}">{sig}</span>', confidence_bar(conf), str(first_existing(row, ["odds", "kurs_buk"], "-")), f'<span class="green">{first_existing(row, ["value", "ev", "edge"], "-")}</span>', f'<span class="pill {klass}">{risk}</span>'])
+        rows.append([
+            str(first_existing(row, ["league", "liga"], "-")),
+            f'<b>{first_existing(row, ["match", "mecz"], "-")}</b>',
+            f'<span class="green">{first_existing(row, ["minute", "minuta"], "-")}</span>',
+            f'<b>{first_existing(row, ["score", "wynik"], "-")}</b>',
+            f'<span class="{sigcls}">{market}</span>',
+            confidence_bar(conf),
+            str(first_existing(row, ["odds", "kurs_buk"], "-")),
+            f'<span class="green">{first_existing(row, ["value", "ev", "edge"], "-")}</span>',
+            f'<span class="pill {klass}">{risk}</span>',
+        ])
     return rows
 
 
@@ -829,55 +1334,55 @@ def render_ai_detail_card(row) -> str:
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>MODEL AI</div>"
-        f"<div class='ai-engine-line'><b>CONFIDENCE:</b> {conf:.2f}</div>"
-        f"<div class='ai-engine-line'><b>CALIBRATED:</b> {calibrated:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MODEL PROB:</b> {model_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>FINAL PROB:</b> {final_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>STAGE A PROB:</b> {final_prob:.4f}</div>"
+        f"<div class='ai-engine-line'><b>PEWNOŚĆ:</b> {conf:.2f}</div>"
+        f"<div class='ai-engine-line'><b>PEWNOŚĆ SKALIBROWANA:</b> {calibrated:.2f}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO MODELU:</b> {model_prob:.4f}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO KOŃCOWE:</b> {final_prob:.4f}</div>"
+        f"<div class='ai-engine-line'><b>ETAP A:</b> {final_prob:.4f}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-title'>VALUE ENGINE</div>"
+        f"<div class='ai-detail-final-title'>SILNIK WARTOŚCI</div>"
         f"<div class='ai-engine-line'><b>EV:</b> {ev:.4f}</div>"
-        f"<div class='ai-engine-line'><b>EDGE:</b> {edge:.4f}</div>"
+        f"<div class='ai-engine-line'><b>PRZEWAGA:</b> {edge:.4f}</div>"
         f"<div class='ai-engine-line'><b>KELLY:</b> {kelly:.2f}</div>"
-        f"<div class='ai-engine-line'><b>RISK:</b> {risk}</div>"
+        f"<div class='ai-engine-line'><b>RYZYKO:</b> {risk}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-title'>MARKET ENGINE</div>"
-        f"<div class='ai-engine-line'><b>BOOK ODDS:</b> {book_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MODEL ODDS:</b> {model_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>BOT ODDS:</b> {bot_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>SHARP:</b> {sharp}</div>"
+        f"<div class='ai-detail-final-title'>SILNIK RYNKU</div>"
+        f"<div class='ai-engine-line'><b>KURS BUKMACHERA:</b> {book_odds:.2f}</div>"
+        f"<div class='ai-engine-line'><b>KURS MODELU:</b> {model_odds:.2f}</div>"
+        f"<div class='ai-engine-line'><b>KURS BOTA:</b> {bot_odds:.2f}</div>"
+        f"<div class='ai-engine-line'><b>RYNEK SHARP:</b> {sharp}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-title'>xG ENGINE</div>"
-        f"<div class='ai-engine-line'><b>HOME xG:</b> {home_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>AWAY xG:</b> {away_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>ADV TOTAL xG:</b> {adv_total_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>ADV OVER2.5:</b> {adv_over:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MARGIN:</b> {margin:.1f}</div>"
+        f"<div class='ai-detail-final-title'>SILNIK xG</div>"
+        f"<div class='ai-engine-line'><b>xG GOSPODARZY:</b> {home_xg:.2f}</div>"
+        f"<div class='ai-engine-line'><b>xG GOŚCI:</b> {away_xg:.2f}</div>"
+        f"<div class='ai-engine-line'><b>SUMA xG:</b> {adv_total_xg:.2f}</div>"
+        f"<div class='ai-engine-line'><b>OVER 2.5:</b> {adv_over:.2f}</div>"
+        f"<div class='ai-engine-line'><b>MARŻA:</b> {margin:.1f}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-title'>MOMENTUM ENGINE</div>"
-        f"<div class='ai-engine-line'><b>MOMENTUM SCORE:</b> {momentum_score:.1f}</div>"
-        f"<div class='ai-engine-line'><b>MOMENTUM LABEL:</b> {momentum_label}</div>"
-        f"<div class='ai-engine-line'><b>SHARP SCORE:</b> {sharp_score:.0f}</div>"
-        f"<div class='ai-engine-line'><b>SHARP SIGNALS:</b> {sharp_signals}</div>"
+        f"<div class='ai-detail-final-title'>SILNIK TEMPA</div>"
+        f"<div class='ai-engine-line'><b>WYNIK TEMPA:</b> {momentum_score:.1f}</div>"
+        f"<div class='ai-engine-line'><b>OCENA TEMPA:</b> {momentum_label}</div>"
+        f"<div class='ai-engine-line'><b>WYNIK SHARP:</b> {sharp_score:.0f}</div>"
+        f"<div class='ai-engine-line'><b>SYGNAŁY SHARP:</b> {sharp_signals}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-title'>META AI ENGINE</div>"
-        f"<div class='ai-engine-line'><b>META PROB:</b> {meta_prob:.1f}</div>"
-        f"<div class='ai-engine-line'><b>MODEL WEIGHT:</b> {model_weight}</div>"
-        f"<div class='ai-engine-line'><b>MARKET WEIGHT:</b> {market_weight}</div>"
-        f"<div class='ai-engine-line'><b>xG WEIGHT:</b> {xg_weight}</div>"
-        f"<div class='ai-engine-line'><b>MOMENTUM WEIGHT:</b> {momentum_weight}</div>"
-        f"<div class='ai-engine-line'><b>SHARP WEIGHT:</b> {sharp_weight}</div>"
-        f"<div class='ai-engine-line'><b>DYNAMIC STAKE:</b> {dynamic_stake:.1f}</div>"
+        f"<div class='ai-detail-final-title'>META AI</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO META:</b> {meta_prob:.1f}</div>"
+        f"<div class='ai-engine-line'><b>WAGA MODELU:</b> {model_weight}</div>"
+        f"<div class='ai-engine-line'><b>WAGA RYNKU:</b> {market_weight}</div>"
+        f"<div class='ai-engine-line'><b>WAGA xG:</b> {xg_weight}</div>"
+        f"<div class='ai-engine-line'><b>WAGA TEMPA:</b> {momentum_weight}</div>"
+        f"<div class='ai-engine-line'><b>WAGA SHARP:</b> {sharp_weight}</div>"
+        f"<div class='ai-engine-line'><b>DYNAMICZNA STAWKA:</b> {dynamic_stake:.1f}</div>"
         f"</div>"
 
         f"</div></div>"
@@ -888,19 +1393,19 @@ def render_ai_detail_card(row) -> str:
 def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
     if picks.empty:
         st.markdown(
-            '<div class="ka-panel"><h3>AI PICKS</h3>'
+            '<div class="ka-panel"><h3>TYPY AI</h3>'
             '<div class="ai-table-final">'
-            '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>KURS</div><div>PEWNOĹšÄ†</div><div>EDGE</div><div>STATUS</div></div>'
-            '<div class="ai-table-final-row"><div>-</div><div><span class="ai-cell-main">Oczekiwanie na dane AI PICKS</span></div><div>-</div><div>-</div><div>-</div><div>-</div><div>-</div></div>'
+            '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>KURS</div><div>PEWNOŚĆ</div><div>PRZEWAGA</div><div>STATUS</div></div>'
+            '<div class="ai-table-final-row"><div>-</div><div><span class="ai-cell-main">Oczekiwanie na typy AI</span></div><div>-</div><div>-</div><div>-</div><div>-</div><div>-</div></div>'
             '</div></div>',
             unsafe_allow_html=True
         )
         return
 
     st.markdown(
-        '<div class="ka-panel"><h3>AI PICKS</h3>'
+        '<div class="ka-panel"><h3>TYPY AI</h3>'
         '<div class="ai-table-final">'
-        '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>KURS</div><div>PEWNOĹšÄ†</div><div>EDGE</div><div>STATUS</div></div>'
+        '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>KURS</div><div>PEWNOŚĆ</div><div>PRZEWAGA</div><div>STATUS</div></div>'
         '</div></div>',
         unsafe_allow_html=True
     )
@@ -911,9 +1416,9 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         edge = first_existing(row, ["ev", "edge", "value"], "-")
         status_label = (
-            "PERFECT" if conf >= 85
-            else "NORMAL" if conf >= 65
-            else "RISK"
+            "BARDZO MOCNY" if conf >= 85
+            else "NORMALNY" if conf >= 65
+            else "RYZYKO"
         )
 
         league = first_existing(row, ["liga", "league"], "-")
@@ -926,7 +1431,7 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
             f'<div class="ai-table-final" style="margin-top:-14px;border-top:0;border-radius:0;">'
             f'<div class="ai-table-final-row">'
             f'<div><span class="ai-cell-num">{league}</span></div>'
-            f'<div><span class="ai-cell-main">{match}</span><span class="ai-cell-sub">AI independent pick</span></div>'
+            f'<div><span class="ai-cell-main">{match}</span><span class="ai-cell-sub">Niezależny typ AI</span></div>'
             f'<div><span class="ai-cell-num">{market}</span></div>'
             f'<div><span class="ai-cell-num">{odds}</span></div>'
             f'<div><div class="ai-conf-line"><span class="ai-conf-value">{conf_width}%</span><div class="ai-conf-track"><div class="ai-conf-fill" style="width:{conf_width}%"></div></div></div></div>'
@@ -937,7 +1442,7 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
 
         st.markdown(row_html, unsafe_allow_html=True)
 
-        with st.expander(f"{status_label} â€˘ AI DETAILS", expanded=False):
+        with st.expander(f"{status_label} - szczegóły AI", expanded=False):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
 
 
@@ -945,134 +1450,269 @@ def title(text: str) -> None:
     st.markdown(f'<div class="ka-title"><span class="ka-dot"></span>{text}</div>', unsafe_allow_html=True)
 
 
+def page_banner(section: str, name: str, subtitle: str) -> None:
+    image = b64_image(BANNER_FILE)
+    if image:
+        st.markdown(
+            f'''<div class="ka-page-banner ka-image-banner"><img src="data:image/png;base64,{image}" alt="KANIBAL ANALYTICS"></div>''',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '''<div class="ka-page-banner ka-image-banner"></div>''',
+            unsafe_allow_html=True,
+        )
+
+
+def subpage_banner(section: str, name: str, subtitle: str) -> None:
+    # Podzakładki nie renderują własnego banera, żeby na ekranie był tylko jeden baner.
+    return None
+
+
+def _result_source(results: pd.DataFrame, picks: pd.DataFrame | None = None) -> pd.DataFrame:
+    if results is not None and not results.empty:
+        return results.copy()
+    if picks is not None and not picks.empty:
+        return picks.copy()
+    return pd.DataFrame()
+
+
+def _win_mask(df: pd.DataFrame) -> pd.Series:
+    if df is None or df.empty:
+        return pd.Series([], dtype=bool)
+    if "result" in df.columns:
+        return df["result"].astype(str).str.lower().str.contains("win|won|wygr|1", regex=True, na=False)
+    if "status" in df.columns:
+        return df["status"].astype(str).str.lower().str.contains("win|won|wygr|closed_win", regex=True, na=False)
+    return pd.Series([False] * len(df), index=df.index)
+
+
+def _smart_group_table(df: pd.DataFrame, group_col: str, label: str, limit: int = 15) -> None:
+    if df is None or df.empty or group_col not in df.columns:
+        table = html_table(["Informacja"], [["Brak danych do tej analizy."]])
+        st.markdown(f'<div class="ka-panel"><h3>{html.escape(label)}</h3><div class="ka-table-scroll">{table}</div></div>', unsafe_allow_html=True)
+        return
+    work = df.copy()
+    work[group_col] = work[group_col].astype(str).replace({"": "-", "nan": "-"})
+    win = _win_mask(work)
+    work["_win"] = win.astype(int) if len(win) else 0
+    work["_profit"] = pd.to_numeric(work.get("profit", 0), errors="coerce").fillna(0)
+    work["_roi"] = pd.to_numeric(work.get("roi", 0), errors="coerce").fillna(0)
+    grouped = work.groupby(group_col, dropna=False).agg(
+        typy=(group_col, "count"),
+        wygrane=("_win", "sum"),
+        profit=("_profit", "sum"),
+        roi=("_roi", "mean"),
+    ).reset_index()
+    grouped["trafnosc_%"] = (grouped["wygrane"] / grouped["typy"].replace(0, pd.NA) * 100).fillna(0).round(2)
+    grouped = grouped.sort_values(["trafnosc_%", "typy", "profit"], ascending=[False, False, False]).head(limit)
+    st.markdown(f'<div class="ka-panel"><h3>{html.escape(label)}</h3>{dataframe_html_table(grouped)}</div>', unsafe_allow_html=True)
+
+
+def _decision_table(df: pd.DataFrame, cols: list[str], fallback: str) -> None:
+    if df is None or df.empty:
+        table = html_table(["Informacja"], [[html.escape(fallback)]])
+        st.markdown(f'<div class="ka-table-scroll">{table}</div>', unsafe_allow_html=True)
+        return
+    existing = [c for c in cols if c in df.columns]
+    st.markdown(dataframe_html_table(df[existing] if existing else df), unsafe_allow_html=True)
+
+
+def _odds_from_pick(pick: dict, default: float = 2.0) -> float:
+    return max(1.01, as_float(first_existing(pick, ["superbet_odds", "kurs_superbet", "kurs_buk", "odds"], default), default))
+
+
 def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
+    page_banner("Panel na żywo", "NA ŻYWO", "Szybka tabela operacyjna z typem zakładu, kursem, wartością i ryzykiem.")
     avg_conf = as_float(numeric_series(live, "confidence").mean(), as_float(numeric_series(picks, "confidence").mean(), 0))
     avg_odds = as_float(numeric_series(live, "odds").mean(), as_float(numeric_series(picks, "kurs_buk").mean(), 0))
-    metrics([("Mecze live", str(len(live)), "+ aktywne dane"), ("Typy live", str(len(live)), "+ monitoring"), ("SkutecznoĹ›Ä‡ live", pct(avg_conf), "+ confidence"), ("Ĺšredni kurs", f"{avg_odds:.2f}" if avg_odds else "-", "+ odds"), ("Zysk live", money(numeric_series(live, 'value').sum() if not live.empty else 0), "+ live value")])
-    title("SYGNAĹY NA Ĺ»YWO")
+    metrics([
+        ("Mecze live", str(len(live)), "aktywne"),
+        ("Typy live", str(len(live)), "monitoring"),
+        ("Średnia pewność", pct(avg_conf), "pewność"),
+        ("Średni kurs", f"{avg_odds:.2f}" if avg_odds else "-", "kurs"),
+        ("Wartość na żywo", money(numeric_series(live, 'value').sum() if not live.empty else 0), "wartość"),
+    ])
+    title("NA ŻYWO")
     rows = live_rows(live)
-    table = html_table(["League", "Match", "Minute", "Score", "Signal", "Confidence", "Odds", "Value", "Risk"], rows) if rows else html_table(["League", "Match", "Minute", "Score", "Signal", "Confidence", "Odds", "Value", "Risk"], [["-","Brak aktywnych danych LIVE â€” panel i wykresy pozostajÄ… gotowe","-","-","-","-","-","-","-"]])
-    live_pressure_values = real_values(live, ["pressure", "confidence", "momentum", "tempo"], default=pick_confidence_values(picks))
-    stats_values = real_values(live, ["confidence", "value", "ev"], default=pick_confidence_values(picks))
-    value_values = real_values(live, ["value", "ev", "edge"], default=pick_value_values(picks))
-    risk_values = group_counts(live, ["risk"], limit=10) or bucket_counts(numeric_series(live, "confidence")) or bucket_counts(numeric_series(picks, "confidence"))
-    st.markdown(f'<div class="live-layout"><div class="ka-panel"><h3>LIVE SIGNALS</h3>{table}</div><div class="ka-panel"><h3>AI SIGNAL QUALITY</h3><div class="ka-value">{pct(avg_conf)}</div><div class="ka-sub">PRESSURE / MOMENTUM / VALUE</div><br>{chart_html("LIVE PRESSURE", live_pressure_values, "Dane live / confidence")}</div></div>', unsafe_allow_html=True)
-    st.markdown('<div class="ka-bottom">' + chart_card("STATS OVERVIEW", stats_values, "Confidence / value") + chart_card("VALUE TOP 5", value_values, "Top value / EV") + chart_card("RISK DISTRIBUTION", risk_values, "RozkĹ‚ad ryzyka") + '</div>', unsafe_allow_html=True)
+    headers = ["Liga", "Mecz", "Minuta", "Wynik", "Typ zakładu", "Pewność", "Kurs", "Wartość", "Ryzyko"]
+    table = html_table(headers, rows) if rows else html_table(headers, [["-", "Brak aktywnych danych LIVE", "-", "-", "-", "-", "-", "-", "-"]])
+    st.markdown(f'<div class="ka-panel"><h3>NA ŻYWO - aktualne mecze i typ zakładu</h3>{table}</div>', unsafe_allow_html=True)
 
 
-def render_prematch(picks: pd.DataFrame) -> None:
-    metrics([("Analizowane mecze", str(len(picks)), "+ pipeline"), ("Typy dziĹ›", str(len(picks)), "+ selekcja"), ("Ĺšr. confidence", pct(as_float(numeric_series(picks, "confidence").mean(), 0)), "+ model"), ("Ĺšr. kurs", f"{as_float(numeric_series(picks, 'kurs_buk').mean(), 0):.2f}", "+ odds"), ("Value", f"{as_float(numeric_series(picks, 'ev').mean(), as_float(numeric_series(picks, 'edge').mean(), 0)):+.2f}%", "+ EV")])
+def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:
+    page_banner("Typy przedmeczowe", "PRZEDMECZOWE", "Trzy czytelne tabele: główna, niskie ryzyko i podwyższone ryzyko.")
+    low_picks = normalize_picks(low_picks) if low_picks is not None and not low_picks.empty else pd.DataFrame()
+    risk_picks = normalize_picks(risk_picks) if risk_picks is not None and not risk_picks.empty else pd.DataFrame()
+    metrics([
+        ("Przedmeczowe", str(len(picks)), "główne"),
+        ("Niskie ryzyko", str(len(low_picks)), "1.00-3.50"),
+        ("Podwyższone ryzyko", str(len(risk_picks)), "1.00-5.00"),
+        ("Średni kurs", f"{as_float(numeric_series(picks, 'kurs_buk').mean(), 0):.2f}", "główne"),
+        ("Średnia pewność", pct(as_float(numeric_series(picks, "confidence").mean(), 0)), "model"),
+    ])
     title("PRZEDMECZOWE")
-    rows = pick_rows(picks)
-    table = html_table(["Liga", "Mecz", "Rynek", "Kurs", "PewnoĹ›Ä‡", "Edge", "Status"], rows) if rows else html_table(["Liga", "Mecz", "Rynek", "Kurs", "PewnoĹ›Ä‡", "Edge", "Status"], [["-","Oczekiwanie na dane PREMATCH","-","-","-","-","-"]])
-    st.markdown(f'<div class="ka-layout"><div class="ka-panel"><h3>PREMATCH PICKS</h3>{table}</div><div>{chart_card("MODEL AI", pick_value_values(picks), "Tempo / forma / value")}</div></div>', unsafe_allow_html=True)
+    headers = ["Liga", "Mecz", "Rynek", "Kurs", "Pewność", "Przewaga", "Status"]
+    prematch_tabs = st.tabs(["Główne", "Niskie ryzyko", "Podwyższone ryzyko"])
+    datasets = [(picks, "TYPY PRZEDMECZOWE", "Brak danych przedmeczowych."), (low_picks, "NISKIE RYZYKO", "Brak danych niskiego ryzyka - bot nie zapisał jeszcze auto_low_picks.csv."), (risk_picks, "PODWYŻSZONE RYZYKO", "Brak danych podwyższonego ryzyka - bot nie zapisał jeszcze auto_risk_picks.csv.")]
+    for tab, (df, label, empty_msg) in zip(prematch_tabs, datasets):
+        with tab:
+            subpage_banner("Prematch table", label, empty_msg)
+            rows = pick_rows(df) if df is not None and not df.empty else []
+            table = html_table(headers, rows) if rows else html_table(headers, [["-", empty_msg, "-", "-", "-", "-", "-"]])
+            st.markdown(f'<div class="ka-panel"><h3>{label}</h3>{table}</div>', unsafe_allow_html=True)
 
 
-def render_ai(picks: pd.DataFrame, results: pd.DataFrame) -> None:
-    title("SZTUCZNA INTELIGENCJA")
-    render_ai_picks_interactive(picks)
-    metrics([("ĹÄ…czna liczba wyborĂłw", str(len(picks)), "aktywnych"), ("Ĺšredni wynik AI", f"{as_float(numeric_series(picks, 'ai_pick_score').mean(), as_float(numeric_series(picks, 'confidence').mean(), 0)):.2f}", "model"), ("Rozliczone", str(len(results)), "historia"), ("ROI", f"{as_float(numeric_series(results, 'roi').mean(), 0):+.1f}%", "wyniki"), ("Mocne wybory", str((numeric_series(picks, 'confidence') >= 75).sum()) if not picks.empty else "0", "confidence 75+")])
-    st.markdown('<div class="ka-three">' + chart_card("SkutecznoĹ›Ä‡ (Win Rate)", winrate_values(results, picks), "Win rate / confidence") + chart_card("ROI (%)", result_roi_values(results), "ROI / profit") + chart_card("ROI wedĹ‚ug Ligi", group_counts(results if not results.empty else picks, ["league", "liga"], 10), "Ranking lig") + '</div>', unsafe_allow_html=True)
-    st.markdown('<div class="ka-three">' + chart_card("SkutecznoĹ›Ä‡ wedĹ‚ug Typu", group_counts(results if not results.empty else picks, ["market", "typ"], 10), "Rynki") + chart_card("SkutecznoĹ›Ä‡ wedĹ‚ug PewnoĹ›ci", bucket_counts(numeric_series(picks, "confidence")), "Confidence buckets") + chart_card("Godziny - SkutecznoĹ›Ä‡", hour_values(results if not results.empty else picks), "Godziny") + '</div>', unsafe_allow_html=True)
+def render_ai(picks: pd.DataFrame, results: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:
+    low_picks = low_picks if low_picks is not None else pd.DataFrame()
+    risk_picks = risk_picks if risk_picks is not None else pd.DataFrame()
+    all_ai = pd.concat([df for df in [picks, low_picks, risk_picks] if df is not None and not df.empty], ignore_index=True, sort=False) if any(df is not None and not df.empty for df in [picks, low_picks, risk_picks]) else pd.DataFrame()
+    page_banner("Typy AI", "AI", "Trzy niezależne tabele AI: główna, niskie ryzyko i podwyższone ryzyko.")
+    title("AI")
+    metrics([
+        ("AI", str(len(picks)), "główne"),
+        ("AI niskie ryzyko", str(len(low_picks)), "1.00-3.50"),
+        ("AI podwyższone ryzyko", str(len(risk_picks)), "1.00-5.00"),
+        ("Średni wynik AI", f"{as_float(numeric_series(all_ai, 'ai_pick_score').mean(), as_float(numeric_series(all_ai, 'confidence').mean(), 0)):.2f}", "model"),
+        ("Rozliczone", str(len(results)), "historia"),
+    ])
+    ai_tabs = st.tabs(["AI", "AI niskie ryzyko", "AI podwyższone ryzyko"])
+    datasets = [
+        (picks, "TYPY AI", "Brak danych AI - główny tryb nie ma jeszcze kandydatów."),
+        (low_picks, "AI NISKIE RYZYKO", "Brak danych AI niskiego ryzyka - poczekaj na cykl albo uruchom pełny launcher."),
+        (risk_picks, "AI PODWYŻSZONE RYZYKO", "Brak danych AI podwyższonego ryzyka - poczekaj na cykl albo uruchom pełny launcher."),
+    ]
+    for tab, (df, label, empty_msg) in zip(ai_tabs, datasets):
+        with tab:
+            subpage_banner("AI table", label, empty_msg)
+            if df is None or df.empty:
+                st.info(empty_msg)
+            render_ai_picks_interactive(df if df is not None else pd.DataFrame())
 
 
 def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALITYKA") -> None:
+    page_banner("Centrum decyzji", "ANALITYKA", "Centrum nauki bota: ligi, rynki, ryzyko, źródła, baza cech i wnioski z historii.")
     title(heading)
-    metrics([("ĹÄ…czna liczba wyborĂłw", str(len(picks)), "aktywnych"), ("Ĺšredni wynik AI", f"{as_float(numeric_series(picks, 'ai_pick_score').mean(), as_float(numeric_series(picks, 'confidence').mean(), 0)):.2f}", "model"), ("Rozliczone", str(len(results)), "historia"), ("ROI", f"{as_float(numeric_series(results, 'roi').mean(), 0):+.1f}%", "wyniki"), ("Mocne wybory", str((numeric_series(picks, 'confidence') >= 75).sum()) if not picks.empty else "0", "confidence 75+")])
-    st.markdown('<div class="ka-three">' + chart_card("SkutecznoĹ›Ä‡ (Win Rate)", winrate_values(results, picks), "Win rate / confidence") + chart_card("ROI (%)", result_roi_values(results), "ROI / profit") + chart_card("ROI wedĹ‚ug Ligi", group_counts(results if not results.empty else picks, ["league", "liga"], 10), "Ranking lig") + '</div>', unsafe_allow_html=True)
-    st.markdown('<div class="ka-three">' + chart_card("SkutecznoĹ›Ä‡ wedĹ‚ug Typu", group_counts(results if not results.empty else picks, ["market", "typ"], 10), "Rynki") + chart_card("SkutecznoĹ›Ä‡ wedĹ‚ug PewnoĹ›ci", bucket_counts(numeric_series(picks, "confidence")), "Confidence buckets") + chart_card("Godziny - SkutecznoĹ›Ä‡", hour_values(results if not results.empty else picks), "Godziny") + '</div>', unsafe_allow_html=True)
+    src = _result_source(results, picks)
+    win = _win_mask(src)
+    winrate = (float(win.mean()) * 100) if len(win) else 0.0
+    metrics([
+        ("Zebrane rekordy", str(len(src)), "historia + picks"),
+        ("Trafność", f"{winrate:.2f}%", "rozliczone"),
+        ("Profit", money(numeric_series(src, 'profit').sum() if not src.empty else 0), "suma"),
+        ("ROI", f"{as_float(numeric_series(src, 'roi').mean(), 0):+.2f}%", "średnio"),
+        ("Baza nauki", str(len(read_csv_safe(DATA_DIR / 'history' / 'learning_events.csv'))), "zdarzenia uczenia"),
+    ])
+    st.markdown('<div class="ka-panel"><h3>Centrum decyzyjne bota</h3><p class="ka-sub">Tabele aktualizują się wraz z historią, rozliczeniami i plikami uczenia zapisanymi przez bota.</p></div>', unsafe_allow_html=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        _smart_group_table(src, "league" if "league" in src.columns else "liga", "Najpewniejsze ligi według trafności")
+    with col2:
+        _smart_group_table(src, "market" if "market" in src.columns else "typ", "Najpewniejsze typy zakładów")
+    col3, col4 = st.columns(2)
+    with col3:
+        _smart_group_table(src, "risk_level" if "risk_level" in src.columns else "risk", "Ryzyko vs wynik")
+    with col4:
+        _smart_group_table(src, "source" if "source" in src.columns else "status", "Źródło/status vs wynik")
+    st.markdown("#### Czego bot już się nauczył")
+    learning_frames = []
+    for path in [DATA_DIR / "ai_learning" / "ai_feature_store.csv", DATA_DIR / "history" / "learning_feature_store.csv", DATA_DIR / "history" / "learning_events.csv"]:
+        df = read_csv_safe(path)
+        if not df.empty:
+            df["plik"] = path.name
+            learning_frames.append(df)
+    learning_df = pd.concat(learning_frames, ignore_index=True, sort=False) if learning_frames else pd.DataFrame()
+    _decision_table(learning_df.tail(200), ["created_at", "written_at", "event", "league", "match", "market", "odds", "confidence", "edge", "ev", "payload_json", "plik"], "Brak zapisanej historii nauki. Pojawi się po kolejnych cyklach bota.")
 
 
 def render_history(results: pd.DataFrame) -> None:
+    page_banner("Historia wyników", "HISTORIA", "Profesjonalna historia wyników, pomagająca podejmować decyzje i uczyć się na danych.")
     title("HISTORIA")
     wins = "0"
     if not results.empty and "result" in results.columns:
         wins = str((results["result"].astype(str).str.lower().str.contains("win|wygr|won|1", regex=True)).sum())
-    metrics([("Liczba typĂłw", str(len(results)), "rozliczenia"), ("Wygrane", wins, "historia"), ("Zysk", money(numeric_series(results, 'profit').sum() if not results.empty else 0), "profit"), ("ROI", f"{as_float(numeric_series(results, 'roi').mean(), 0):+.1f}%", "Ĺ›rednio"), ("CLV", "4.2%", "tracking")])
-    if not results.empty:
-        st.dataframe(streamlit_df(results), use_container_width=True, hide_index=True)
-    st.markdown('<div class="ka-two">' + chart_card("Zysk w czasie", result_roi_values(results), "Profit / ROI") + chart_card("Statystyki szczegĂłĹ‚owe", group_counts(results, ["result", "market", "league"], 10), "Historia wynikĂłw") + '</div>', unsafe_allow_html=True)
+    metrics([
+        ("Rekordy", str(len(results)), "historia"),
+        ("Wygrane", wins, "trafione"),
+        ("Profit", money(numeric_series(results, 'profit').sum() if not results.empty else 0), "suma"),
+        ("ROI", f"{as_float(numeric_series(results, 'roi').mean(), 0):+.2f}%", "średnio"),
+        ("Otwarte", str((results.get('status', pd.Series(dtype=str)).astype(str).str.upper() == 'OPEN').sum()) if not results.empty and 'status' in results.columns else "0", "do rozliczenia"),
+    ])
+    hist_tabs = st.tabs(["Tabela", "Ligi", "Typy", "Decyzyjność"])
+    with hist_tabs[0]:
+        subpage_banner("Historia", "Tabela", "Pełna tabela rozliczeń i rekordów historii.")
+        _decision_table(results, ["created_at", "updated_at", "match_date", "league", "match_name", "match", "market", "bet_name", "odds", "confidence", "edge", "ev", "stake", "status", "result", "profit", "roi", "score"], "Brak historii.")
+    with hist_tabs[1]:
+        subpage_banner("Historia", "Ligi", "Skuteczność i zysk według lig.")
+        _smart_group_table(results, "league" if "league" in results.columns else "liga", "Historia według lig")
+    with hist_tabs[2]:
+        subpage_banner("Historia", "Typy", "Skuteczność i zysk według typu zakładu.")
+        _smart_group_table(results, "market" if "market" in results.columns else "typ", "Historia według typu zakładu")
+    with hist_tabs[3]:
+        subpage_banner("Historia", "Decyzyjność", "Najlepsze rekordy do nauki i decyzji.")
+        _decision_table(results.sort_values(by=[c for c in ["roi", "profit", "confidence"] if c in results.columns], ascending=False).head(100) if not results.empty else results, ["league", "match_name", "match", "market", "odds", "confidence", "edge", "ev", "result", "profit", "roi"], "Brak danych decyzyjnych.")
 
 
 def render_ranking(picks: pd.DataFrame, results: pd.DataFrame) -> None:
+    page_banner("Ranking", "RANKING", "Ranking lig, typów zakładów i połączeń liga + rynek, aktualizowany z historią.")
     title("RANKING")
-    src = results if not results.empty else picks
-    league_col = "league" if "league" in src.columns else "liga" if "liga" in src.columns else None
-    market_col = "market" if "market" in src.columns else "typ" if "typ" in src.columns else None
-    def ranking_table(col, label):
-        if col:
-            counts = src[col].astype(str).value_counts().head(10)
-            rows = [[f'<b>{idx}</b>', f'<span class="green">{int(val)}</span>'] for idx, val in counts.items()]
-        else:
-            rows = [["Brak danych", "0"]]
-        return f'<div class="ka-panel"><h3>{label}</h3>' + html_table(["Nazwa", "SygnaĹ‚y"], rows) + '</div>'
-    st.markdown('<div class="ka-two">' + ranking_table(league_col, "Najlepsze ligi") + ranking_table(market_col, "Najlepsze rynki") + '</div>', unsafe_allow_html=True)
-
-
-def render_alerts(picks: pd.DataFrame, live: pd.DataFrame) -> None:
-    title("ALERTY")
-    source = live if not live.empty else picks
-    alerts = []
-    if not source.empty:
-        for _, row in source.head(8).iterrows():
-            conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
-            ev = as_float(first_existing(row, ["ev", "value", "edge"], 0))
-            if conf >= 75:
-                alerts.append(("LIVE ALERT", f"Wysoka pewnoĹ›Ä‡ {conf:.1f}%", first_existing(row, ["match", "mecz"], "-")))
-            if ev >= 8:
-                alerts.append(("VALUE ALERT", f"Wysokie EV {ev:.1f}", first_existing(row, ["match", "mecz"], "-")))
-    if not alerts:
-        alerts = [("SYSTEM", "Monitoring aktywny. Brak krytycznych alertĂłw.", "KANIBAL ANALYTICS")]
-    cards = ''.join(f'<div class="ka-card"><div class="green">{a}</div><h3>{b}</h3><div class="ka-sub">{c}</div></div>' for a,b,c in alerts[:8])
-    alert_values = real_values(source, ["confidence", "ev", "value", "edge"], default=[len(alerts)])
-    st.markdown('<div class="ka-two"><div>' + cards + '</div>' + chart_card("Alerty w czasie", alert_values, "Realne alerty / confidence / EV") + '</div>', unsafe_allow_html=True)
-
-
-def render_settings() -> None:
-    title("USTAWIENIA")
-    cfg = load_strategy_config()
-    profiles = filter_profile_options(cfg)
-    active = active_filter_profile(cfg)
-    profile_keys = list(profiles.keys())
-    current_idx = profile_keys.index(active) if active in profile_keys else 0
-
-    def profile_label(key: str) -> str:
-        profile = profiles.get(key, {})
-        return (
-            f"{profile.get('label', key.title())} "
-            f"({float(profile.get('min_book_odds', 1.0)):.2f}-"
-            f"{float(profile.get('max_book_odds', 3.5)):.2f})"
-        )
-
-    selected = st.radio(
-        "Zakres filtrów bota",
-        profile_keys,
-        index=current_idx,
-        horizontal=True,
-        format_func=profile_label,
-        key="filter_profile_select",
-    )
-
-    selected_profile = profiles[selected]
+    src = _result_source(results, picks)
     metrics([
-        ("Aktywny profil", str(profiles[active].get("label", active.title())), "obecnie zapisany"),
-        ("Wybrany zakres", f"{float(selected_profile.get('min_book_odds', 1.0)):.2f}-{float(selected_profile.get('max_book_odds', 3.5)):.2f}", "po zapisie"),
-        ("Historia", "bez zmian", "nie kasuje danych"),
-        ("Zastosowanie", "kolejny cykl", "scheduler/bot"),
-        ("Plik", "config", "config_strategy.json"),
+        ("Ligi", str(src["league"].nunique()) if not src.empty and "league" in src.columns else "0", "ranking"),
+        ("Typy", str(src["market"].nunique()) if not src.empty and "market" in src.columns else "0", "rynki"),
+        ("Rekordy", str(len(src)), "baza"),
+        ("Profit", money(numeric_series(src, 'profit').sum() if not src.empty else 0), "suma"),
+        ("ROI", f"{as_float(numeric_series(src, 'roi').mean(), 0):+.2f}%", "średnio"),
     ])
+    col1, col2 = st.columns(2)
+    with col1:
+        _smart_group_table(src, "league" if "league" in src.columns else "liga", "Liga: co trafia najczęściej")
+    with col2:
+        _smart_group_table(src, "market" if "market" in src.columns else "typ", "Typ zakładu: co trafia najczęściej")
+    if not src.empty:
+        league_col = "league" if "league" in src.columns else "liga" if "liga" in src.columns else None
+        market_col = "market" if "market" in src.columns else "typ" if "typ" in src.columns else None
+        if league_col and market_col:
+            st.markdown("#### Liga + typ zakładu")
+            combo = src.copy()
+            combo["liga_typ"] = combo[league_col].astype(str) + " | " + combo[market_col].astype(str)
+            _smart_group_table(combo, "liga_typ", "Najmocniejsze połączenia")
 
-    if st.button("Zapisz profil filtrów", type="primary", use_container_width=True):
-        cfg["filter_profiles"] = profiles
-        cfg["active_filter_profile"] = selected
-        cfg.setdefault("filters", {})
-        cfg["filters"]["min_book_odds"] = float(selected_profile.get("min_book_odds", 1.0))
-        cfg["filters"]["max_book_odds"] = float(selected_profile.get("max_book_odds", 3.5))
-        save_strategy_config(cfg)
-        st.success(f"Zapisano: {profile_label(selected)}. Bot użyje tego zakresu przy następnym uruchomieniu.")
-        st.rerun()
 
-    st.info("Zmiana profilu nie usuwa historii. Zmienia tylko zakres kursów używany przez bota przy kolejnym pobraniu typów.")
+def render_gpt_professional(prematch_picks: pd.DataFrame, low_picks: pd.DataFrame, risk_picks: pd.DataFrame, live: pd.DataFrame, results: pd.DataFrame) -> None:
+    page_banner("Czat GPT", "CZAT GPT", "Profesjonalny ekran rozmowy z GPT podzielony na Prematch, Low i Risk.")
+    title("CZAT GPT")
+    total_context = sum(len(df) for df in [prematch_picks, low_picks, risk_picks] if df is not None)
+    metrics([
+        ("Kontekst GPT", str(total_context), "typy"),
+        ("Na żywo", str(len(live)), "mecze"),
+        ("Historia", str(len(results)), "rekordy"),
+        ("GPT", "aktywny", "jeśli OPENAI_API_KEY"),
+        ("Profile", "3", "Prematch / Low / Risk"),
+    ])
+    st.markdown('<div class="ka-panel"><h3>Profesjonalny asystent analityczny</h3><p class="ka-sub">GPT widzi tylko dane aktywnego profilu. Moduł nie zmienia logiki bota, nie kasuje historii i nie nadpisuje typów.</p></div>', unsafe_allow_html=True)
+
+    datasets = [
+        ("prematch", "Prematch", prematch_picks if prematch_picks is not None else pd.DataFrame(), PICK_CANDIDATES),
+        ("low", "Low", low_picks if low_picks is not None else pd.DataFrame(), LOW_PICK_CANDIDATES),
+        ("risk", "Risk", risk_picks if risk_picks is not None else pd.DataFrame(), RISK_PICK_CANDIDATES),
+    ]
+    profile_tabs = st.tabs([label for _, label, _, _ in datasets])
+    for tab, (profile_key, profile_label, profile_df, source_files) in zip(profile_tabs, datasets):
+        with tab:
+            metrics([
+                ("Typy profilu", str(len(profile_df)), profile_label),
+                ("Mecze live", str(len(live)), "na żywo"),
+                ("Historia", str(len(results)), "rekordy"),
+                ("Analiza", "osobna", profile_key),
+                ("Zapis", "profilowy", "bez mieszania"),
+            ])
+            gpt_subtabs = st.tabs(["Czat analityczny", "Analiza AI/GPT"])
+            with gpt_subtabs[0]:
+                render_gpt_chat_tab(profile_df, live, results, profile_name=profile_label, key_prefix=profile_key)
+            with gpt_subtabs[1]:
+                render_gpt_tab(BASE_DIR, profile_name=profile_label, key_prefix=profile_key, source_files=source_files)
+
 
 def _manual_pick_label(row, idx: int) -> str:
     league = first_existing(row, ["liga", "league"], "-")
@@ -1093,218 +1733,253 @@ def _ako_calculated_odds(odds_values) -> float:
     return round(total, 4)
 
 
-def render_manual_betting(picks_source: pd.DataFrame) -> None:
-    title("MOJE ZAKŁADY")
+@st.cache_data(ttl=300, show_spinner=False)
+def _resolve_superbet_odds_cached(fixture_id: str, market_code: str, fallback: float) -> tuple[float, str]:
+    fallback_value = max(1.01, as_float(fallback, 1.80))
+    if not fixture_id or not market_code:
+        return fallback_value, "Superbet (kurs z bota)"
+    try:
+        from data_api import get_bookmaker_market_odds
+        row = get_bookmaker_market_odds({"fixture_id": fixture_id}, market_code, "superbet")
+        if row and row.get("odds"):
+            return max(1.01, as_float(row.get("odds"), fallback_value)), str(row.get("bookmaker") or "Superbet")
+    except Exception:
+        pass
+    return fallback_value, "Superbet (kurs z bota)"
 
-    required = [add_manual_bet, add_ako_coupon, manual_bets_dataframe, manual_summary, grouped_manual_stats]
-    if not all(required):
-        st.error("Moduł manual betting nie został załadowany.")
-        return
 
-    manual_df = manual_bets_dataframe()
-    ako_df = ako_coupons_dataframe() if ako_coupons_dataframe else pd.DataFrame()
-    summary = manual_summary(manual_df)
-    ako_summary = manual_summary(ako_df.rename(columns={"total_odds": "odds"})) if not ako_df.empty else {
-        "total": 0, "open": 0, "winrate": 0, "profit": 0, "roi": 0
-    }
+def _bookmaker_odds_for_pick(pick: dict, market_code: str, default: float = 2.0) -> tuple[float, str]:
+    market_code = str(market_code or "").upper()
+    fallback = _odds_from_pick(pick, default)
+    market_keys = [
+        f"superbet_{market_code}", f"kurs_superbet_{market_code}", f"odds_{market_code}", f"kurs_{market_code}",
+        f"superbet_{market_code.lower()}", f"kurs_superbet_{market_code.lower()}", f"odds_{market_code.lower()}", f"kurs_{market_code.lower()}",
+    ]
+    for key in market_keys:
+        if key in pick and str(pick.get(key, "")).strip() not in {"", "nan", "None"}:
+            value = as_float(pick.get(key), 0)
+            if value > 1:
+                return max(1.01, value), "Superbet"
 
-    metrics([
-        ("Single", str(summary["total"]), "moje typy"),
-        ("AKO", str(ako_summary["total"]), "kupony"),
-        ("Otwarte", str(summary["open"] + ako_summary["open"]), "do rozliczenia"),
-        ("Profit", money(summary["profit"] + ako_summary["profit"]), "manual"),
-        ("ROI", f"{summary['roi']:+.2f}%", "single"),
-    ])
+    fixture_id = str(first_existing(pick, ["fixture_id", "id"], "")).strip()
+    return _resolve_superbet_odds_cached(fixture_id, market_code, fallback)
 
-    if picks_source.empty:
-        st.warning("Brak meczów z selekcji bota. Uruchom bota, aby uzupełnić auto_all_picks.csv.")
+
+def _manual_mode_note(mode_key: str, mode_label: str) -> str:
+    return f"Tryb: {mode_key} | {mode_label}"
+
+
+def _filter_manual_by_mode(df: pd.DataFrame, mode_key: str) -> pd.DataFrame:
+    if df is None or df.empty or "note" not in df.columns:
+        return df if df is not None else pd.DataFrame()
+    note = df["note"].astype(str)
+    mask = note.str.contains(f"Tryb: {mode_key}", regex=False, na=False)
+    if mode_key == "standard":
+        mask = mask | note.str.strip().eq("")
+    return df[mask].copy()
+
+
+def _render_manual_profile(mode_key: str, mode_label: str, picks_source: pd.DataFrame, manual_df: pd.DataFrame, ako_df: pd.DataFrame) -> None:
+    if picks_source is None or picks_source.empty:
+        st.warning(f"Brak meczów dla profilu {mode_label}. Poczekaj na kolejny cykl bota albo sprawdź pliki typów.")
         return
 
     shown = picks_source.reset_index(drop=True)
     labels = [_manual_pick_label(row, idx) for idx, row in shown.iterrows()]
     market_labels = [label for _, label in MANUAL_MARKETS]
+    mode_note = _manual_mode_note(mode_key, mode_label)
+    mode_manual_df = _filter_manual_by_mode(manual_df, mode_key)
+    mode_ako_df = _filter_manual_by_mode(ako_df, mode_key)
 
-    mode_tabs = st.tabs(["Single", "Kupon AKO", "Historia", "Statystyki"])
+    st.markdown(f'<div class="ka-panel"><h3>{html.escape(mode_label)}</h3><p class="ka-sub">Wybierasz mecz, typ i stawkę. Kurs jest automatycznie pobierany dla wybranego rynku; jeżeli feed nie zwróci Superbet, panel używa kursu bota jako bezpiecznego uzupełnienia.</p></div>', unsafe_allow_html=True)
+    action_tabs = st.tabs(["Zakład pojedynczy", "Kupon multi", "Historia", "Statystyki"])
 
-    with mode_tabs[0]:
-        with st.form("manual_single_form", clear_on_submit=False):
-            selected_label = st.selectbox("Mecz z selekcji bota", labels, key="single_match")
-            selected_pick = shown.iloc[labels.index(selected_label)].to_dict()
-            selected_market_label = st.selectbox("Twój typ zakładu", market_labels, key="single_market")
-            odds = st.number_input("Kurs, po którym zagrałeś", min_value=1.01, max_value=100.0, value=2.00, step=0.01, key="single_odds")
-            stake = st.number_input("Stawka", min_value=0.01, max_value=1000000.0, value=10.0, step=1.0, key="single_stake")
-            bookmaker = st.text_input("Bukmacher", value="", key="single_bookmaker")
-            note = st.text_area("Notatka", value="", height=80, key="single_note")
-            if st.form_submit_button("Zapisz single"):
-                try:
-                    bet_id = add_manual_bet(
-                        selected_pick,
-                        _market_code_by_label(selected_market_label),
-                        odds,
-                        stake,
-                        bookmaker=bookmaker,
-                        note=note,
-                    )
-                    st.success(f"Zapisano zakład single #{bet_id}.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Nie udało się zapisać zakładu: {exc}")
-
-    with mode_tabs[1]:
-        leg_count = st.number_input(
-            "Ile pozycji chcesz dodać do kuponu AKO?",
-            min_value=2,
-            max_value=10,
-            value=3,
-            step=1,
-            help="Zmieniasz tę liczbę i panel pokaże dokładnie tyle pól zdarzeń na kuponie.",
+    with action_tabs[0]:
+        selected_idx = st.selectbox(
+            "Mecz",
+            list(range(len(labels))),
+            format_func=lambda idx: labels[int(idx)],
+            key=f"{mode_key}_single_match",
         )
-        st.caption(f"Ten kupon będzie miał {int(leg_count)} pozycji.")
-        with st.form("manual_ako_form", clear_on_submit=False):
-            coupon_name = st.text_input("Nazwa kuponu", value="Kupon AKO")
-            coupon_bookmaker = st.text_input("Bukmacher kuponu", value="", key="ako_bookmaker")
-            coupon_note = st.text_area("Notatka do kuponu", value="", height=70, key="ako_note")
+        selected_pick = shown.iloc[int(selected_idx)].to_dict()
+        selected_market_label = st.selectbox("Typ zakładu", market_labels, key=f"{mode_key}_single_market")
+        market_code = _market_code_by_label(selected_market_label)
+        auto_odds, bookmaker_name = _bookmaker_odds_for_pick(selected_pick, market_code, _odds_from_pick(selected_pick))
+        st.caption(f"Kurs: {auto_odds:.2f} | źródło: {bookmaker_name}")
+        stake = st.number_input("Stawka", min_value=0.01, max_value=1000000.0, value=10.0, step=1.0, key=f"{mode_key}_single_stake")
+        st.number_input("Kurs automatyczny", min_value=1.01, max_value=100.0, value=float(auto_odds), step=0.01, disabled=True, key=f"{mode_key}_single_auto_odds_{selected_idx}_{market_code}")
+        if st.button("Zapisz zakład pojedynczy", type="primary", key=f"{mode_key}_single_save"):
+            try:
+                bet_id = add_manual_bet(selected_pick, market_code, auto_odds, stake, bookmaker=bookmaker_name, note=mode_note)
+                st.success(f"Zapisano zakład pojedynczy #{bet_id}.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Nie udało się zapisać zakładu: {exc}")
 
-            legs = []
-            leg_odds = []
-            for idx in range(int(leg_count)):
-                st.markdown(f"**Zdarzenie {idx + 1}**")
-                match_label = st.selectbox("Mecz", labels, key=f"ako_match_{idx}")
-                market_label = st.selectbox("Typ", market_labels, key=f"ako_market_{idx}")
-                odds_value = st.number_input("Kurs zdarzenia", min_value=1.01, max_value=100.0, value=1.80, step=0.01, key=f"ako_odds_{idx}")
-                legs.append({
-                    "pick": shown.iloc[labels.index(match_label)].to_dict(),
-                    "manual_market": _market_code_by_label(market_label),
-                    "odds": odds_value,
-                })
-                leg_odds.append(odds_value)
+    with action_tabs[1]:
+        leg_count = st.number_input("Ile meczów ma kupon multi?", min_value=2, max_value=10, value=3, step=1, key=f"{mode_key}_multi_count")
+        legs = []
+        leg_odds = []
+        for idx in range(int(leg_count)):
+            st.markdown(f"**Pozycja {idx + 1}**")
+            cols = st.columns([2.2, 1.2, 0.8])
+            with cols[0]:
+                match_idx = st.selectbox(
+                    "Mecz",
+                    list(range(len(labels))),
+                    format_func=lambda value: labels[int(value)],
+                    key=f"{mode_key}_multi_match_{idx}",
+                )
+            with cols[1]:
+                market_label = st.selectbox("Typ", market_labels, key=f"{mode_key}_multi_market_{idx}")
+            selected = shown.iloc[int(match_idx)].to_dict()
+            market_code = _market_code_by_label(market_label)
+            odds_value, bookmaker_name = _bookmaker_odds_for_pick(selected, market_code, _odds_from_pick(selected, 1.80))
+            with cols[2]:
+                st.number_input("Kurs", min_value=1.01, max_value=100.0, value=float(odds_value), step=0.01, disabled=True, key=f"{mode_key}_multi_odds_{idx}_{match_idx}_{market_code}")
+            legs.append({"pick": selected, "manual_market": market_code, "odds": odds_value})
+            leg_odds.append(odds_value)
 
-            calculated = _ako_calculated_odds(leg_odds)
-            total_odds = st.number_input("Kurs łączny kuponu", min_value=1.01, max_value=100000.0, value=float(calculated), step=0.01)
-            coupon_stake = st.number_input("Stawka na kupon AKO", min_value=0.01, max_value=1000000.0, value=10.0, step=1.0)
-            st.caption(f"Kurs liczony z pozycji: {calculated:.4f}")
+        calculated = _ako_calculated_odds(leg_odds)
+        coupon_stake = st.number_input("Stawka kuponu", min_value=0.01, max_value=1000000.0, value=10.0, step=1.0, key=f"{mode_key}_multi_stake")
+        st.metric("Kurs łączny", f"{calculated:.4f}")
+        if st.button("Zapisz kupon multi", type="primary", key=f"{mode_key}_multi_save"):
+            try:
+                coupon_id = add_ako_coupon(
+                    legs,
+                    stake=coupon_stake,
+                    total_odds=calculated,
+                    name=f"{mode_label} multi",
+                    bookmaker="Superbet",
+                    note=mode_note,
+                )
+                st.success(f"Zapisano kupon multi #{coupon_id}.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Nie udało się zapisać kuponu multi: {exc}")
 
-            if st.form_submit_button("Zapisz kupon AKO"):
-                try:
-                    coupon_id = add_ako_coupon(
-                        legs,
-                        stake=coupon_stake,
-                        total_odds=total_odds,
-                        name=coupon_name,
-                        bookmaker=coupon_bookmaker,
-                        note=coupon_note,
-                    )
-                    st.success(f"Zapisano kupon AKO #{coupon_id}.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Nie udało się zapisać kuponu AKO: {exc}")
-
-        if settle_all_manual and st.button("Sprawdź wyniki manualnych teraz"):
+        if settle_all_manual and st.button("Sprawdź wyniki manualnych teraz", key=f"{mode_key}_settle_now"):
             updated = settle_all_manual()
             st.success(f"Rozliczono: {updated}")
             st.rerun()
 
-    with mode_tabs[2]:
-        hist_tabs = st.tabs(["Single", "AKO", "Pozycje AKO", "Usuń"])
+    with action_tabs[2]:
+        hist_tabs = st.tabs(["Single", "Multi", "Pozycje multi", "Usuń"])
         with hist_tabs[0]:
-            if manual_df.empty:
-                st.info("Brak zapisanych zakładów single.")
-            else:
-                cols = [c for c in ["created_at", "match_name", "league", "manual_market_label", "odds", "stake", "status", "result", "score", "profit", "roi"] if c in manual_df.columns]
-                st.dataframe(streamlit_df(manual_df[cols]), use_container_width=True, hide_index=True)
+            _decision_table(mode_manual_df, ["created_at", "match_name", "league", "manual_market_label", "odds", "stake", "status", "result", "score", "profit", "roi", "bookmaker"], "Brak zapisanych zakładów pojedynczych w tym profilu.")
         with hist_tabs[1]:
-            if ako_df.empty:
-                st.info("Brak zapisanych kuponów AKO.")
-            else:
-                cols = [c for c in ["created_at", "name", "stake", "total_odds", "calculated_odds", "status", "result", "profit", "roi", "bookmaker"] if c in ako_df.columns]
-                st.dataframe(streamlit_df(ako_df[cols]), use_container_width=True, hide_index=True)
+            _decision_table(mode_ako_df, ["created_at", "name", "stake", "total_odds", "calculated_odds", "status", "result", "profit", "roi", "bookmaker"], "Brak zapisanych kuponów multi w tym profilu.")
         with hist_tabs[2]:
             legs_df = ako_legs_dataframe() if ako_legs_dataframe else pd.DataFrame()
-            if legs_df.empty:
-                st.info("Brak pozycji AKO.")
-            else:
-                cols = [c for c in ["coupon_id", "match_name", "league", "manual_market_label", "odds", "status", "result", "score"] if c in legs_df.columns]
-                st.dataframe(streamlit_df(legs_df[cols]), use_container_width=True, hide_index=True)
+            if not mode_ako_df.empty and not legs_df.empty and "coupon_id" in legs_df.columns:
+                coupon_ids = set(pd.to_numeric(mode_ako_df["id"], errors="coerce").dropna().astype(int).tolist())
+                legs_df = legs_df[pd.to_numeric(legs_df["coupon_id"], errors="coerce").fillna(-1).astype(int).isin(coupon_ids)].copy()
+            elif mode_ako_df.empty:
+                legs_df = pd.DataFrame()
+            _decision_table(legs_df, ["coupon_id", "match_name", "league", "manual_market_label", "odds", "status", "result", "score"], "Brak pozycji multi w tym profilu.")
         with hist_tabs[3]:
             delete_cols = st.columns(2)
             with delete_cols[0]:
-                st.subheader("Usuń single")
-                if manual_df.empty or delete_manual_bet is None:
-                    st.info("Brak zapisanych zakładów single.")
+                st.subheader("Usuń zakład pojedynczy")
+                if mode_manual_df.empty or delete_manual_bet is None:
+                    st.info("Brak zapisanych zakładów pojedynczych w tym profilu.")
                 else:
-                    single_options = {
-                        f"#{int(row['id'])} | {row.get('match_name', '-')} | {row.get('manual_market_label', '-')} | {row.get('status', '-')}" : int(row["id"])
-                        for _, row in manual_df.iterrows()
-                    }
-                    selected_single = st.selectbox("Wybierz single do usunięcia", list(single_options.keys()), key="delete_single_select")
-                    if st.button("Usuń wybrany single", key="delete_single_button"):
+                    single_options = {f"#{int(row['id'])} | {row.get('match_name', '-')} | {row.get('manual_market_label', '-')} | {row.get('status', '-')}": int(row["id"]) for _, row in mode_manual_df.iterrows()}
+                    selected_single = st.selectbox("Wybierz zakład", list(single_options.keys()), key=f"{mode_key}_delete_single_select")
+                    if st.button("Usuń wybrany zakład", key=f"{mode_key}_delete_single_button"):
                         delete_manual_bet(single_options[selected_single])
-                        st.success("Usunięto zakład single.")
+                        st.success("Usunięto zakład pojedynczy.")
                         st.rerun()
-
             with delete_cols[1]:
-                st.subheader("Usuń kupon AKO")
-                if ako_df.empty or delete_ako_coupon is None:
-                    st.info("Brak zapisanych kuponów AKO.")
+                st.subheader("Usuń kupon multi")
+                if mode_ako_df.empty or delete_ako_coupon is None:
+                    st.info("Brak zapisanych kuponów multi w tym profilu.")
                 else:
-                    ako_options = {
-                        f"#{int(row['id'])} | {row.get('name', 'Kupon AKO')} | {row.get('status', '-')} | kurs {row.get('total_odds', '-')}" : int(row["id"])
-                        for _, row in ako_df.iterrows()
-                    }
-                    selected_coupon = st.selectbox("Wybierz kupon AKO do usunięcia", list(ako_options.keys()), key="delete_ako_select")
-                    if st.button("Usuń wybrany kupon AKO", key="delete_ako_button"):
+                    ako_options = {f"#{int(row['id'])} | {row.get('name', 'Kupon multi')} | {row.get('status', '-')} | kurs {row.get('total_odds', '-')}": int(row["id"]) for _, row in mode_ako_df.iterrows()}
+                    selected_coupon = st.selectbox("Wybierz kupon", list(ako_options.keys()), key=f"{mode_key}_delete_multi_select")
+                    if st.button("Usuń wybrany kupon", key=f"{mode_key}_delete_multi_button"):
                         delete_ako_coupon(ako_options[selected_coupon])
-                        st.success("Usunięto kupon AKO razem z jego pozycjami.")
+                        st.success("Usunięto kupon multi razem z pozycjami.")
                         st.rerun()
 
-    with mode_tabs[3]:
-        league_stats = grouped_manual_stats(manual_df, "league")
-        market_stats = grouped_manual_stats(manual_df, "manual_market_label")
-        stat_cols = st.columns(2)
-        with stat_cols[0]:
-            st.subheader("Single według ligi")
-            if league_stats.empty:
-                st.info("Brak rozliczonych singli.")
-            else:
-                st.dataframe(streamlit_df(league_stats), use_container_width=True, hide_index=True)
-        with stat_cols[1]:
-            st.subheader("Single według typu")
-            if market_stats.empty:
-                st.info("Brak rozliczonych singli.")
-            else:
-                st.dataframe(streamlit_df(market_stats), use_container_width=True, hide_index=True)
+    with action_tabs[3]:
+        mode_single_summary = manual_summary(mode_manual_df)
+        mode_multi_summary = manual_summary(mode_ako_df.rename(columns={"total_odds": "odds"})) if not mode_ako_df.empty else {"total": 0, "open": 0, "winrate": 0, "profit": 0, "roi": 0}
+        metrics([
+            ("Single", str(mode_single_summary["total"]), "zapisane"),
+            ("Multi", str(mode_multi_summary["total"]), "zapisane"),
+            ("Wygrane single", str(mode_single_summary.get("wins", 0)), "rozliczone"),
+            ("Profit", money(mode_single_summary["profit"] + mode_multi_summary["profit"]), "profil"),
+            ("ROI", f"{mode_single_summary['roi']:+.2f}%", "single"),
+        ])
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Według ligi")
+            _decision_table(grouped_manual_stats(mode_manual_df, "league"), ["league", "bets", "wins", "winrate_%", "stake", "profit", "roi_%"], "Brak rozliczonych singli w tym profilu.")
+        with col2:
+            st.subheader("Według typu")
+            _decision_table(grouped_manual_stats(mode_manual_df, "manual_market_label"), ["manual_market_label", "bets", "wins", "winrate_%", "stake", "profit", "roi_%"], "Brak rozliczonych singli w tym profilu.")
 
+
+def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame | None = None, risk_source: pd.DataFrame | None = None) -> None:
+    page_banner("Moje zakłady", "MOJE ZAKŁADY", "Zakłady pojedyncze i multi w trzech profilach: Standard, Niskie ryzyko i Duże ryzyko.")
+    title("MOJE ZAKŁADY")
+
+    required = [add_manual_bet, add_ako_coupon, manual_bets_dataframe, manual_summary, grouped_manual_stats]
+    if not all(required):
+        st.error("Moduł moich zakładów nie został załadowany.")
+        return
+
+    manual_df = manual_bets_dataframe()
+    ako_df = ako_coupons_dataframe() if ako_coupons_dataframe else pd.DataFrame()
+    summary = manual_summary(manual_df)
+    ako_summary = manual_summary(ako_df.rename(columns={"total_odds": "odds"})) if not ako_df.empty else {"total": 0, "open": 0, "winrate": 0, "profit": 0, "roi": 0}
+
+    metrics([
+        ("Single", str(summary["total"]), "pojedyncze zakłady"),
+        ("Multi", str(ako_summary["total"]), "kupony"),
+        ("Otwarte", str(summary["open"] + ako_summary["open"]), "do rozliczenia"),
+        ("Profit", money(summary["profit"] + ako_summary["profit"]), "manual"),
+        ("ROI", f"{summary['roi']:+.2f}%", "single"),
+    ])
+
+    datasets = [
+        ("standard", "Standard", picks_source if picks_source is not None else pd.DataFrame()),
+        ("low", "Niskie ryzyko", low_source if low_source is not None else pd.DataFrame()),
+        ("risk", "Duże ryzyko", risk_source if risk_source is not None else pd.DataFrame()),
+    ]
+    profile_tabs = st.tabs([label for _, label, _ in datasets])
+    for tab, (mode_key, mode_label, source_df) in zip(profile_tabs, datasets):
+        with tab:
+            _render_manual_profile(mode_key, mode_label, source_df, manual_df, ako_df)
 
 css()
 require_login()
-hero()
-view_labels = {data["label"]: key for key, data in BOT_VIEWS.items()}
-selected_label = st.sidebar.radio("MENU", list(view_labels.keys()), index=0)
-selected_view = view_labels[selected_label]
-st.sidebar.caption("Każdy widok czyta osobny plik typów.")
-
-raw_picks = load_picks(selected_view)
+raw_picks = load_picks()
 picks = normalize_picks(raw_picks)
+low_picks = normalize_picks(load_pick_candidates(LOW_PICK_CANDIDATES))
+risk_picks = normalize_picks(load_pick_candidates(RISK_PICK_CANDIDATES))
 live = load_live_data(picks)
 results = load_results()
 ai_picks = load_ai_picks(picks)
+ai_low_picks = load_ai_picks(low_picks, LOW_AI_PICKS_FILE, "low")
+ai_risk_picks = load_ai_picks(risk_picks, RISK_AI_PICKS_FILE, "risk")
+ai_context = pd.concat(
+    [df for df in [ai_picks, ai_low_picks, ai_risk_picks] if df is not None and not df.empty],
+    ignore_index=True,
+    sort=False,
+) if any(df is not None and not df.empty for df in [ai_picks, ai_low_picks, ai_risk_picks]) else pd.DataFrame()
 
-tabs = st.tabs(["LIVE", "PREMATCH", "AI", "ANALYTICS", "HISTORY", "MOJE ZAKŁADY", "RANKING", "ALERTS", "SETTINGS", "GPT CHAT"])
+tabs = st.tabs(["NA ŻYWO", "PRZEDMECZOWE", "AI", "ANALITYKA", "HISTORIA", "MOJE ZAKŁADY", "RANKING", "CZAT GPT"])
 with tabs[0]: render_live(live, picks)
-with tabs[1]:
-    st.caption(f"Aktywny widok: {selected_label}")
-    render_prematch(picks)
-with tabs[2]: render_ai(ai_picks, results)
+with tabs[1]: render_prematch(picks, low_picks, risk_picks)
+with tabs[2]: render_ai(ai_picks, results, ai_low_picks, ai_risk_picks)
 with tabs[3]: render_analytics(picks, results, "ANALITYKA")
 with tabs[4]: render_history(results)
-with tabs[5]: render_manual_betting(raw_picks)
+with tabs[5]: render_manual_betting(raw_picks, low_picks, risk_picks)
 with tabs[6]: render_ranking(picks, results)
-with tabs[7]: render_alerts(picks, live)
-with tabs[8]: render_settings()
-with tabs[9]:
-    gpt_subtabs = st.tabs(["đź’¬ LIVE CHAT", "đź“Š AI ANALYSIS"])
-    with gpt_subtabs[0]:
-        render_gpt_chat_tab(ai_picks, live, results)
-    with gpt_subtabs[1]:
-        render_gpt_tab(BASE_DIR)
-st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA Ĺ»YWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
+with tabs[7]: render_gpt_professional(picks, low_picks, risk_picks, live, results)
+st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
+
+
+

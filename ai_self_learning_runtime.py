@@ -13,13 +13,19 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 import pandas as pd
 
+try:
+    from betbot.storage.append_only_history import append_event, append_records
+except Exception:
+    def append_event(*args, **kwargs):
+        return None
+    def append_records(*args, **kwargs):
+        return 0
+
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
-LOW_PREMATCH_FILE = DATA_DIR / "auto_low_picks.csv"
-RISK_PREMATCH_FILE = DATA_DIR / "auto_risk_picks.csv"
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
@@ -33,8 +39,32 @@ FEATURE_STORE_FILE = AI_MODEL_DIR / "ai_feature_store.csv"
 EVENT_LOG_FILE = AI_MODEL_DIR / "ai_learning_events.csv"
 DEBUG_FILE = DATA_DIR / "ai_runtime_debug.json"
 
+AI_MODE_SETTINGS = {
+    "main": {
+        "prematch_file": "auto_all_picks.csv",
+        "ai_file": "ai_picks.csv",
+        "model_dir": "ai_learning",
+        "label": "AI",
+        "append_stream": "ai_picks",
+    },
+    "low": {
+        "prematch_file": "auto_low_picks.csv",
+        "ai_file": "ai_low_picks.csv",
+        "model_dir": "ai_learning_low",
+        "label": "AI LOW",
+        "append_stream": "ai_low_picks",
+    },
+    "risk": {
+        "prematch_file": "auto_risk_picks.csv",
+        "ai_file": "ai_risk_picks.csv",
+        "model_dir": "ai_learning_risk",
+        "label": "AI RISK",
+        "append_stream": "ai_risk_picks",
+    },
+}
+
 AI_COLUMNS = [
-    "ai_id", "created_at", "source", "league", "match", "market", "odds",
+    "ai_id", "created_at", "source", "ai_mode", "ai_label", "league", "match", "market", "odds",
     "confidence", "edge", "ev", "ai_pick_score", "risk", "status",
     "tempo", "pressure", "momentum", "model_reason", "ai_generated"
 ]
@@ -62,6 +92,24 @@ DEFAULT_STATE: Dict[str, Any] = {
 }
 
 MARKETS = ["OVER_1.5", "BTTS_YES", "OVER_2.5", "DOUBLE_1X", "DOUBLE_X2", "OVER_0.5", "BTTS_NO", "UNDER_4.5"]
+
+
+def configure_ai_mode(mode: str = "main") -> Dict[str, Any]:
+    global PREMATCH_FILE, AI_PICKS_FILE, AI_MODEL_DIR, MODEL_STATE_FILE, FEATURE_STORE_FILE, EVENT_LOG_FILE, DEBUG_FILE
+    mode = str(mode or "main").lower()
+    if mode not in AI_MODE_SETTINGS:
+        mode = "main"
+    settings = dict(AI_MODE_SETTINGS[mode])
+    settings["mode"] = mode
+    PREMATCH_FILE = DATA_DIR / settings["prematch_file"]
+    AI_PICKS_FILE = DATA_DIR / settings["ai_file"]
+    AI_MODEL_DIR = DATA_DIR / settings["model_dir"]
+    AI_MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    MODEL_STATE_FILE = AI_MODEL_DIR / "ai_model_state.json"
+    FEATURE_STORE_FILE = AI_MODEL_DIR / "ai_feature_store.csv"
+    EVENT_LOG_FILE = AI_MODEL_DIR / "ai_learning_events.csv"
+    DEBUG_FILE = DATA_DIR / f"ai_runtime_debug_{mode}.json"
+    return settings
 
 
 def now_iso() -> str:
@@ -224,7 +272,7 @@ def update_learning_state() -> Dict[str, Any]:
     return state
 
 
-def candidates() -> pd.DataFrame:
+def candidates(label: str = "AI") -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
     live = read_csv(LIVE_FILE)
     if not live.empty:
@@ -234,18 +282,8 @@ def candidates() -> pd.DataFrame:
     pre = read_csv(PREMATCH_FILE)
     if not pre.empty:
         pre = pre.copy()
-        pre["_source"] = "FIXTURE_UNIVERSE"
+        pre["_source"] = f"{label}_FIXTURE_UNIVERSE"
         frames.append(pre)
-    low = read_csv(LOW_PREMATCH_FILE)
-    if not low.empty:
-        low = low.copy()
-        low["_source"] = "FIXTURE_UNIVERSE_LOW"
-        frames.append(low)
-    risk = read_csv(RISK_PREMATCH_FILE)
-    if not risk.empty:
-        risk = risk.copy()
-        risk["_source"] = "FIXTURE_UNIVERSE_RISK"
-        frames.append(risk)
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True, sort=False)
@@ -280,11 +318,15 @@ def risk_for(score: float, edge: float, odds: float) -> str:
     return "HIGH"
 
 
-def build_ai_picks(limit: int = 12) -> pd.DataFrame:
+def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
+    settings = configure_ai_mode(mode)
     state = update_learning_state()
-    cand = candidates()
+    cand = candidates(settings["label"])
     debug: Dict[str, Any] = {
         "updated_at": now_iso(),
+        "ai_mode": settings["mode"],
+        "source_file": str(PREMATCH_FILE),
+        "output_file": str(AI_PICKS_FILE),
         "mode": state.get("mode"),
         "candidates": int(len(cand)),
         "accepted": 0,
@@ -345,6 +387,8 @@ def build_ai_picks(limit: int = 12) -> pd.DataFrame:
             "ai_id": ai_id,
             "created_at": ts,
             "source": first(row, ["_source"], "DATA_FEED"),
+            "ai_mode": settings["mode"],
+            "ai_label": settings["label"],
             "league": league,
             "match": match,
             "market": market,
@@ -387,6 +431,7 @@ def append_feature_store(rows: List[Dict[str, Any]]) -> None:
     else:
         combined = new
     combined.to_csv(FEATURE_STORE_FILE, index=False)
+    append_records("learning_feature_store", rows, source="ai_self_learning_runtime.py")
 
 
 def log_event(message: str, extra: Dict[str, Any] | None = None) -> None:
@@ -398,19 +443,24 @@ def log_event(message: str, extra: Dict[str, Any] | None = None) -> None:
         old = read_csv(EVENT_LOG_FILE)
         df = pd.concat([old, df], ignore_index=True, sort=False)
     df.to_csv(EVENT_LOG_FILE, index=False)
+    append_event("learning_events", row, source="ai_self_learning_runtime.py")
 
 
-def run_self_learning_cycle(limit: int = 12) -> Dict[str, Any]:
+def run_self_learning_cycle(limit: int = 12, mode: str = "main") -> Dict[str, Any]:
+    settings = configure_ai_mode(mode)
     state_before = load_state()
-    picks = build_ai_picks(limit=limit)
+    picks = build_ai_picks(limit=limit, mode=mode)
     AI_PICKS_FILE.parent.mkdir(exist_ok=True)
     if picks.empty:
         pd.DataFrame(columns=AI_COLUMNS).to_csv(AI_PICKS_FILE, index=False)
     else:
         picks.to_csv(AI_PICKS_FILE, index=False)
+        append_records(settings["append_stream"], picks.to_dict("records"), source="ai_self_learning_runtime.py")
     state_after = update_learning_state()
     result = {
         "status": "OK",
+        "ai_mode": settings["mode"],
+        "ai_label": settings["label"],
         "mode": state_after.get("mode"),
         "ai_picks": int(len(picks)),
         "cycles": int(state_after.get("cycles", 0)),
@@ -418,9 +468,15 @@ def run_self_learning_cycle(limit: int = 12) -> Dict[str, Any]:
         "file": str(AI_PICKS_FILE),
     }
     log_event("SELF_LEARNING_CYCLE", result)
-    print(f"[AI-SELF-LEARNING] OK | picks={result['ai_picks']} | mode={result['mode']} | settled={result['settled_samples']}")
+    print(f"[AI-SELF-LEARNING] {settings['label']} OK | picks={result['ai_picks']} | mode={result['mode']} | settled={result['settled_samples']}")
     return result
 
 
 if __name__ == "__main__":
-    run_self_learning_cycle()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", choices=sorted(AI_MODE_SETTINGS), default="main")
+    parser.add_argument("--limit", type=int, default=12)
+    args = parser.parse_args()
+    run_self_learning_cycle(limit=args.limit, mode=args.mode)

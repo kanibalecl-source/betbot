@@ -1,9 +1,0 @@
-{
-  "module": "market_movement_audit",
-  "status": "ok",
-  "source": "/mnt/data/betbot_upgrade_safe_work/betbot-main/data/clv_history.csv",
-  "rows": 0,
-  "output_csv": "/mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/market_movement_audit.csv",
-  "note": "Moduł analizuje ruch kursów offline. Nie wykrywa ani nie blokuje picków w runtime.",
-  "generated_at": "2026-05-27T11:32:49.470424"
-}

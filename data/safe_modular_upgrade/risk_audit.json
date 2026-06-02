@@ -1,9 +1,0 @@
-{
-  "module": "risk_audit",
-  "status": "ok",
-  "source": "/mnt/data/betbot_upgrade_safe_work/betbot-main/data/history.csv",
-  "rows": 0,
-  "output_csv": "/mnt/data/betbot_upgrade_safe_work/betbot-main/data/safe_modular_upgrade/risk_audit.csv",
-  "note": "Audyt ryzyka tylko raportuje ekspozycję. Nie zmienia stakingu.",
-  "generated_at": "2026-05-27T11:32:49.475900"
-}

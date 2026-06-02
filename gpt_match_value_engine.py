@@ -12,6 +12,14 @@ from typing import Any, Dict, List
 from ako_coupon_builder import build_ako_coupons
 
 try:
+    from betbot.storage.append_only_history import append_event, append_records
+except Exception:
+    def append_event(*args, **kwargs):
+        return None
+    def append_records(*args, **kwargs):
+        return 0
+
+try:
     from dotenv import load_dotenv
     load_dotenv()
 except Exception:
@@ -19,6 +27,10 @@ except Exception:
 
 REPORT_FILE = Path("data/gpt_analysis_report.json")
 CACHE_DIR = Path("cache/gpt_analysis")
+try:
+    from storage_paths import DATA_DIR as SHARED_DATA_DIR
+except Exception:
+    SHARED_DATA_DIR = None
 
 
 def _read_csv(path: Path) -> List[Dict[str, Any]]:
@@ -31,15 +43,37 @@ def _read_csv(path: Path) -> List[Dict[str, Any]]:
         return []
 
 
-def load_candidate_matches(base_dir: Path, limit: int | None = None) -> List[Dict[str, Any]]:
-    files = [
+def _profile_slug(profile: str | None) -> str:
+    text = str(profile or "prematch").strip().lower()
+    text = re.sub(r"[^a-z0-9_-]+", "_", text)
+    return text or "prematch"
+
+
+def _report_file(profile: str | None = None) -> Path:
+    slug = _profile_slug(profile)
+    if slug in {"", "prematch", "standard", "main"}:
+        return Path("data/gpt_analysis_report_prematch.json")
+    return Path(f"data/gpt_analysis_report_{slug}.json")
+
+
+def _report_path(base_dir: Path, profile: str | None = None) -> Path:
+    report_name = _report_file(profile).name
+    if SHARED_DATA_DIR is not None:
+        return Path(SHARED_DATA_DIR) / report_name
+    return Path(base_dir) / "data" / report_name
+
+
+def load_candidate_matches(base_dir: Path, limit: int | None = None, source_files: List[Path] | None = None, profile: str | None = None) -> List[Dict[str, Any]]:
+    shared_files = []
+    if SHARED_DATA_DIR is not None:
+        shared_files = [
+            Path(SHARED_DATA_DIR) / "auto_all_picks.csv",
+            Path(SHARED_DATA_DIR) / "live_matches.csv",
+        ]
+    files = list(source_files or []) + shared_files + [
         base_dir / "data" / "auto_all_picks.csv",
-        base_dir / "data" / "auto_low_picks.csv",
-        base_dir / "data" / "auto_risk_picks.csv",
         base_dir / "data" / "live_matches.csv",
         base_dir / "auto_all_picks.csv",
-        base_dir / "auto_low_picks.csv",
-        base_dir / "auto_risk_picks.csv",
         base_dir / "live_matches.csv",
     ]
     rows: List[Dict[str, Any]] = []
@@ -65,6 +99,7 @@ def load_candidate_matches(base_dir: Path, limit: int | None = None) -> List[Dic
                 "odds": odds or "",
                 "league": _first(r, ["league", "liga"]),
                 "time": _first(r, ["time", "start", "date", "kickoff"]),
+                "profile": _profile_slug(profile),
                 "source_row": r,
             })
             if limit and len(rows) >= limit:
@@ -231,20 +266,29 @@ def _parse_json(text: str) -> Dict[str, Any]:
         raise ValueError("Model nie zwrócił poprawnego JSON.")
 
 
-def run_full_gpt_analysis(base_dir: Path, limit: int | None = None) -> Dict[str, Any]:
+def run_full_gpt_analysis(base_dir: Path, limit: int | None = None, profile: str | None = None, source_files: List[Path] | None = None) -> Dict[str, Any]:
     base_dir = Path(base_dir)
-    candidates = load_candidate_matches(base_dir, limit=limit)
+    profile_name = _profile_slug(profile)
+    candidates = load_candidate_matches(base_dir, limit=limit, source_files=source_files, profile=profile_name)
     analyses = [analyze_match_with_gpt(base_dir, item) for item in candidates]
     coupons = build_ako_coupons(analyses)
     report = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "profile": profile_name,
         "count": len(analyses),
         "analyses": analyses,
         "coupons": coupons,
     }
-    out = base_dir / REPORT_FILE
+    out = _report_path(base_dir, profile_name)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    if profile_name in {"prematch", "standard", "main"}:
+        legacy = _report_path(base_dir, "legacy").with_name(REPORT_FILE.name)
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    append_records("gpt_analyses", analyses, source="gpt_match_value_engine.py")
+    append_records("gpt_coupons", coupons, source="gpt_match_value_engine.py")
+    append_event("gpt_analysis_report", {"profile": profile_name, "count": len(analyses), "coupons": len(coupons), "file": str(out)}, source="gpt_match_value_engine.py")
     try:
         from agi_storage import upsert_gpt_analysis
         for item in analyses:
@@ -254,16 +298,25 @@ def run_full_gpt_analysis(base_dir: Path, limit: int | None = None) -> Dict[str,
     return report
 
 
-def load_latest_report(base_dir: Path) -> Dict[str, Any]:
-    path = Path(base_dir) / REPORT_FILE
+def load_latest_report(base_dir: Path, profile: str | None = None, source_files: List[Path] | None = None) -> Dict[str, Any]:
+    profile_name = _profile_slug(profile)
+    path = _report_path(Path(base_dir), profile_name)
     if path.exists():
         try:
             return json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             pass
-    candidates = load_candidate_matches(Path(base_dir), limit=25)
+    if profile_name in {"prematch", "standard", "main"}:
+        legacy = _report_path(Path(base_dir), "legacy").with_name(REPORT_FILE.name)
+        if legacy.exists():
+            try:
+                return json.loads(legacy.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    candidates = load_candidate_matches(Path(base_dir), limit=25, source_files=source_files, profile=profile_name)
     return {
         "generated_at": None,
+        "profile": profile_name,
         "count": 0,
         "analyses": [],
         "coupons": [],

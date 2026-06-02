@@ -1,7 +1,0 @@
-pandas
-requests
-python-dotenv
-streamlit
-numpy
-flask
-gunicorn
