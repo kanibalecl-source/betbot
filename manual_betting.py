@@ -4,6 +4,12 @@ from datetime import datetime
 
 import pandas as pd
 
+try:
+    from betbot.storage.append_only_history import append_event
+except Exception:
+    def append_event(*args, **kwargs):
+        return None
+
 from api_results import get_match_result_by_id
 from database import get_conn, init_db
 
@@ -12,8 +18,8 @@ MANUAL_MARKETS = [
     ("DOUBLE_1X", "1X"),
     ("DOUBLE_X2", "X2"),
     ("DOUBLE_12", "12"),
-    ("BTTS_YES", "BTTS Yes"),
-    ("BTTS_NO", "BTTS No"),
+    ("BTTS_YES", "BTTS Tak"),
+    ("BTTS_NO", "BTTS Nie"),
     ("OVER_0.5", "Over 0.5"),
     ("OVER_1.5", "Over 1.5"),
     ("OVER_2.5", "Over 2.5"),
@@ -166,9 +172,9 @@ def add_manual_bet(
     odds = _to_float(odds)
     stake = _to_float(stake)
     if odds <= 1:
-        raise ValueError("Kurs musi byc wiekszy niz 1.00")
+        raise ValueError("Kurs musi być większy niż 1.00")
     if stake <= 0:
-        raise ValueError("Stawka musi byc wieksza od 0")
+        raise ValueError("Stawka musi być większa od 0")
 
     p = _pick_payload(pick)
     conn = get_conn()
@@ -191,6 +197,7 @@ def add_manual_bet(
     )
     conn.commit()
     bet_id = int(cur.lastrowid)
+    append_event("manual_single_bets", {"id": bet_id, "market": market, "odds": odds, "stake": stake, "match": p.get("match_name"), "league": p.get("league")}, source="manual_betting.py")
     conn.close()
     return bet_id
 
@@ -205,10 +212,10 @@ def add_ako_coupon(
 ) -> int:
     init_manual_db()
     if len(legs) < 2:
-        raise ValueError("Kupon AKO musi miec minimum 2 zdarzenia")
+        raise ValueError("Kupon AKO musi mieć minimum 2 zdarzenia")
     stake = _to_float(stake)
     if stake <= 0:
-        raise ValueError("Stawka kuponu musi byc wieksza od 0")
+        raise ValueError("Stawka kuponu musi być większa od 0")
 
     calculated_odds = 1.0
     normalized = []
@@ -219,7 +226,7 @@ def add_ako_coupon(
         if market not in MARKET_LABELS:
             raise ValueError("Nieznany rynek w kuponie AKO")
         if odds <= 1:
-            raise ValueError("Kazdy kurs w kuponie AKO musi byc wiekszy niz 1.00")
+            raise ValueError("Każdy kurs w kuponie AKO musi być większy niż 1.00")
         calculated_odds *= odds
         payload = _pick_payload(pick)
         payload.update({"manual_market": market, "manual_market_label": MARKET_LABELS[market], "odds": odds})
@@ -262,6 +269,7 @@ def add_ako_coupon(
             ),
         )
     conn.commit()
+    append_event("manual_ako_coupons", {"id": coupon_id, "legs": len(normalized), "stake": stake, "total_odds": calculated_odds, "name": name}, source="manual_betting.py")
     conn.close()
     return coupon_id
 
@@ -326,6 +334,7 @@ def settle_manual_open_bets(limit: int = 300) -> int:
         )
         updated += 1
     conn.commit()
+    append_event("manual_settlement", {"type": "single", "updated": updated}, source="manual_betting.py")
     conn.close()
     return updated
 
@@ -400,6 +409,7 @@ def settle_ako_coupons(limit: int = 200) -> int:
         )
         settled += 1
     conn.commit()
+    append_event("manual_settlement", {"type": "ako", "updated": settled}, source="manual_betting.py")
     conn.close()
     return settled
 

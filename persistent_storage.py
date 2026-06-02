@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -12,18 +12,15 @@ BASE_DIR = Path(__file__).resolve().parent
 
 
 def _data_dir() -> Path:
-    # Najpierw trwały volume Railway, jeśli użytkownik go podłączył.
-    for env_name in ("PERSISTENT_DATA_DIR", "RAILWAY_VOLUME_MOUNT_PATH"):
-        value = os.getenv(env_name)
-        if value:
-            path = Path(value)
-            path.mkdir(parents=True, exist_ok=True)
-            return path
-    # Fallback: obecny folder data. Działa od razu, ale na Railway bez volume może znikać po redeploy.
-    path = BASE_DIR / "data"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
+    try:
+        from storage_paths import DATA_DIR as shared_data_dir
+        path = Path(shared_data_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    except Exception:
+        path = BASE_DIR / "data"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
 DATA_DIR = _data_dir()
 DB_FILE = DATA_DIR / "betbot_memory.sqlite3"
@@ -242,3 +239,4 @@ def summary() -> Dict[str, Any]:
         "db_file": str(DB_FILE),
         "persistent": storage_mode() != "LOCAL_DATA_FALLBACK",
     }
+
