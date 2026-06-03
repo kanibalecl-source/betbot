@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from ako_coupon_builder import build_ako_coupons
+from gpt_prompts import build_hidden_match_analysis_prompt
 
 try:
     from betbot.storage.append_only_history import append_event, append_records
@@ -122,7 +123,8 @@ def _safe_name(text: str) -> str:
 
 
 def _cache_path(base_dir: Path, item: Dict[str, Any]) -> Path:
-    return base_dir / CACHE_DIR / f"{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
+    profile = _safe_name(str(item.get("profile") or "prematch"))
+    return base_dir / CACHE_DIR / f"{profile}_{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
 
 
 def _load_cache(base_dir: Path, item: Dict[str, Any], ttl_seconds: int = 1800):
@@ -175,6 +177,10 @@ Zwróć WYŁĄCZNIE poprawny JSON bez markdown:
 """.strip()
 
 
+def _prompt(item: Dict[str, Any]) -> str:
+    return build_hidden_match_analysis_prompt(item)
+
+
 def _fallback_analysis(item: Dict[str, Any], reason: str = "") -> Dict[str, Any]:
     return {
         "match": item.get("match", ""),
@@ -213,7 +219,7 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
-        model = os.getenv("GPT_ANALYSIS_MODEL", "gpt-4.1-mini")
+        model = os.getenv("GPT_ANALYSIS_MODEL", os.getenv("OPENAI_MODEL", "gpt-5.2-chat-latest")).strip() or "gpt-5.2-chat-latest"
         prompt = _prompt(item)
 
         # Najpierw próbujemy z web search, bo użytkownik chce analizę formy, kontuzji i newsów.
@@ -226,10 +232,17 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
                 input=prompt,
             )
         except Exception:
-            response = client.responses.create(
-                model=model,
-                input=prompt,
-            )
+            try:
+                response = client.responses.create(
+                    model=model,
+                    input=prompt,
+                )
+            except Exception:
+                fallback_model = os.getenv("GPT_ANALYSIS_FALLBACK_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+                response = client.responses.create(
+                    model=fallback_model,
+                    input=prompt,
+                )
 
         text = getattr(response, "output_text", "") or ""
         parsed = _parse_json(text)
@@ -243,7 +256,9 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
         }
         data["confidence"] = int(float(data.get("confidence", 0) or 0))
         data["value_score"] = float(data.get("value_score", 0) or 0)
+        data["quality_score"] = float(data.get("quality_score", 0) or 0)
         data["decision"] = str(data.get("decision", "SKIP")).upper()
+        data["profile"] = str(item.get("profile") or "")
         _save_cache(base_dir, item, data)
         return data
     except Exception as e:
@@ -296,6 +311,65 @@ def run_full_gpt_analysis(base_dir: Path, limit: int | None = None, profile: str
     except Exception:
         pass
     return report
+
+
+def _same_analysis(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+    return (
+        str(a.get("match", "")).lower() == str(b.get("match", "")).lower()
+        and str(a.get("bet", "")).lower() == str(b.get("bet", "")).lower()
+        and str(a.get("odds", "")) == str(b.get("odds", ""))
+    )
+
+
+def run_single_gpt_analysis(
+    base_dir: Path,
+    index: int,
+    limit: int | None = None,
+    profile: str | None = None,
+    source_files: List[Path] | None = None,
+) -> Dict[str, Any]:
+    base_dir = Path(base_dir)
+    profile_name = _profile_slug(profile)
+    candidates = load_candidate_matches(base_dir, limit=limit, source_files=source_files, profile=profile_name)
+    if not candidates:
+        return load_latest_report(base_dir, profile=profile_name, source_files=source_files)
+    safe_index = max(0, min(int(index), len(candidates) - 1))
+    analysis = analyze_match_with_gpt(base_dir, candidates[safe_index])
+
+    report = load_latest_report(base_dir, profile=profile_name, source_files=source_files)
+    analyses = list(report.get("analyses", []) or [])
+    replaced = False
+    for pos, existing in enumerate(analyses):
+        if _same_analysis(existing, analysis):
+            analyses[pos] = analysis
+            replaced = True
+            break
+    if not replaced:
+        analyses.insert(0, analysis)
+
+    coupons = build_ako_coupons(analyses)
+    updated = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "profile": profile_name,
+        "count": len(analyses),
+        "analyses": analyses,
+        "coupons": coupons,
+    }
+    out = _report_path(base_dir, profile_name)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+    if profile_name in {"prematch", "standard", "main"}:
+        legacy = _report_path(base_dir, "legacy").with_name(REPORT_FILE.name)
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+    append_records("gpt_analyses", [analysis], source="gpt_match_value_engine.py")
+    append_event("gpt_single_analysis", {"profile": profile_name, "match": analysis.get("match"), "bet": analysis.get("bet"), "file": str(out)}, source="gpt_match_value_engine.py")
+    try:
+        from agi_storage import upsert_gpt_analysis
+        upsert_gpt_analysis(analysis)
+    except Exception:
+        pass
+    return updated
 
 
 def load_latest_report(base_dir: Path, profile: str | None = None, source_files: List[Path] | None = None) -> Dict[str, Any]:

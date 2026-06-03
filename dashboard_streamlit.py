@@ -1,6 +1,7 @@
 ﻿import base64
 import html
 import json
+import os
 from pathlib import Path
 from typing import Iterable, List
 
@@ -24,7 +25,7 @@ except Exception:
 try:
     from gpt_streamlit_panel import render_gpt_tab
 except Exception:
-    def render_gpt_tab(base_dir=None):
+    def render_gpt_tab(base_dir=None, *args, **kwargs):
         st.warning("Moduł GPT nie został załadowany.")
 
 
@@ -1683,14 +1684,15 @@ def render_gpt_professional(prematch_picks: pd.DataFrame, low_picks: pd.DataFram
     page_banner("Czat GPT", "CZAT GPT", "Profesjonalny ekran rozmowy z GPT podzielony na Prematch, Low i Risk.")
     title("CZAT GPT")
     total_context = sum(len(df) for df in [prematch_picks, low_picks, risk_picks] if df is not None)
+    model_name = os.getenv("GPT_ANALYSIS_MODEL", os.getenv("OPENAI_MODEL", "gpt-5.2-chat-latest")).replace("-chat-latest", "")
     metrics([
-        ("Kontekst GPT", str(total_context), "typy"),
-        ("Na żywo", str(len(live)), "mecze"),
-        ("Historia", str(len(results)), "rekordy"),
-        ("GPT", "aktywny", "jeśli OPENAI_API_KEY"),
-        ("Profile", "3", "Prematch / Low / Risk"),
+        ("Model", model_name, "fallback: gpt-4.1-mini"),
+        ("Tryb", "AUTO", "prompt ukryty"),
+        ("Typy GPT", str(total_context), "aktywny profil"),
+        ("Do gry", "-", "po analizie"),
+        ("Zapis", "Profilowy", "bez mieszania danych"),
     ])
-    st.markdown('<div class="ka-panel"><h3>Profesjonalny asystent analityczny</h3><p class="ka-sub">GPT widzi tylko dane aktywnego profilu. Moduł nie zmienia logiki bota, nie kasuje historii i nie nadpisuje typów.</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="ka-panel"><h3>Profesjonalny asystent analityczny</h3><p class="ka-sub">Moduł analizuje typy wygenerowane przez bota, korzysta z cache i nie nadpisuje głównej logiki typowania. Widoczny jest tylko wynik analizy, prompt pozostaje ukryty w kodzie.</p></div>', unsafe_allow_html=True)
 
     datasets = [
         ("prematch", "Prematch", prematch_picks if prematch_picks is not None else pd.DataFrame(), PICK_CANDIDATES),
@@ -1700,18 +1702,7 @@ def render_gpt_professional(prematch_picks: pd.DataFrame, low_picks: pd.DataFram
     profile_tabs = st.tabs([label for _, label, _, _ in datasets])
     for tab, (profile_key, profile_label, profile_df, source_files) in zip(profile_tabs, datasets):
         with tab:
-            metrics([
-                ("Typy profilu", str(len(profile_df)), profile_label),
-                ("Mecze live", str(len(live)), "na żywo"),
-                ("Historia", str(len(results)), "rekordy"),
-                ("Analiza", "osobna", profile_key),
-                ("Zapis", "profilowy", "bez mieszania"),
-            ])
-            gpt_subtabs = st.tabs(["Czat analityczny", "Analiza AI/GPT"])
-            with gpt_subtabs[0]:
-                render_gpt_chat_tab(profile_df, live, results, profile_name=profile_label, key_prefix=profile_key)
-            with gpt_subtabs[1]:
-                render_gpt_tab(BASE_DIR, profile_name=profile_label, key_prefix=profile_key, source_files=source_files)
+            render_gpt_tab(BASE_DIR, profile_name=profile_label, key_prefix=profile_key, source_files=source_files)
 
 
 def _manual_pick_label(row, idx: int) -> str:
@@ -1954,7 +1945,8 @@ def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame |
             _render_manual_profile(mode_key, mode_label, source_df, manual_df, ako_df)
 
 css()
-require_login()
+# Lokalna paczka testowa GPT: logowanie wyłączone, żeby test na laptopie
+# nie blokował dostępu do panelu i nie wpływał na wersję serwerową.
 raw_picks = load_picks()
 picks = normalize_picks(raw_picks)
 low_picks = normalize_picks(load_pick_candidates(LOW_PICK_CANDIDATES))
@@ -1980,6 +1972,4 @@ with tabs[5]: render_manual_betting(raw_picks, low_picks, risk_picks)
 with tabs[6]: render_ranking(picks, results)
 with tabs[7]: render_gpt_professional(picks, low_picks, risk_picks, live, results)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
-
-
 
