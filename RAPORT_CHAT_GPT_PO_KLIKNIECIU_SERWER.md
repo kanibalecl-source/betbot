@@ -35,6 +35,4 @@ Dzięki temu wdrożenie nie powinno nadpisać historii ani danych uczących na R
 
 ## Ważne
 
-Ta paczka zachowuje wariant przetestowany lokalnie: logowanie jest wyłączone w `dashboard_streamlit.py`.
-
-Jeżeli logowanie ma wrócić na serwer, należy ponownie włączyć `require_login()` przed wdrożeniem.
+Ta paczka serwerowa ma włączone logowanie przez `require_login()`.

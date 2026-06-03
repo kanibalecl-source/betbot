@@ -1945,8 +1945,7 @@ def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame |
             _render_manual_profile(mode_key, mode_label, source_df, manual_df, ako_df)
 
 css()
-# Lokalna paczka testowa GPT: logowanie wyłączone, żeby test na laptopie
-# nie blokował dostępu do panelu i nie wpływał na wersję serwerową.
+require_login()
 raw_picks = load_picks()
 picks = normalize_picks(raw_picks)
 low_picks = normalize_picks(load_pick_candidates(LOW_PICK_CANDIDATES))
