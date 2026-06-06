@@ -80,164 +80,76 @@ def _asset_data_uri(path: Path) -> str:
         return ""
 
 
-def _login_css() -> str:
-    banner_uri = _asset_data_uri(BASE_DIR / "kanibal_banner_pro.jpg")
-    banner_html = (
-        f"<img src='{banner_uri}' alt='KANIBAL ANALYTICS'>"
-        if banner_uri
-        else "<div class='login-fallback'>KANIBAL<br><span>ANALYTICS</span></div>"
-    )
+def _login_css() -> None:
+    background_uri = _asset_data_uri(BASE_DIR / "kanibal_login_page.png")
     st.markdown(
         f"""
         <style>
         section[data-testid="stSidebar"] {{display:none!important;}}
-        .block-container {{max-width:1920px!important;padding:2.4rem 3.4rem 1rem!important;}}
+        header[data-testid="stHeader"] {{background:transparent!important;}}
+        .block-container {{
+            max-width:1920px!important;
+            min-height:100vh!important;
+            padding:7.5vh 5vw 2vh!important;
+        }}
         .stApp {{
-            background:
-                radial-gradient(circle at 15% 20%,rgba(124,255,43,.12),transparent 28%),
-                radial-gradient(circle at 82% 72%,rgba(255,196,0,.08),transparent 24%),
-                linear-gradient(135deg,#020404 0%,#07100b 46%,#030506 100%)!important;
+            background:#050708 url("{background_uri}") center/cover no-repeat fixed!important;
         }}
-        .stApp::before {{
-            content:"";
-            position:fixed;
-            inset:0;
-            opacity:.18;
-            pointer-events:none;
-            background-image:
-                linear-gradient(rgba(124,255,43,.14) 1px,transparent 1px),
-                linear-gradient(90deg,rgba(124,255,43,.14) 1px,transparent 1px);
-            background-size:64px 64px;
-            -webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.82),transparent 72%);
-            mask-image:linear-gradient(90deg,rgba(0,0,0,.82),transparent 72%);
+        div[data-testid="stHorizontalBlock"] {{
+            gap:3vw!important;
+            align-items:center!important;
         }}
-        .login-orb-wrap {{min-height:720px;display:flex;align-items:center;justify-content:center;position:relative;}}
-        .login-orb-wrap::before {{
-            content:"";
-            position:absolute;
-            width:760px;
-            height:760px;
-            border-radius:50%;
-            background:radial-gradient(circle,rgba(124,255,43,.16),rgba(124,255,43,.05) 38%,transparent 70%);
-            filter:blur(10px);
-        }}
-        .login-orb {{
-            position:relative;
-            width:min(720px,70vw);
-            aspect-ratio:1;
-            border-radius:50%;
-            padding:18px;
-            border:1px solid rgba(124,255,43,.34);
-            background:
-                radial-gradient(circle at 34% 28%,rgba(255,255,255,.16),transparent 18%),
-                linear-gradient(145deg,rgba(124,255,43,.22),rgba(255,196,0,.10) 48%,rgba(0,0,0,.72));
-            box-shadow:0 42px 120px rgba(0,0,0,.62),0 0 70px rgba(124,255,43,.20),inset 0 0 40px rgba(124,255,43,.08);
-        }}
-        .login-orb::before,.login-orb::after {{
-            content:"";
-            position:absolute;
-            inset:-18px;
-            border-radius:50%;
-            border:1px solid rgba(124,255,43,.14);
-            pointer-events:none;
-        }}
-        .login-orb::after {{inset:34px;border-color:rgba(255,255,255,.08);box-shadow:inset 0 0 60px rgba(0,0,0,.48);}}
-        .login-orb img {{
-            width:100%;
-            height:100%;
-            display:block;
-            object-fit:contain;
-            object-position:center;
-            border-radius:50%;
-            border:1px solid rgba(255,255,255,.10);
-            padding:48px;
-            background:radial-gradient(circle at 50% 50%,#071014 0%,#020505 72%);
-            filter:saturate(1.08) contrast(1.08);
-        }}
-        .login-fallback {{
-            width:100%;
-            height:100%;
-            border-radius:50%;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            flex-direction:column;
-            color:#fff;
-            font-size:58px;
-            font-weight:950;
-            background:#071014;
-        }}
-        .login-fallback span {{color:#7CFF2B;font-size:22px;letter-spacing:.26em;}}
+        .login-spacer {{min-height:76vh;}}
         div[data-testid="stForm"] {{
-            padding:32px;
-            border:1px solid rgba(124,255,43,.20);
-            border-radius:20px;
-            background:linear-gradient(180deg,rgba(12,19,24,.94),rgba(5,9,11,.96));
-            box-shadow:0 26px 90px rgba(0,0,0,.56),0 0 48px rgba(124,255,43,.08);
+            padding:clamp(28px,3.4vw,54px)!important;
+            border:1px solid rgba(205,255,170,.30)!important;
+            border-radius:18px!important;
+            background:linear-gradient(180deg,rgba(11,14,15,.985),rgba(5,8,9,.99))!important;
+            box-shadow:0 28px 90px rgba(0,0,0,.70),0 0 45px rgba(143,231,0,.08)!important;
+            backdrop-filter:blur(18px);
         }}
-        div[data-testid="stForm"]::before {{content:"";display:block;width:50px;height:2px;margin-bottom:26px;background:#7CFF2B;}}
-        .login-head {{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px;}}
-        .login-title {{font-size:26px;font-weight:950;color:#fff;}}
-        .login-badge {{
-            color:#7CFF2B;
-            border:1px solid rgba(124,255,43,.28);
-            background:rgba(124,255,43,.08);
-            border-radius:999px;
-            padding:8px 12px;
-            font-size:11px;
-            font-weight:950;
-            text-transform:uppercase;
-            letter-spacing:.08em;
+        .login-user-icon {{
+            width:58px;height:58px;margin:0 auto 20px;border:1px solid #75b900;
+            border-radius:50%;display:grid;place-items:center;color:#a8ef00;font-size:28px;
         }}
+        .login-title {{font-size:34px;font-weight:500;color:#fff;text-align:center;line-height:1.1;}}
+        .login-subtitle {{margin:12px 0 34px;color:#9a9d9f;text-align:center;font-size:14px;}}
         .login-note {{
-            margin-top:18px;
-            color:#98a49d;
-            font-size:12px;
-            line-height:1.45;
-            border-top:1px solid rgba(255,255,255,.08);
-            padding-top:18px;
+            margin-top:24px;color:#858a87;font-size:12px;line-height:1.5;
+            border-top:1px solid rgba(255,255,255,.08);padding-top:22px;text-align:center;
         }}
         div[data-testid="stTextInput"] label {{
-            color:#a6b0b9!important;
-            font-size:12px!important;
-            font-weight:950!important;
-            text-transform:uppercase!important;
-            letter-spacing:.10em!important;
+            color:#e6e8e4!important;font-size:14px!important;font-weight:400!important;
         }}
         div[data-testid="stTextInput"] input {{
-            height:54px!important;
-            border-radius:12px!important;
-            border:1px solid rgba(255,255,255,.12)!important;
-            background:#071014!important;
-            color:#fff!important;
-            font-size:15px!important;
+            height:56px!important;border-radius:8px!important;
+            border:1px solid rgba(255,255,255,.25)!important;
+            background:rgba(0,0,0,.34)!important;color:#fff!important;font-size:14px!important;
         }}
         div[data-testid="stTextInput"] input:focus {{
-            border-color:rgba(124,255,43,.65)!important;
-            box-shadow:0 0 0 3px rgba(124,255,43,.10)!important;
+            border-color:rgba(168,239,0,.75)!important;
+            box-shadow:0 0 0 3px rgba(168,239,0,.09)!important;
         }}
         div[data-testid="stFormSubmitButton"] button {{
-            height:56px!important;
-            border:1px solid rgba(124,255,43,.46)!important;
-            border-radius:12px!important;
-            background:linear-gradient(180deg,rgba(124,255,43,.30),rgba(23,100,30,.32))!important;
-            color:#fff!important;
-            font-weight:950!important;
-            font-size:14px!important;
-            letter-spacing:.12em!important;
-            text-transform:uppercase!important;
-            box-shadow:0 0 28px rgba(124,255,43,.12)!important;
+            height:62px!important;margin-top:14px!important;border:0!important;border-radius:7px!important;
+            background:linear-gradient(180deg,#b6fa13,#79c900)!important;color:#111700!important;
+            font-weight:800!important;font-size:16px!important;letter-spacing:.17em!important;
+            text-transform:uppercase!important;box-shadow:0 0 24px rgba(148,229,0,.30)!important;
         }}
         @media(max-width:1100px){{
-            .block-container {{padding:1.2rem!important;}}
-            .login-orb-wrap {{min-height:420px;}}
-            .login-orb {{width:min(430px,88vw);}}
+            .block-container {{padding:4vh 4vw!important;}}
+            .stApp {{background-position:35% center!important;}}
+            .login-spacer {{min-height:35vh;}}
+        }}
+        @media(max-width:700px){{
+            .stApp {{background-position:32% center!important;}}
+            .login-spacer {{min-height:18vh;}}
+            div[data-testid="stForm"] {{padding:28px 22px!important;}}
         }}
         </style>
         """,
         unsafe_allow_html=True,
     )
-    return banner_html
 
 
 def require_login() -> None:
@@ -256,29 +168,25 @@ def require_login() -> None:
                 st.rerun()
         return
 
-    banner_html = _login_css()
-    left_col, right_col = st.columns([1.15, 0.85], vertical_alignment="center")
+    _login_css()
+    left_col, right_col = st.columns([1.58, 0.82], vertical_alignment="center")
     with left_col:
-        st.markdown(
-            f'<div class="login-orb-wrap"><div class="login-orb">{banner_html}</div></div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<div class="login-spacer"></div>', unsafe_allow_html=True)
     with right_col:
         with st.form("kanibal_login_form", clear_on_submit=False):
             st.markdown(
                 """
-                <div class="login-head">
-                    <div class="login-title">Logowanie</div>
-                    <div class="login-badge">Panel prywatny</div>
-                </div>
+                <div class="login-user-icon">&#9675;</div>
+                <div class="login-title">Witaj ponownie</div>
+                <div class="login-subtitle">Zaloguj się, aby przejść do panelu analitycznego</div>
                 """,
                 unsafe_allow_html=True,
             )
-            username = st.text_input("Login")
-            password = st.text_input("Hasło", type="password")
-            submitted = st.form_submit_button("Zaloguj", use_container_width=True)
+            username = st.text_input("Adres e-mail lub login", placeholder="Wprowadź login")
+            password = st.text_input("Hasło", type="password", placeholder="Wprowadź hasło")
+            submitted = st.form_submit_button("Zaloguj się", use_container_width=True)
             st.markdown(
-                '<div class="login-note">Dostęp tylko dla autoryzowanego użytkownika. Sesja po zalogowaniu prowadzi bezpośrednio do panelu KANIBAL ANALYTICS.</div>',
+                '<div class="login-note">Twoje dane są bezpieczne<br>Dostęp tylko dla autoryzowanych użytkowników</div>',
                 unsafe_allow_html=True,
             )
 
