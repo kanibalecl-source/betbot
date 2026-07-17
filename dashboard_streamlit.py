@@ -9,6 +9,8 @@ from typing import Iterable, List
 import pandas as pd
 import streamlit as st
 
+from trading_desk_theme import inject_trading_desk_theme, render_appbar
+
 try:
     from betbot.dashboard.data_service import read_csv_safe as modular_read_csv_safe
     from betbot.dashboard.data_service import normalize_streamlit_df as modular_streamlit_df
@@ -75,7 +77,7 @@ RISK_PICK_CANDIDATES = [DATA_DIR / "auto_risk_picks.csv", BASE_DIR / "auto_risk_
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
-BANNER_FILE = BASE_DIR / "kanibal_banner.png"
+BANNER_FILE = BASE_DIR / "kanibal_banner_reference.png"
 CONFIG_FILE = BASE_DIR / "config_strategy.json"
 
 DISPLAY_MARKETS = {
@@ -555,6 +557,10 @@ def b64_image(path: Path) -> str:
 
 
 def css() -> None:
+    # Wyłącznie warstwa prezentacji. Dotychczasowe reguły pozostają poniżej
+    # jako materiał referencyjny, ale nie są emitowane, aby motywy się nie gryzły.
+    inject_trading_desk_theme()
+    return
     st.markdown('''
 <style>
 :root{--bg:#05080a;--panel:#0a0f13;--line:rgba(255,255,255,.10);--green:#7CFF2B;--yellow:#ffc400;--red:#ff3b30;--blue:#10a8ff;--muted:#8f9aa5;--white:#f7fbf4;}
@@ -1308,8 +1314,29 @@ def hero() -> None:
         st.markdown('<div class="kanibal-fallback">KANIBAL ANALYTICS</div>', unsafe_allow_html=True)
 
 
+def _metric_icon(label: str) -> str:
+    value = str(label).lower()
+    if any(token in value for token in ["profit", "zysk", "stawka", "kurs"]):
+        return "◉"
+    if any(token in value for token in ["traf", "pewno", "perfect", "wygr"]):
+        return "◎"
+    if any(token in value for token in ["roi", "value", "przewaga", "clv"]):
+        return "↗"
+    if any(token in value for token in ["mecz", "typ", "analiz", "rekord", "liga"]):
+        return "▦"
+    return "◇"
+
+
 def metric(label, value, sub="") -> str:
-    return f'<div class="ka-card"><div class="ka-label">{label}</div><div class="ka-value">{value}</div><div class="ka-sub">{sub}</div><div class="sparkline"></div></div>'
+    positive = " positive" if str(value).lstrip().startswith("+") else ""
+    return (
+        '<div class="ka-card">'
+        f'<div class="ka-metric-icon">{_metric_icon(label)}</div>'
+        f'<div class="ka-label">{html.escape(str(label))}</div>'
+        f'<div class="ka-value{positive}">{value}</div>'
+        f'<div class="ka-sub">{html.escape(str(sub))}</div>'
+        '</div>'
+    )
 
 
 def metrics(items: List[tuple]) -> None:
@@ -1565,7 +1592,11 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
 
 
 def title(text: str) -> None:
-    st.markdown(f'<div class="ka-title"><span class="ka-dot"></span>{text}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="ka-title"><span class="ka-title-left">{html.escape(text)}</span>'
+        '<span class="ka-title-meta">DANE ODŚWIEŻONE <span class="status-dot"></span> NA ŻYWO</span></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def page_banner(section: str, name: str, subtitle: str) -> None:
@@ -2110,6 +2141,7 @@ def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame |
 
 css()
 require_login()
+render_appbar(BASE_DIR)
 raw_picks = load_picks()
 picks = normalize_picks(raw_picks)
 low_picks = normalize_picks(load_pick_candidates(LOW_PICK_CANDIDATES))
