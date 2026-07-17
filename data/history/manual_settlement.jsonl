@@ -1,0 +1,2 @@
+{"written_at": "2026-07-17T01:50:02+00:00", "stream": "manual_settlement", "source": "manual_betting.py", "payload": {"type": "single", "updated": 0}, "event_id": "ef1015393464e17eb076e192"}
+{"written_at": "2026-07-17T01:50:02+00:00", "stream": "manual_settlement", "source": "manual_betting.py", "payload": {"type": "ako", "updated": 0}, "event_id": "16573deebdd019a2aa8adde2"}

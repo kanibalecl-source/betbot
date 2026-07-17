@@ -1,0 +1,25 @@
+{
+  "updated_at": "2026-07-17T01:54:27.646462+00:00",
+  "ai_mode": "low",
+  "source_file": "C:\\Users\\MSI\\Desktop\\bot_upgrade\\2\\2\\betbot-main\\data\\auto_low_picks.csv",
+  "output_file": "C:\\Users\\MSI\\Desktop\\bot_upgrade\\2\\2\\betbot-main\\data\\ai_low_picks.csv",
+  "mode": "BOOTSTRAP",
+  "candidates": 103,
+  "accepted": 12,
+  "rejected": [
+    {
+      "match": "Northcote City vs Manningham United Blues",
+      "reason": "threshold",
+      "score": 50.37,
+      "edge": 0.13
+    },
+    {
+      "match": "Seattle Sounders vs Portland Timbers",
+      "reason": "threshold",
+      "score": 42.43,
+      "edge": 0.12
+    }
+  ],
+  "min_confidence": 54.0,
+  "min_edge": 0.0
+}

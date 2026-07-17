@@ -1,0 +1,23 @@
+{
+  "version": "self_learning_v2_verified_results_only",
+  "created_at": "2026-07-17T01:38:53.412933+00:00",
+  "updated_at": "2026-07-17T01:38:53.713348+00:00",
+  "cycles": 2,
+  "samples": 29,
+  "settled_samples": 0,
+  "mode": "BOOTSTRAP",
+  "min_confidence": 54.0,
+  "min_edge": 0.0,
+  "league_weights": {},
+  "market_weights": {},
+  "risk_weights": {
+    "LOW": 4.0,
+    "MEDIUM": 1.5,
+    "HIGH": -3.0
+  },
+  "last_summary": {
+    "rows": 0,
+    "leagues": 0,
+    "markets": 0
+  }
+}

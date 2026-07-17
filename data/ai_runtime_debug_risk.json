@@ -1,0 +1,12 @@
+{
+  "updated_at": "2026-07-17T01:54:27.977519+00:00",
+  "ai_mode": "risk",
+  "source_file": "C:\\Users\\MSI\\Desktop\\bot_upgrade\\2\\2\\betbot-main\\data\\auto_risk_picks.csv",
+  "output_file": "C:\\Users\\MSI\\Desktop\\bot_upgrade\\2\\2\\betbot-main\\data\\ai_risk_picks.csv",
+  "mode": "BOOTSTRAP",
+  "candidates": 27,
+  "accepted": 12,
+  "rejected": [],
+  "min_confidence": 54.0,
+  "min_edge": 0.0
+}

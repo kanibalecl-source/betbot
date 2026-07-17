@@ -1,0 +1,4 @@
+﻿written_at,event_id,stream,source,payload_json
+2026-07-17T01:50:02+00:00,b14060765e51e6210c7edb25,persistence_cycles,persistence_runtime.py,"{""sync"": {""inserted"": 0, ""updated"": 0}, ""settle"": {""checked"": 0, ""settled"": 0, ""skipped"": 0}}"
+2026-07-17T01:57:01+00:00,cc8d69589ebdf3f23fb4861d,persistence_cycles,persistence_runtime.py,"{""sync"": {""inserted"": 179, ""updated"": 0}, ""settle"": {""checked"": 179, ""settled"": 0, ""skipped"": 0}}"
+2026-07-17T01:57:40+00:00,1b4d44d7068d41f38702fa7f,persistence_cycles,persistence_runtime.py,"{""sync"": {""inserted"": 0, ""updated"": 179}, ""settle"": {""checked"": 179, ""settled"": 0, ""skipped"": 0}}"

@@ -1,0 +1,13 @@
+{
+  "processed": {
+    "C:\\Users\\MSI\\Desktop\\bot_upgrade\\1\\1\\betbot-main\\data": "C:\\Users\\MSI\\Desktop\\bot_upgrade\\1\\1\\betbot-main\\data\\kanibal_persistent.sqlite3|421888|1784252480154638400"
+  },
+  "last_run_epoch": 1784253936.4828248,
+  "last_summary": {
+    "status": "OK",
+    "sources": 1,
+    "picks": 11,
+    "events": 5,
+    "csv_rows": 339
+  }
+}

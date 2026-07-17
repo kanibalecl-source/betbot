@@ -1,0 +1,3 @@
+﻿written_at,event_id,stream,source,payload_json
+2026-07-17T01:53:15+00:00,941e9271de9322bf8cebe4b0,gpt_single_analysis,gpt_match_value_engine.py,"{""profile"": ""prematch"", ""match"": ""Mjallby AIF vs Vasteras SK FK"", ""bet"": ""Over 1.5"", ""file"": ""C:\\Users\\MSI\\Desktop\\bot_upgrade\\2\\2\\betbot-main\\data\\gpt_analysis_report_prematch.json""}"
+2026-07-17T01:58:11+00:00,95f6084c69a7c73b16b7a72d,gpt_single_analysis,gpt_match_value_engine.py,"{""profile"": ""prematch"", ""match"": ""IFK Goteborg vs IF Brommapojkarna"", ""bet"": ""X2"", ""file"": ""C:\\Users\\MSI\\Desktop\\bot_upgrade\\2\\2\\betbot-main\\data\\gpt_analysis_report_prematch.json""}"

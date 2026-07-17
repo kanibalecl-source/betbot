@@ -449,17 +449,40 @@ def hour_values(df: pd.DataFrame) -> List[float]:
     return group_counts(df, ["league", "market", "typ"])
 
 def ensure_live_file() -> None:
-    cols = ["league", "match", "minute", "score", "signal", "confidence", "odds", "value", "ev", "cashout", "stake", "risk", "source"]
+    cols = [
+        "fixture_id", "league", "match", "home", "away", "minute", "score", "status",
+        "signal", "signal_verified", "confidence", "odds", "odds_market", "odds_bookmaker",
+        "odds_verified", "value", "ev", "risk", "source", "data_status", "updated_at",
+    ]
     if not LIVE_FILE.exists():
         pd.DataFrame(columns=cols).to_csv(LIVE_FILE, index=False)
 
 
 
 def load_live_data(picks: pd.DataFrame) -> pd.DataFrame:
-    # FULL BETA: LIVE uses only real live pipeline data from data/live_matches.csv.
-    # No PREMATCH bridge is written into LIVE, so dashboard does not mix prematch rows with live feed.
+    # LIVE never falls back to prematch data. Only verified, fresh provider rows are displayed.
     ensure_live_file()
-    return read_csv_safe(LIVE_FILE)
+    live = read_csv_safe(LIVE_FILE)
+    if live.empty:
+        return live
+
+    required = {"fixture_id", "league", "match", "minute", "score", "status", "source", "data_status", "updated_at"}
+    if not required.issubset(live.columns):
+        return pd.DataFrame(columns=live.columns)
+
+    status = live["status"].astype(str).str.upper().str.strip()
+    active = status.isin({"1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT", "SUSP"})
+    verified = live["data_status"].astype(str).str.startswith("VERIFIED_FIXTURE")
+    real_source = live["source"].astype(str).str.startswith("API-Football")
+    updated = pd.to_datetime(live["updated_at"], errors="coerce", utc=True)
+    max_age = max(60, int(os.getenv("LIVE_MAX_AGE_SECONDS", "900")))
+    fresh = updated.notna() & ((pd.Timestamp.now(tz="UTC") - updated).dt.total_seconds() <= max_age)
+
+    result = live.loc[active & verified & real_source & fresh].copy()
+    if result.empty:
+        return result
+    result["_updated_dt"] = updated.loc[result.index]
+    return result.sort_values(["_updated_dt", "minute"], ascending=[False, False])
 
 
 def load_results() -> pd.DataFrame:
@@ -1332,23 +1355,28 @@ def placeholder_chart(title: str, subtitle: str = "Wykres gotowy - oczekuje na d
 def live_rows(live: pd.DataFrame) -> List[List[str]]:
     rows = []
     for _, row in live.head(30).iterrows():
-        conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
-        risk = str(first_existing(row, ["risk"], "LOW")).upper()
-        klass = "pill-red" if "HIGH" in risk else "pill-yellow" if "MED" in risk else "pill-green"
-        market = fmt_market(first_existing(row, ["market", "typ", "bet", "bet_name", "signal", "advanced_signal"], "LIVE"))
-        if str(market).strip().lower() in {"", "-", "no signal", "nosignal", "none", "nan"}:
-            market = "LIVE"
-        sigcls = "green" if conf >= 70 else "yellow" if conf >= 50 else "red"
+        signal_verified = str(first_existing(row, ["signal_verified"], "false")).strip().lower() in {"1", "true", "yes"}
+        odds_verified = str(first_existing(row, ["odds_verified"], "false")).strip().lower() in {"1", "true", "yes"}
+        raw_conf = pd.to_numeric(pd.Series([first_existing(row, ["confidence"], None)]), errors="coerce").iloc[0]
+        conf_html = confidence_bar(float(raw_conf)) if signal_verified and pd.notna(raw_conf) else "-"
+        signal = first_existing(row, ["signal"], "-") if signal_verified else "Brak zweryfikowanego typu"
+        odds = first_existing(row, ["odds"], "-") if odds_verified else "-"
+        odds_market = first_existing(row, ["odds_market"], "") if odds_verified else ""
+        bookmaker = first_existing(row, ["odds_bookmaker"], "") if odds_verified else ""
+        odds_context = " · ".join(str(value) for value in (odds_market, bookmaker) if value)
+        odds_text = f"{odds} ({odds_context})" if odds_context else str(odds)
+        quality = "Mecz + kurs z API" if odds_verified else "Mecz z API"
+        status = str(first_existing(row, ["status"], "-"))
         rows.append([
-            str(first_existing(row, ["league", "liga"], "-")),
-            f'<b>{first_existing(row, ["match", "mecz"], "-")}</b>',
-            f'<span class="green">{first_existing(row, ["minute", "minuta"], "-")}</span>',
-            f'<b>{first_existing(row, ["score", "wynik"], "-")}</b>',
-            f'<span class="{sigcls}">{market}</span>',
-            confidence_bar(conf),
-            str(first_existing(row, ["odds", "kurs_buk"], "-")),
-            f'<span class="green">{first_existing(row, ["value", "ev", "edge"], "-")}</span>',
-            f'<span class="pill {klass}">{risk}</span>',
+            html.escape(str(first_existing(row, ["league", "liga"], "-"))),
+            f'<b>{html.escape(str(first_existing(row, ["match", "mecz"], "-")))}</b>',
+            f'<span class="green">{html.escape(str(first_existing(row, ["minute", "minuta"], "-")))}</span>',
+            f'<b>{html.escape(str(first_existing(row, ["score", "wynik"], "-")))}</b>',
+            f'<span class="yellow">{html.escape(str(signal))}</span>',
+            conf_html,
+            html.escape(odds_text),
+            f'<span class="blue">{html.escape(status)}</span>',
+            f'<span class="pill pill-green">{quality}</span>',
         ])
     return rows
 
@@ -1631,21 +1659,31 @@ def _odds_from_pick(pick: dict, default: float = 2.0) -> float:
 
 
 def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
-    page_banner("Panel na żywo", "NA ŻYWO", "Szybka tabela operacyjna z typem zakładu, kursem, wartością i ryzykiem.")
-    avg_conf = as_float(numeric_series(live, "confidence").mean(), as_float(numeric_series(picks, "confidence").mean(), 0))
-    avg_odds = as_float(numeric_series(live, "odds").mean(), as_float(numeric_series(picks, "kurs_buk").mean(), 0))
+    page_banner("Panel na żywo", "NA ŻYWO", "Wyłącznie świeże dane LIVE potwierdzone przez API. Braki pozostają puste.")
+    if live.empty:
+        verified_types = 0
+        verified_odds = 0
+        avg_conf = 0.0
+        avg_odds = 0.0
+    else:
+        signal_mask = live.get("signal_verified", pd.Series(False, index=live.index)).astype(str).str.lower().isin({"1", "true", "yes"})
+        odds_mask = live.get("odds_verified", pd.Series(False, index=live.index)).astype(str).str.lower().isin({"1", "true", "yes"})
+        verified_types = int(signal_mask.sum())
+        verified_odds = int(odds_mask.sum())
+        avg_conf = as_float(pd.to_numeric(live.loc[signal_mask, "confidence"], errors="coerce").mean(), 0) if "confidence" in live else 0
+        avg_odds = as_float(pd.to_numeric(live.loc[odds_mask, "odds"], errors="coerce").mean(), 0) if "odds" in live else 0
     metrics([
-        ("Mecze live", str(len(live)), "aktywne"),
-        ("Typy live", str(len(live)), "monitoring"),
-        ("Średnia pewność", pct(avg_conf), "pewność"),
-        ("Średni kurs", f"{avg_odds:.2f}" if avg_odds else "-", "kurs"),
-        ("Wartość na żywo", money(numeric_series(live, 'value').sum() if not live.empty else 0), "wartość"),
+        ("Mecze live", str(len(live)), "potwierdzone przez API"),
+        ("Typy live", str(verified_types), "tylko zweryfikowane"),
+        ("Kursy live", str(verified_odds), "potwierdzone przez API"),
+        ("Średnia pewność", pct(avg_conf) if verified_types else "-", "bez wartości zastępczych"),
+        ("Średni kurs", f"{avg_odds:.2f}" if verified_odds and avg_odds else "-", "bez kursu prematch"),
     ])
     title("NA ŻYWO")
     rows = live_rows(live)
-    headers = ["Liga", "Mecz", "Minuta", "Wynik", "Typ zakładu", "Pewność", "Kurs", "Wartość", "Ryzyko"]
-    table = html_table(headers, rows) if rows else html_table(headers, [["-", "Brak aktywnych danych LIVE", "-", "-", "-", "-", "-", "-", "-"]])
-    st.markdown(f'<div class="ka-panel"><h3>NA ŻYWO - aktualne mecze i typ zakładu</h3>{table}</div>', unsafe_allow_html=True)
+    headers = ["Liga", "Mecz", "Minuta", "Wynik", "Typ zakładu", "Pewność", "Kurs", "Status", "Jakość danych"]
+    table = html_table(headers, rows) if rows else html_table(headers, [["-", "Brak świeżych, potwierdzonych danych LIVE", "-", "-", "-", "-", "-", "-", "-"]])
+    st.markdown(f'<div class="ka-panel"><h3>NA ŻYWO - dane zweryfikowane</h3>{table}</div>', unsafe_allow_html=True)
 
 
 def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:

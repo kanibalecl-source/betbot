@@ -1,0 +1,6 @@
+fixture_id,league,match,home,away,minute,score,status,signal,confidence,odds,value,ev,cashout,stake,risk,source,pressure,momentum,tempo,xg_pace,advanced_signal,advanced_market,advanced_confidence,live_intensity,updated_at
+1490327,Major League Soccer,St. Louis City - Sporting Kansas City,St. Louis City,Sporting Kansas City,59,2:1,2H,NO ADVANCED SIGNAL,0.0,,0.0,0.0,MONITOR,,LOW,LIVE API,0.0,0.0,0.0,0.0,NO ADVANCED SIGNAL,WAIT,0.0,LOW,2026-07-17T02:05:19.494812+00:00
+1540103,Copa Argentina,Sarmiento Junin - Boca Juniors,Sarmiento Junin,Boca Juniors,60,0:1,2H,NO ADVANCED SIGNAL,0.0,,0.0,0.0,MONITOR,,LOW,LIVE API,0.0,0.0,0.0,0.0,NO ADVANCED SIGNAL,WAIT,0.0,LOW,2026-07-17T02:05:19.494889+00:00
+1586137,USL League Two,Dothan United - The Villages,Dothan United,The Villages,67,0:1,2H,NO ADVANCED SIGNAL,0.0,,0.0,0.0,MONITOR,,LOW,LIVE API,0.0,0.0,0.0,0.0,NO ADVANCED SIGNAL,WAIT,0.0,LOW,2026-07-17T02:05:19.494960+00:00
+1589339,USL League Two,Peoria - Sueno,Peoria,Sueno,67,2:2,2H,NO ADVANCED SIGNAL,0.0,,0.0,0.0,MONITOR,,LOW,LIVE API,0.0,0.0,0.0,0.0,NO ADVANCED SIGNAL,WAIT,0.0,LOW,2026-07-17T02:05:19.495025+00:00
+1550894,Liga MX,Necaxa - Atlante FC,Necaxa,Atlante FC,45,0:0,HT,NO ADVANCED SIGNAL,0.0,,0.0,0.0,MONITOR,,LOW,LIVE API,0.0,5.0,0.0,0.0,NO ADVANCED SIGNAL,WAIT,0.0,LOW,2026-07-17T02:05:19.495092+00:00

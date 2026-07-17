@@ -1,0 +1,5 @@
+created_at,league,match,market,odds,confidence,edge,ev,tempo,pressure,momentum,risk,source,result,profit,roi
+2026-07-17T01:54:27.491178+00:00,Allsvenskan,Mjallby AIF vs Vasteras SK FK,OVER_1.5,2.52,82.99,0.21,1.0914,,,,MEDIUM,AI_FIXTURE_UNIVERSE,PENDING,0.0,0.0
+2026-07-17T01:54:27.491178+00:00,Serie A,Bahia vs Chapecoense-sc,OVER_1.5,2.4,79.44,0.12,0.9065,,,,MEDIUM,AI_FIXTURE_UNIVERSE,PENDING,0.0,0.0
+2026-07-17T01:54:27.491178+00:00,Allsvenskan,IFK Goteborg vs IF Brommapojkarna,DOUBLE_X2,1.91,66.42,0.27,0.2687,,,,MEDIUM,AI_FIXTURE_UNIVERSE,PENDING,0.0,0.0
+2026-07-17T01:54:27.491178+00:00,Serie A,Mirassol vs Gremio,DOUBLE_X2,1.86,63.37,0.18,0.1788,,,,MEDIUM,AI_FIXTURE_UNIVERSE,PENDING,0.0,0.0

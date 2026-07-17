@@ -1,0 +1,2 @@
+﻿written_at,event_id,stream,source,payload_json
+2026-07-17T01:38:50+00:00,b6b09a99dceeb0cc61857ec6,prematch_empty_selection,bot.py,"{""mode"": ""risk"", ""reason"": ""filters_or_no_value"", ""output_file"": ""C:\\Users\\MSI\\Desktop\\bot_upgrade\\1\\1\\betbot-main\\data\\auto_risk_picks.csv""}"

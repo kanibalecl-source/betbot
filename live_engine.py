@@ -1,111 +1,46 @@
-from pathlib import Path
+"""Validated compatibility storage for LIVE rows.
+
+This module no longer supplies default status, risk, confidence or score values.
+"""
+
+from typing import Any, Dict, Iterable, List
+
 import pandas as pd
 
-try:
-    from prediction_pipeline_integration import process_and_save_matches
-except Exception:
-    process_and_save_matches = None
-
-BASE_DIR = Path(__file__).resolve().parent
-
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
-
-LIVE_FILE = DATA_DIR / "live_matches.csv"
+from live_pipeline_runtime import ACTIVE_STATUSES, LIVE_FILE, LiveDataError, save_live_matches
 
 
-FINISHED_STATUSES = [
-    "FT",
-    "FINISHED",
-    "ENDED",
-    "AFTER PEN.",
-    "AFTER PENALTIES",
-    "FULLTIME",
-    "AET"
-]
-
-
-def is_live_match(match):
+def is_live_match(match: Dict[str, Any]) -> bool:
+    status = str(match.get("status") or "").upper().strip()
+    source = str(match.get("source") or "")
+    data_status = str(match.get("data_status") or "")
     try:
-        status = str(match.get("status", "")).upper()
-
-        if status in FINISHED_STATUSES:
-            return False
-
-        minute = match.get("minute", 0)
-
-        try:
-            minute = int(minute)
-        except:
-            minute = 0
-
-        if minute >= 120:
-            return False
-
-        return True
-
-    except:
+        minute = int(float(match.get("minute")))
+    except (TypeError, ValueError):
         return False
+    return bool(
+        status in ACTIVE_STATUSES
+        and 0 <= minute < 130
+        and source.startswith("API-Football")
+        and data_status.startswith("VERIFIED_FIXTURE")
+        and match.get("fixture_id") is not None
+        and str(match.get("match") or "").strip()
+        and str(match.get("score") or "").strip()
+    )
 
 
 class LiveEngine:
-    def __init__(self):
-        pass
+    def save_live_matches(self, matches: Iterable[Dict[str, Any]]) -> None:
+        rows: List[Dict[str, Any]] = list(matches or [])
+        invalid = [row for row in rows if not is_live_match(row)]
+        if invalid:
+            raise LiveDataError("Refusing to save unverified LIVE rows")
+        save_live_matches(rows)
 
-    def save_live_matches(self, matches):
-
-        try:
-            if not matches:
-                print("⚠️ NO LIVE MATCHES")
-                return
-
-            active_matches = [
-                match for match in matches
-                if is_live_match(match)
-            ]
-
-            print(f"✅ ACTIVE LIVE MATCHES -> {len(active_matches)}")
-
-            if process_and_save_matches:
-                process_and_save_matches(active_matches)
-                return
-
-            cleaned_matches = []
-
-            for match in active_matches:
-                cleaned_matches.append({
-                    "home": match.get("home", ""),
-                    "away": match.get("away", ""),
-                    "league": match.get("league", ""),
-                    "minute": match.get("minute", ""),
-                    "score": match.get("score", ""),
-                    "signal": match.get("signal", ""),
-                    "confidence": match.get("confidence", 0),
-                    "ev": match.get("ev", 0),
-                    "status": match.get("status", "LIVE"),
-                    "risk": match.get("risk", "LOW")
-                })
-
-            df = pd.DataFrame(cleaned_matches)
-            df.to_csv(LIVE_FILE, index=False)
-
-            print(f"✅ LIVE SAVED -> {LIVE_FILE}")
-            print(f"✅ MATCHES COUNT -> {len(df)}")
-
-        except Exception as e:
-            print(f"❌ SAVE LIVE ERROR: {e}")
-
-    def load_live_matches(self):
-
-        try:
-            if not LIVE_FILE.exists():
-                return []
-
-            df = pd.read_csv(LIVE_FILE)
-            df = df.fillna("")
-
-            return df.to_dict(orient="records")
-
-        except Exception as e:
-            print(f"❌ LOAD LIVE ERROR: {e}")
+    def load_live_matches(self) -> List[Dict[str, Any]]:
+        if not LIVE_FILE.exists() or LIVE_FILE.stat().st_size == 0:
             return []
+        frame = pd.read_csv(LIVE_FILE)
+        if frame.empty:
+            return []
+        return [row for row in frame.to_dict(orient="records") if is_live_match(row)]

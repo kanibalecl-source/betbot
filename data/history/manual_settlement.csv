@@ -1,0 +1,3 @@
+﻿written_at,event_id,stream,source,payload_json
+2026-07-17T01:50:02+00:00,ef1015393464e17eb076e192,manual_settlement,manual_betting.py,"{""type"": ""single"", ""updated"": 0}"
+2026-07-17T01:50:02+00:00,16573deebdd019a2aa8adde2,manual_settlement,manual_betting.py,"{""type"": ""ako"", ""updated"": 0}"

@@ -1,0 +1,3 @@
+﻿created_at,event,status,ai_mode,ai_label,mode,ai_picks,cycles,settled_samples,file
+2026-07-17T01:54:27.593151+00:00,SELF_LEARNING_CYCLE,OK,main,AI,BOOTSTRAP,4,2,0,C:\Users\MSI\Desktop\bot_upgrade\2\2\betbot-main\data\ai_picks.csv
+2026-07-17T01:38:53.403682+00:00,SELF_LEARNING_CYCLE,OK,main,AI,BOOTSTRAP,5,2,0,C:\Users\MSI\Desktop\bot_upgrade\1\1\betbot-main\data\ai_picks.csv

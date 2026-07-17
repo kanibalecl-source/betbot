@@ -1,0 +1,16 @@
+{
+  "status": "NO_SETTLED_DATA",
+  "samples": 0,
+  "features": [
+    "probability",
+    "odds",
+    "edge",
+    "ev",
+    "confidence"
+  ],
+  "model_path": "C:\\Users\\MSI\\Desktop\\bot_upgrade\\2\\2\\betbot-main\\data\\enterprise\\v7_logistic.json",
+  "calibration": {},
+  "metrics": {
+    "note": "Add settled bets with won/result/outcome field."
+  }
+}
