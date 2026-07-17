@@ -43,16 +43,23 @@ DATA_DIR = get_data_dir()
 
 def persistent_storage_configured() -> bool:
     """Return True only when data lives outside the deploy directory."""
-    configured = any(
+    railway_mount = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    try:
+        confirmed_railway_volume = bool(railway_mount) and DATA_DIR.resolve() == Path(railway_mount).resolve()
+    except Exception:
+        confirmed_railway_volume = False
+    configured_external = any(
         os.getenv(name, "").strip()
-        for name in ("KANIBAL_DATA_DIR", "PERSISTENT_DATA_DIR", "RAILWAY_VOLUME_MOUNT_PATH")
+        for name in ("KANIBAL_DATA_DIR", "PERSISTENT_DATA_DIR")
     )
     outside_deploy = DATA_DIR.resolve() != (BASE_DIR / "data").resolve()
     # Railway commonly mounts a Volume at /data without exposing its mount path
     # as an application variable. get_data_dir() has already verified that this
     # directory exists and is writable, so accept that standard mount directly.
     standard_volume = str(DATA_DIR).replace("\\", "/").rstrip("/") == "/data"
-    return outside_deploy and (configured or standard_volume)
+    # /app/data is also safe when Railway itself confirms that exact mount via
+    # its automatically provided RAILWAY_VOLUME_MOUNT_PATH variable.
+    return confirmed_railway_volume or (outside_deploy and (configured_external or standard_volume))
 
 
 def require_persistent_storage_on_server() -> None:

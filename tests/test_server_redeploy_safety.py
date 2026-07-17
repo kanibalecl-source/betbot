@@ -27,6 +27,26 @@ class ServerRedeploySafetyTests(unittest.TestCase):
             self.assertTrue(storage_paths.persistent_storage_configured())
             storage_paths.require_persistent_storage_on_server()
 
+    def test_railway_confirmed_app_data_volume_is_accepted(self):
+        import storage_paths
+        from server_data_guard import prepare_server_data_backup
+
+        with tempfile.TemporaryDirectory() as temp:
+            code = Path(temp) / "app"
+            volume = code / "data"
+            volume.mkdir(parents=True)
+            (volume / "results_history.csv").write_text("pick_key,status\nP-1,CLOSED\n", encoding="utf-8")
+            with patch.dict("os.environ", {
+                "RAILWAY_ENVIRONMENT": "production",
+                "RAILWAY_VOLUME_MOUNT_PATH": str(volume),
+                "PERSISTENT_DATA_DIR": "",
+                "KANIBAL_DATA_DIR": "",
+            }, clear=False), patch.object(storage_paths, "DATA_DIR", volume), patch.object(storage_paths, "BASE_DIR", code):
+                self.assertTrue(storage_paths.persistent_storage_configured())
+                storage_paths.require_persistent_storage_on_server()
+                result = prepare_server_data_backup(volume, code, "app-data-volume", force_server=True)
+                self.assertEqual(result["status"], "BACKUP_CREATED")
+
     def test_two_redeploy_backups_do_not_modify_volume_sources(self):
         from server_data_guard import prepare_server_data_backup
 

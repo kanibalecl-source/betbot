@@ -81,10 +81,19 @@ def prepare_server_data_backup(
     data_path = Path(data_dir or DATA_DIR).resolve()
     code_path = Path(base_dir or BASE_DIR).resolve()
     bundled_path = (code_path / "data").resolve()
-    if data_path == bundled_path or code_path in data_path.parents:
+    railway_mount = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
+    try:
+        confirmed_railway_volume = bool(railway_mount) and data_path == Path(railway_mount).resolve()
+    except Exception:
+        confirmed_railway_volume = False
+    if (data_path == bundled_path or code_path in data_path.parents) and not confirmed_railway_volume:
         raise RuntimeError("Katalog danych serwera znajduje się wewnątrz deploymentu; start przerwany.")
 
-    bundled_files = [p for p in bundled_path.rglob("*") if p.is_file()] if bundled_path.exists() else []
+    bundled_files = (
+        [p for p in bundled_path.rglob("*") if p.is_file()]
+        if bundled_path.exists() and not (confirmed_railway_volume and bundled_path == data_path)
+        else []
+    )
     if bundled_files:
         raise RuntimeError("Paczka serwerowa zawiera katalog data; start przerwany, aby nie nadpisać Volume.")
 
