@@ -7,6 +7,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 def sha256(path: Path) -> str:
@@ -14,6 +15,18 @@ def sha256(path: Path) -> str:
 
 
 class ServerRedeploySafetyTests(unittest.TestCase):
+    def test_standard_railway_data_mount_is_accepted_without_extra_path_variable(self):
+        import storage_paths
+
+        with patch.dict("os.environ", {
+            "RAILWAY_ENVIRONMENT": "production",
+            "PERSISTENT_DATA_DIR": "",
+            "KANIBAL_DATA_DIR": "",
+            "RAILWAY_VOLUME_MOUNT_PATH": "",
+        }, clear=False), patch.object(storage_paths, "DATA_DIR", Path("/data")):
+            self.assertTrue(storage_paths.persistent_storage_configured())
+            storage_paths.require_persistent_storage_on_server()
+
     def test_two_redeploy_backups_do_not_modify_volume_sources(self):
         from server_data_guard import prepare_server_data_backup
 

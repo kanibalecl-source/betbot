@@ -47,7 +47,12 @@ def persistent_storage_configured() -> bool:
         os.getenv(name, "").strip()
         for name in ("KANIBAL_DATA_DIR", "PERSISTENT_DATA_DIR", "RAILWAY_VOLUME_MOUNT_PATH")
     )
-    return configured and DATA_DIR.resolve() != (BASE_DIR / "data").resolve()
+    outside_deploy = DATA_DIR.resolve() != (BASE_DIR / "data").resolve()
+    # Railway commonly mounts a Volume at /data without exposing its mount path
+    # as an application variable. get_data_dir() has already verified that this
+    # directory exists and is writable, so accept that standard mount directly.
+    standard_volume = str(DATA_DIR).replace("\\", "/").rstrip("/") == "/data"
+    return outside_deploy and (configured or standard_volume)
 
 
 def require_persistent_storage_on_server() -> None:
