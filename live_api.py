@@ -4,12 +4,12 @@ import pandas as pd
 from pathlib import Path
 
 from config import API_FOOTBALL_KEY
+from storage_paths import DATA_DIR
 
 HEADERS = {
     "x-apisports-key": API_FOOTBALL_KEY
 }
 
-DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 LIVE_FILE = DATA_DIR / "live_matches.csv"

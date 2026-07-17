@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -36,7 +36,7 @@ MARKET_LABELS = dict(MANUAL_MARKETS)
 
 
 def now_text() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def init_manual_db() -> None:
@@ -72,7 +72,9 @@ def init_manual_db() -> None:
             away_goals INTEGER,
             score TEXT,
             profit REAL DEFAULT 0,
-            roi REAL DEFAULT 0
+            roi REAL DEFAULT 0,
+            settlement_source TEXT,
+            settled_at TEXT
         )
         """
     )
@@ -91,7 +93,9 @@ def init_manual_db() -> None:
             status TEXT DEFAULT 'OPEN',
             result TEXT DEFAULT 'PENDING',
             profit REAL DEFAULT 0,
-            roi REAL DEFAULT 0
+            roi REAL DEFAULT 0,
+            settlement_source TEXT,
+            settled_at TEXT
         )
         """
     )
@@ -115,10 +119,17 @@ def init_manual_db() -> None:
             result TEXT DEFAULT 'PENDING',
             home_goals INTEGER,
             away_goals INTEGER,
-            score TEXT
+            score TEXT,
+            settlement_source TEXT,
+            settled_at TEXT
         )
         """
     )
+    for table in ("manual_bets", "manual_ako_coupons", "manual_ako_legs"):
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for column in ("settlement_source", "settled_at"):
+            if column not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} TEXT")
     conn.commit()
     conn.close()
 
@@ -327,10 +338,10 @@ def settle_manual_open_bets(limit: int = 300) -> int:
             """
             UPDATE manual_bets
             SET updated_at=?, status='CLOSED', result=?, home_goals=?, away_goals=?,
-                score=?, profit=?, roi=?
+                score=?, profit=?, roi=?, settlement_source='API_FOOTBALL', settled_at=?
             WHERE id=?
             """,
-            (now_text(), "WIN" if won else "LOSS", int(home_goals), int(away_goals), f"{home_goals}:{away_goals}", profit, roi, bet["id"]),
+            (now_text(), "WIN" if won else "LOSS", int(home_goals), int(away_goals), f"{home_goals}:{away_goals}", profit, roi, now_text(), bet["id"]),
         )
         updated += 1
     conn.commit()
@@ -375,10 +386,11 @@ def settle_ako_coupons(limit: int = 200) -> int:
             conn.execute(
                 """
                 UPDATE manual_ako_legs
-                SET status='CLOSED', result=?, home_goals=?, away_goals=?, score=?
+                SET status='CLOSED', result=?, home_goals=?, away_goals=?, score=?,
+                    settlement_source='API_FOOTBALL', settled_at=?
                 WHERE id=?
                 """,
-                ("WIN" if won else "LOSS", home_goals, away_goals, f"{home_goals}:{away_goals}", leg["id"]),
+                ("WIN" if won else "LOSS", home_goals, away_goals, f"{home_goals}:{away_goals}", now_text(), leg["id"]),
             )
             if won:
                 pass
@@ -402,10 +414,11 @@ def settle_ako_coupons(limit: int = 200) -> int:
         conn.execute(
             """
             UPDATE manual_ako_coupons
-            SET updated_at=?, status='CLOSED', result=?, profit=?, roi=?
+            SET updated_at=?, status='CLOSED', result=?, profit=?, roi=?,
+                settlement_source='API_FOOTBALL', settled_at=?
             WHERE id=?
             """,
-            (now_text(), result_text, profit, roi, coupon["id"]),
+            (now_text(), result_text, profit, roi, now_text(), coupon["id"]),
         )
         settled += 1
     conn.commit()

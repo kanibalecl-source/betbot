@@ -1,6 +1,7 @@
 ﻿import base64
 import html
 import json
+import math
 import os
 from pathlib import Path
 from typing import Iterable, List
@@ -463,18 +464,64 @@ def load_live_data(picks: pd.DataFrame) -> pd.DataFrame:
 
 def load_results() -> pd.DataFrame:
     frames = []
+    archive_files = [
+        DATA_DIR / "auto_all_picks_history.csv",
+        DATA_DIR / "auto_low_picks_history.csv",
+        DATA_DIR / "auto_risk_picks_history.csv",
+    ]
+    for path in archive_files:
+        df = read_csv_safe(path)
+        if df.empty:
+            continue
+        df = df.copy()
+        df["record_source"] = path.name
+        if "league" not in df.columns and "liga" in df.columns:
+            df["league"] = df["liga"]
+        if "match_name" not in df.columns:
+            df["match_name"] = df["match"] if "match" in df.columns else df.get("mecz", "")
+        if "market" not in df.columns and "typ" in df.columns:
+            df["market"] = df["typ"]
+        if "odds" not in df.columns and "kurs_buk" in df.columns:
+            df["odds"] = df["kurs_buk"]
+        if "fixture_status" not in df.columns and "status" in df.columns:
+            df["fixture_status"] = df["status"]
+        df["status"] = "OPEN"
+        df["result"] = "PENDING"
+        frames.append(df)
     for path in [RESULTS_FILE, HISTORY_FILE, BASE_DIR / "results_history.csv", BASE_DIR / "history.csv"]:
         df = read_csv_safe(path)
         if not df.empty:
+            df = df.copy()
+            df["record_source"] = path.name
             frames.append(df)
     try:
         from agi_storage import load_history_dataframe
         storage_df = load_history_dataframe()
         if storage_df is not None and not storage_df.empty:
+            storage_df = storage_df.copy()
+            storage_df["record_source"] = "kanibal_persistent.sqlite3"
             frames.append(storage_df)
     except Exception:
         pass
-    return pd.concat(frames, ignore_index=True, sort=False).drop_duplicates() if frames else pd.DataFrame()
+    if not frames:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True, sort=False)
+
+    def history_key(row) -> str:
+        for name in ("pick_key", "pick_id", "ai_id"):
+            value = str(first_existing(row, [name], "")).strip()
+            if value:
+                return f"{name}:{value}"
+        fixture = str(first_existing(row, ["fixture_id"], "")).strip()
+        market = str(first_existing(row, ["market", "typ", "bet_name"], "")).strip().upper()
+        odds = str(first_existing(row, ["odds", "kurs_buk"], "")).strip()
+        if fixture and market:
+            return f"fixture:{fixture}|market:{market}|odds:{odds}"
+        return f"row:{row.name}"
+
+    combined["_history_key"] = combined.apply(history_key, axis=1)
+    combined = combined.drop_duplicates(subset=["_history_key"], keep="last")
+    return combined.drop(columns=["_history_key"]).reset_index(drop=True)
 
 
 def b64_image(path: Path) -> str:
@@ -1195,6 +1242,37 @@ input,textarea,select{
   .stTabs [data-baseweb="tab-list"]{grid-auto-columns:minmax(104px,1fr)!important;}
   .stTabs [data-baseweb="tab"]{min-width:104px!important;height:44px!important;font-size:10px!important;}
 }
+
+/* Czytelne zakładki i hiperłącza na ciemnym tle. */
+.stTabs [data-baseweb="tab"],
+.stTabs [data-baseweb="tab"] p,
+.stTabs [data-baseweb="tab"] span{
+  color:#d8e4dd!important;
+  opacity:1!important;
+  text-decoration:none!important;
+}
+.stTabs [data-baseweb="tab"]:hover,
+.stTabs [data-baseweb="tab"]:hover p,
+.stTabs [data-baseweb="tab"]:hover span{
+  color:#ffffff!important;
+  background:rgba(124,255,43,.055)!important;
+}
+.stTabs [aria-selected="true"],
+.stTabs [aria-selected="true"] p,
+.stTabs [aria-selected="true"] span{
+  color:#bfff83!important;
+  opacity:1!important;
+}
+.stApp a:not(.status-link){
+  color:#9cff65!important;
+  text-decoration:underline!important;
+  text-decoration-color:rgba(156,255,101,.55)!important;
+  text-underline-offset:3px!important;
+}
+.stApp a:not(.status-link):hover{
+  color:#ffffff!important;
+  text-decoration-color:#7CFF2B!important;
+}
 </style>
 ''', unsafe_allow_html=True)
 
@@ -1295,39 +1373,50 @@ def ai_row_key(row, idx: int) -> str:
 
 
 def render_ai_detail_card(row) -> str:
-    conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 62.93))
-    calibrated = as_float(first_existing(row, ["calibrated_confidence", "calibrated"], conf + 0.64))
-    model_prob = as_float(first_existing(row, ["model_prob", "model_probability"], 0.7055))
-    final_prob = as_float(first_existing(row, ["final_prob", "final_probability"], 0.6293))
+    def number(names):
+        raw = first_existing(row, names, None)
+        try:
+            parsed = float(pd.to_numeric(pd.Series([raw]), errors="coerce").iloc[0])
+            return parsed if math.isfinite(parsed) else None
+        except Exception:
+            return None
 
-    ev = as_float(first_existing(row, ["ev", "value", "edge"], 0.1767))
-    edge = as_float(first_existing(row, ["edge", "ev", "value"], 0.1767))
-    kelly = as_float(first_existing(row, ["kelly", "kelly_fraction"], 0.05))
-    risk = str(first_existing(row, ["risk"], "HIGH")).upper()
+    def shown(value, digits=2):
+        return "BRAK DANYCH" if value is None else f"{value:.{digits}f}"
 
-    book_odds = as_float(first_existing(row, ["book_odds", "odds", "kurs_buk"], 1.87))
-    model_odds = as_float(first_existing(row, ["model_odds", "fair_odds"], 1.42))
-    bot_odds = as_float(first_existing(row, ["bot_odds", "ai_odds"], 1.59))
-    sharp = str(first_existing(row, ["sharp", "sharp_signal"], "NEUTRAL")).upper()
+    conf = number(["confidence", "advanced_confidence", "ai_pick_score"])
+    calibrated = number(["confidence_calibrated_v2", "calibrated_confidence", "calibrated"])
+    model_prob = number(["prawd_model", "model_prob", "model_probability"])
+    final_prob = number(["prawd_final", "final_prob", "final_probability", "probability"])
 
-    home_xg = as_float(first_existing(row, ["home_xg", "xg_home"], 1.15))
-    away_xg = as_float(first_existing(row, ["away_xg", "xg_away"], 1.41))
-    adv_total_xg = as_float(first_existing(row, ["adv_total_xg", "total_xg"], home_xg + away_xg))
-    adv_over = as_float(first_existing(row, ["adv_over25", "adv_over_2_5", "over25_probability"], 85.33))
-    margin = as_float(first_existing(row, ["margin", "bookmaker_margin"], 0.0))
+    ev = number(["ev", "value"])
+    edge = number(["edge"])
+    kelly = number(["kelly_25", "kelly", "kelly_fraction"])
+    risk = str(first_existing(row, ["risk", "risk_level"], "BRAK DANYCH")).upper()
 
-    momentum_score = as_float(first_existing(row, ["momentum_score", "momentum"], 25.0))
-    momentum_label = str(first_existing(row, ["momentum_label"], "LOW")).upper()
-    sharp_score = as_float(first_existing(row, ["sharp_score"], 0))
-    sharp_signals = str(first_existing(row, ["sharp_signals", "sharp_signal"], "NO_SHARP_SIGNAL"))
+    book_odds = number(["book_odds", "odds", "kurs_buk"])
+    model_odds = number(["kurs_model", "model_odds", "fair_odds"])
+    bot_odds = number(["kurs_bota", "bot_odds", "ai_odds", "fair_odds"])
+    sharp = str(first_existing(row, ["sharp", "sharp_signal", "sharp_label"], "BRAK DANYCH")).upper()
 
-    meta_prob = as_float(first_existing(row, ["meta_prob", "meta_probability"], 67.9))
-    model_weight = as_float(first_existing(row, ["model_weight"], 0.3))
-    market_weight = as_float(first_existing(row, ["market_weight"], 0.2))
-    xg_weight = as_float(first_existing(row, ["xg_weight"], 0.2))
-    momentum_weight = as_float(first_existing(row, ["momentum_weight"], 0.15))
-    sharp_weight = as_float(first_existing(row, ["sharp_weight"], 0.15))
-    dynamic_stake = as_float(first_existing(row, ["dynamic_stake", "stake"], 23.0))
+    home_xg = number(["home_goal_rate", "home_xg", "xg_home"])
+    away_xg = number(["away_goal_rate", "away_xg", "xg_away"])
+    adv_total_xg = number(["advanced_total_xg", "adv_total_xg", "total_xg"])
+    adv_over = number(["advanced_over25_prob", "adv_over25", "adv_over_2_5", "over25_probability"])
+    margin = number(["market_margin", "marza_sum", "margin", "bookmaker_margin"])
+
+    momentum_score = number(["momentum_score", "momentum"])
+    momentum_label = str(first_existing(row, ["momentum_label"], "BRAK DANYCH")).upper()
+    sharp_score = number(["sharp_score"])
+    sharp_signals = str(first_existing(row, ["sharp_signals", "sharp_signal"], "BRAK DANYCH"))
+
+    meta_prob = number(["meta_prob", "meta_probability"])
+    model_weight = number(["meta_weight_model", "model_weight"])
+    market_weight = number(["meta_weight_market", "market_weight"])
+    xg_weight = number(["meta_weight_xg", "xg_weight"])
+    momentum_weight = number(["meta_weight_momentum", "momentum_weight"])
+    sharp_weight = number(["meta_weight_sharp", "sharp_weight"])
+    dynamic_stake = number(["dynamic_stake", "stake"])
 
     return (
         f"<div class='ai-detail-final'>"
@@ -1335,55 +1424,55 @@ def render_ai_detail_card(row) -> str:
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>MODEL AI</div>"
-        f"<div class='ai-engine-line'><b>PEWNOŚĆ:</b> {conf:.2f}</div>"
-        f"<div class='ai-engine-line'><b>PEWNOŚĆ SKALIBROWANA:</b> {calibrated:.2f}</div>"
-        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO MODELU:</b> {model_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO KOŃCOWE:</b> {final_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>ETAP A:</b> {final_prob:.4f}</div>"
+        f"<div class='ai-engine-line'><b>PEWNOŚĆ:</b> {shown(conf)}</div>"
+        f"<div class='ai-engine-line'><b>PEWNOŚĆ SKALIBROWANA:</b> {shown(calibrated)}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO MODELU:</b> {shown(model_prob, 4)}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO KOŃCOWE:</b> {shown(final_prob, 4)}</div>"
+        f"<div class='ai-engine-line'><b>ETAP A:</b> {shown(final_prob, 4)}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>SILNIK WARTOŚCI</div>"
-        f"<div class='ai-engine-line'><b>EV:</b> {ev:.4f}</div>"
-        f"<div class='ai-engine-line'><b>PRZEWAGA:</b> {edge:.4f}</div>"
-        f"<div class='ai-engine-line'><b>KELLY:</b> {kelly:.2f}</div>"
+        f"<div class='ai-engine-line'><b>EV:</b> {shown(ev, 4)}</div>"
+        f"<div class='ai-engine-line'><b>PRZEWAGA:</b> {shown(edge, 4)}</div>"
+        f"<div class='ai-engine-line'><b>KELLY:</b> {shown(kelly)}</div>"
         f"<div class='ai-engine-line'><b>RYZYKO:</b> {risk}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>SILNIK RYNKU</div>"
-        f"<div class='ai-engine-line'><b>KURS BUKMACHERA:</b> {book_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>KURS MODELU:</b> {model_odds:.2f}</div>"
-        f"<div class='ai-engine-line'><b>KURS BOTA:</b> {bot_odds:.2f}</div>"
+        f"<div class='ai-engine-line'><b>KURS BUKMACHERA:</b> {shown(book_odds)}</div>"
+        f"<div class='ai-engine-line'><b>KURS MODELU:</b> {shown(model_odds)}</div>"
+        f"<div class='ai-engine-line'><b>KURS BOTA:</b> {shown(bot_odds)}</div>"
         f"<div class='ai-engine-line'><b>RYNEK SHARP:</b> {sharp}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
-        f"<div class='ai-detail-final-title'>SILNIK xG</div>"
-        f"<div class='ai-engine-line'><b>xG GOSPODARZY:</b> {home_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>xG GOŚCI:</b> {away_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>SUMA xG:</b> {adv_total_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>OVER 2.5:</b> {adv_over:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MARŻA:</b> {margin:.1f}</div>"
+        f"<div class='ai-detail-final-title'>DANE MODELU BRAMEK</div>"
+        f"<div class='ai-engine-line'><b>TEMPO BRAMEK GOSPODARZY:</b> {shown(home_xg)}</div>"
+        f"<div class='ai-engine-line'><b>TEMPO BRAMEK GOŚCI:</b> {shown(away_xg)}</div>"
+        f"<div class='ai-engine-line'><b>SUMA:</b> {shown(adv_total_xg)}</div>"
+        f"<div class='ai-engine-line'><b>OVER 2.5:</b> {shown(adv_over)}</div>"
+        f"<div class='ai-engine-line'><b>MARŻA:</b> {shown(margin, 4)}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>SILNIK TEMPA</div>"
-        f"<div class='ai-engine-line'><b>WYNIK TEMPA:</b> {momentum_score:.1f}</div>"
+        f"<div class='ai-engine-line'><b>WYNIK TEMPA:</b> {shown(momentum_score, 1)}</div>"
         f"<div class='ai-engine-line'><b>OCENA TEMPA:</b> {momentum_label}</div>"
-        f"<div class='ai-engine-line'><b>WYNIK SHARP:</b> {sharp_score:.0f}</div>"
+        f"<div class='ai-engine-line'><b>WYNIK SHARP:</b> {shown(sharp_score, 0)}</div>"
         f"<div class='ai-engine-line'><b>SYGNAŁY SHARP:</b> {sharp_signals}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>META AI</div>"
-        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO META:</b> {meta_prob:.1f}</div>"
-        f"<div class='ai-engine-line'><b>WAGA MODELU:</b> {model_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA RYNKU:</b> {market_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA xG:</b> {xg_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA TEMPA:</b> {momentum_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA SHARP:</b> {sharp_weight}</div>"
-        f"<div class='ai-engine-line'><b>DYNAMICZNA STAWKA:</b> {dynamic_stake:.1f}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO META:</b> {shown(meta_prob, 1)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA MODELU:</b> {shown(model_weight)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA RYNKU:</b> {shown(market_weight)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA DANYCH BRAMEK:</b> {shown(xg_weight)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA TEMPA:</b> {shown(momentum_weight)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA SHARP:</b> {shown(sharp_weight)}</div>"
+        f"<div class='ai-engine-line'><b>DYNAMICZNA STAWKA:</b> {shown(dynamic_stake, 1)}</div>"
         f"</div>"
 
         f"</div></div>"
@@ -1482,10 +1571,18 @@ def _win_mask(df: pd.DataFrame) -> pd.Series:
     if df is None or df.empty:
         return pd.Series([], dtype=bool)
     if "result" in df.columns:
-        return df["result"].astype(str).str.lower().str.contains("win|won|wygr|1", regex=True, na=False)
+        return df["result"].astype(str).str.strip().str.upper().isin({"WIN", "WON", "WYGRANA", "1", "TRUE"})
     if "status" in df.columns:
-        return df["status"].astype(str).str.lower().str.contains("win|won|wygr|closed_win", regex=True, na=False)
+        return df["status"].astype(str).str.strip().str.upper().isin({"WIN", "WON", "WYGRANA", "CLOSED_WIN"})
     return pd.Series([False] * len(df), index=df.index)
+
+
+def _settled_mask(df: pd.DataFrame) -> pd.Series:
+    if df is None or df.empty or "result" not in df.columns:
+        return pd.Series(False, index=df.index if df is not None else None, dtype=bool)
+    return df["result"].astype(str).str.strip().str.upper().isin(
+        {"WIN", "WON", "LOSE", "LOSS", "LOST", "PUSH", "VOID"}
+    )
 
 
 def _smart_group_table(df: pd.DataFrame, group_col: str, label: str, limit: int = 15) -> None:
@@ -1497,15 +1594,25 @@ def _smart_group_table(df: pd.DataFrame, group_col: str, label: str, limit: int 
     work[group_col] = work[group_col].astype(str).replace({"": "-", "nan": "-"})
     win = _win_mask(work)
     work["_win"] = win.astype(int) if len(win) else 0
-    work["_profit"] = pd.to_numeric(work.get("profit", 0), errors="coerce").fillna(0)
-    work["_roi"] = pd.to_numeric(work.get("roi", 0), errors="coerce").fillna(0)
+    work["_settled"] = _settled_mask(work).astype(int)
+    work["_profit"] = (
+        pd.to_numeric(work["profit"], errors="coerce").fillna(0)
+        if "profit" in work.columns
+        else pd.Series(0.0, index=work.index, dtype=float)
+    )
+    work["_roi"] = (
+        pd.to_numeric(work["roi"], errors="coerce").fillna(0)
+        if "roi" in work.columns
+        else pd.Series(0.0, index=work.index, dtype=float)
+    )
     grouped = work.groupby(group_col, dropna=False).agg(
         typy=(group_col, "count"),
+        rozliczone=("_settled", "sum"),
         wygrane=("_win", "sum"),
         profit=("_profit", "sum"),
         roi=("_roi", "mean"),
     ).reset_index()
-    grouped["trafnosc_%"] = (grouped["wygrane"] / grouped["typy"].replace(0, pd.NA) * 100).fillna(0).round(2)
+    grouped["trafnosc_%"] = (grouped["wygrane"] / grouped["rozliczone"].replace(0, pd.NA) * 100).fillna(0).round(2)
     grouped = grouped.sort_values(["trafnosc_%", "typy", "profit"], ascending=[False, False, False]).head(limit)
     st.markdown(f'<div class="ka-panel"><h3>{html.escape(label)}</h3>{dataframe_html_table(grouped)}</div>', unsafe_allow_html=True)
 
@@ -1575,7 +1682,7 @@ def render_ai(picks: pd.DataFrame, results: pd.DataFrame, low_picks: pd.DataFram
         ("AI niskie ryzyko", str(len(low_picks)), "1.00-3.50"),
         ("AI podwyższone ryzyko", str(len(risk_picks)), "1.00-5.00"),
         ("Średni wynik AI", f"{as_float(numeric_series(all_ai, 'ai_pick_score').mean(), as_float(numeric_series(all_ai, 'confidence').mean(), 0)):.2f}", "model"),
-        ("Rozliczone", str(len(results)), "historia"),
+        ("Rozliczone", str(int(_settled_mask(results).sum())), "historia"),
     ])
     ai_tabs = st.tabs(["AI", "AI niskie ryzyko", "AI podwyższone ryzyko"])
     datasets = [
@@ -1596,13 +1703,26 @@ def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALIT
     title(heading)
     src = _result_source(results, picks)
     win = _win_mask(src)
-    winrate = (float(win.mean()) * 100) if len(win) else 0.0
+    settled = _settled_mask(src)
+    settled_count = int(settled.sum()) if len(settled) else 0
+    winrate = (float(win[settled].mean()) * 100) if settled_count else 0.0
+    learning_paths = [
+        DATA_DIR / "ai_learning" / "ai_feature_store.csv",
+        DATA_DIR / "ai_learning_low" / "ai_feature_store.csv",
+        DATA_DIR / "ai_learning_risk" / "ai_feature_store.csv",
+        DATA_DIR / "ai_learning" / "ai_learning_events.csv",
+        DATA_DIR / "ai_learning_low" / "ai_learning_events.csv",
+        DATA_DIR / "ai_learning_risk" / "ai_learning_events.csv",
+        DATA_DIR / "history" / "learning_feature_store.csv",
+        DATA_DIR / "history" / "learning_events.csv",
+    ]
+    learning_count = sum(len(read_csv_safe(path)) for path in learning_paths)
     metrics([
         ("Zebrane rekordy", str(len(src)), "historia + picks"),
         ("Trafność", f"{winrate:.2f}%", "rozliczone"),
         ("Profit", money(numeric_series(src, 'profit').sum() if not src.empty else 0), "suma"),
         ("ROI", f"{as_float(numeric_series(src, 'roi').mean(), 0):+.2f}%", "średnio"),
-        ("Baza nauki", str(len(read_csv_safe(DATA_DIR / 'history' / 'learning_events.csv'))), "zdarzenia uczenia"),
+        ("Baza nauki", str(learning_count), "wszystkie zapisane rekordy"),
     ])
     st.markdown('<div class="ka-panel"><h3>Centrum decyzyjne bota</h3><p class="ka-sub">Tabele aktualizują się wraz z historią, rozliczeniami i plikami uczenia zapisanymi przez bota.</p></div>', unsafe_allow_html=True)
     col1, col2 = st.columns(2)
@@ -1617,7 +1737,7 @@ def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALIT
         _smart_group_table(src, "source" if "source" in src.columns else "status", "Źródło/status vs wynik")
     st.markdown("#### Czego bot już się nauczył")
     learning_frames = []
-    for path in [DATA_DIR / "ai_learning" / "ai_feature_store.csv", DATA_DIR / "history" / "learning_feature_store.csv", DATA_DIR / "history" / "learning_events.csv"]:
+    for path in learning_paths:
         df = read_csv_safe(path)
         if not df.empty:
             df["plik"] = path.name
@@ -1629,20 +1749,22 @@ def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALIT
 def render_history(results: pd.DataFrame) -> None:
     page_banner("Historia wyników", "HISTORIA", "Profesjonalna historia wyników, pomagająca podejmować decyzje i uczyć się na danych.")
     title("HISTORIA")
-    wins = "0"
-    if not results.empty and "result" in results.columns:
-        wins = str((results["result"].astype(str).str.lower().str.contains("win|wygr|won|1", regex=True)).sum())
+    win_mask = _win_mask(results)
+    wins = str(int(win_mask.sum())) if len(win_mask) else "0"
+    settled_mask = _settled_mask(results)
+    settled_count = int(settled_mask.sum()) if len(settled_mask) else 0
+    open_count = int(len(results) - settled_count)
     metrics([
         ("Rekordy", str(len(results)), "historia"),
+        ("Rozliczone", str(settled_count), "wyniki końcowe"),
         ("Wygrane", wins, "trafione"),
         ("Profit", money(numeric_series(results, 'profit').sum() if not results.empty else 0), "suma"),
-        ("ROI", f"{as_float(numeric_series(results, 'roi').mean(), 0):+.2f}%", "średnio"),
-        ("Otwarte", str((results.get('status', pd.Series(dtype=str)).astype(str).str.upper() == 'OPEN').sum()) if not results.empty and 'status' in results.columns else "0", "do rozliczenia"),
+        ("Otwarte", str(open_count), "oczekują na wynik"),
     ])
     hist_tabs = st.tabs(["Tabela", "Ligi", "Typy", "Decyzyjność"])
     with hist_tabs[0]:
         subpage_banner("Historia", "Tabela", "Pełna tabela rozliczeń i rekordów historii.")
-        _decision_table(results, ["created_at", "updated_at", "match_date", "league", "match_name", "match", "market", "bet_name", "odds", "confidence", "edge", "ev", "stake", "status", "result", "profit", "roi", "score"], "Brak historii.")
+        _decision_table(results, ["created_at", "updated_at", "match_date", "league", "match_name", "match", "market", "bet_name", "odds", "confidence", "edge", "ev", "stake", "status", "result", "profit", "roi", "score", "record_source"], "Brak historii.")
     with hist_tabs[1]:
         subpage_banner("Historia", "Ligi", "Skuteczność i zysk według lig.")
         _smart_group_table(results, "league" if "league" in results.columns else "liga", "Historia według lig")
@@ -1651,7 +1773,11 @@ def render_history(results: pd.DataFrame) -> None:
         _smart_group_table(results, "market" if "market" in results.columns else "typ", "Historia według typu zakładu")
     with hist_tabs[3]:
         subpage_banner("Historia", "Decyzyjność", "Najlepsze rekordy do nauki i decyzji.")
-        _decision_table(results.sort_values(by=[c for c in ["roi", "profit", "confidence"] if c in results.columns], ascending=False).head(100) if not results.empty else results, ["league", "match_name", "match", "market", "odds", "confidence", "edge", "ev", "result", "profit", "roi"], "Brak danych decyzyjnych.")
+        settled = results.loc[settled_mask].copy() if not results.empty and len(settled_mask) else pd.DataFrame()
+        sort_columns = [c for c in ["roi", "profit", "confidence"] if c in settled.columns]
+        if not settled.empty and sort_columns:
+            settled = settled.sort_values(by=sort_columns, ascending=False)
+        _decision_table(settled.head(100), ["league", "match_name", "match", "market", "odds", "confidence", "edge", "ev", "result", "profit", "roi", "record_source"], f"Brak rozliczonych danych decyzyjnych. Zapisane i oczekujące rekordy: {open_count}.")
 
 
 def render_ranking(picks: pd.DataFrame, results: pd.DataFrame) -> None:
@@ -1971,4 +2097,3 @@ with tabs[5]: render_manual_betting(raw_picks, low_picks, risk_picks)
 with tabs[6]: render_ranking(picks, results)
 with tabs[7]: render_gpt_professional(picks, low_picks, risk_picks, live, results)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
-

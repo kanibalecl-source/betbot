@@ -358,11 +358,19 @@ def get_odds_market_data(match):
 
         for row in rows:
             key = row["market"]
-            if key not in markets or row["odds"] > markets[key]["best_odds"]:
-                markets[key] = {
-                    "best_odds": row["odds"],
-                    "bookmaker": row["bookmaker"]
-                }
+            item = markets.setdefault(key, {
+                "best_odds": None,
+                "bookmaker": "",
+                "all_odds": [],
+                "by_bookmaker": {},
+            })
+            item["all_odds"].append(row["odds"])
+            # Keep the exact outcome price per bookmaker. This allows margin
+            # checks only on complete, internally consistent market books.
+            item["by_bookmaker"][row["bookmaker"]] = row["odds"]
+            if item["best_odds"] is None or row["odds"] > item["best_odds"]:
+                item["best_odds"] = row["odds"]
+                item["bookmaker"] = row["bookmaker"]
 
         if markets:
             print(f"ODDS MARKETS: {sorted(list(markets.keys()))}")
@@ -407,4 +415,3 @@ if __name__ == "__main__":
 
     print(f"FINAL MATCHES: {len(matches)}")
     print(matches[:3])
-

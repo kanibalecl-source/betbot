@@ -9,7 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-DATA_DIR = BASE_DIR / "data"
+try:
+    from storage_paths import DATA_DIR
+except ImportError:
+    DATA_DIR = BASE_DIR / "data"
 HISTORY_DIR = Path(os.getenv("KANIBAL_HISTORY_DIR", str(DATA_DIR / "history")))
 
 
@@ -66,13 +69,9 @@ def append_csv(stream: str, event: Dict[str, Any]) -> None:
 
 
 def append_event(stream: str, payload: Dict[str, Any] | None = None, source: str = "") -> None:
-    try:
-        event = _envelope(stream, payload or {}, source=source)
-        append_jsonl(stream, event)
-        append_csv(stream, event)
-    except Exception:
-        # Historia nigdy nie mo?e wywr?ci? logiki bota.
-        pass
+    event = _envelope(stream, payload or {}, source=source)
+    append_jsonl(stream, event)
+    append_csv(stream, event)
 
 
 def append_records(stream: str, records: Iterable[Dict[str, Any]], source: str = "") -> int:

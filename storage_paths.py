@@ -41,7 +41,39 @@ def get_data_dir() -> Path:
 DATA_DIR = get_data_dir()
 
 
+def persistent_storage_configured() -> bool:
+    """Return True only when data lives outside the deploy directory."""
+    configured = any(
+        os.getenv(name, "").strip()
+        for name in ("KANIBAL_DATA_DIR", "PERSISTENT_DATA_DIR", "RAILWAY_VOLUME_MOUNT_PATH")
+    )
+    return configured and DATA_DIR.resolve() != (BASE_DIR / "data").resolve()
+
+
+def require_persistent_storage_on_server() -> None:
+    """Fail closed on a server that has no mounted persistent data directory."""
+    is_server = any(
+        os.getenv(name, "").strip()
+        for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "KANIBAL_SERVER_MODE")
+    )
+    strict = os.getenv("KANIBAL_REQUIRE_PERSISTENT_STORAGE", "1").strip().lower() not in {
+        "0", "false", "no", "off"
+    }
+    if is_server and strict and not persistent_storage_configured():
+        raise RuntimeError(
+            "Brak trwałego katalogu danych. Podłącz Railway Volume i ustaw "
+            "PERSISTENT_DATA_DIR/RAILWAY_VOLUME_MOUNT_PATH; start został zatrzymany, "
+            "aby historia i nauka nie zniknęły po redeployu."
+        )
+
+
 def migrate_local_data_once() -> None:
+    # A server deploy must never seed or merge its mounted Volume from files
+    # bundled with application code. Server history is authoritative.
+    if any(os.getenv(name, "").strip() for name in (
+        "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "KANIBAL_SERVER_MODE"
+    )):
+        return
     local_data = BASE_DIR / "data"
     target = DATA_DIR
     if local_data.resolve() == target.resolve() or not local_data.exists():
@@ -65,3 +97,10 @@ def migrate_local_data_once() -> None:
 
 
 migrate_local_data_once()
+
+try:
+    from legacy_data_migration import migrate_discovered_legacy_data
+
+    LEGACY_MIGRATION_SUMMARY = migrate_discovered_legacy_data(BASE_DIR, DATA_DIR)
+except Exception as exc:
+    LEGACY_MIGRATION_SUMMARY = {"status": "ERROR", "error": str(exc)}

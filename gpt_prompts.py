@@ -4,177 +4,169 @@ import json
 from typing import Any, Dict
 
 
+def _first(source: Dict[str, Any], *names: str, default: str = "") -> str:
+    for name in names:
+        value = source.get(name)
+        if value not in (None, ""):
+            return str(value)
+    return default
+
+
 def build_hidden_match_analysis_prompt(item: Dict[str, Any]) -> str:
-    """Hidden GPT prompt for automatic per-match analysis."""
-    payload = {
+    """Build the hidden prompt executed for one match after clicking Analyze."""
+    source_row = item.get("source_row") if isinstance(item.get("source_row"), dict) else {}
+    match = _first(item, "match", default=_first(source_row, "match", "mecz", default="brak danych"))
+    league = _first(item, "league", default=_first(source_row, "league", "liga", default="brak danych"))
+    kickoff = _first(item, "time", default=_first(source_row, "match_date", "date", "kickoff", default="brak danych"))
+    venue = _first(source_row, "stadium", "venue", "miejsce", default="brak potwierdzonych danych")
+
+    system_context = {
         "profil_ryzyka": item.get("profile", "prematch"),
-        "liga": item.get("league", ""),
-        "mecz": item.get("match", ""),
-        "termin": item.get("time", ""),
         "typ_bota": item.get("bet", ""),
         "kurs": item.get("odds", ""),
-        "dane_bota": item.get("source_row", {}),
+        "dane_bota": source_row,
     }
+
     return f"""
-Jesteś profesjonalnym analitykiem piłkarskim i ekspertem od oceny typów bukmacherskich. Twoim zadaniem jest wykonanie ultra dokładnej, obiektywnej i wieloźródłowej analizy meczów piłkarskich pod kątem typów bukmacherskich wygenerowanych wcześniej przez bota.
+Przygotuj profesjonalną, niezależną analizę meczu piłkarskiego:
 
-Analiza ma dotyczyć konkretnego meczu oraz każdej drużyny biorącej udział w danym spotkaniu. Ten prompt działa automatycznie dla pojedynczego typu bota, dlatego nie twórz typów spoza analizowanego meczu i nie zmieniaj głównej logiki bota.
+Mecz: {match}
+Rozgrywki: {league}
+Data i godzina: {kickoff}
+Miejsce: {venue}
+Cel analizy: ocena sportowa oraz oszacowanie prawdopodobieństwa wyników.
 
-Dane wejściowe:
-{json.dumps(payload, ensure_ascii=False, default=str)}
+Przeprowadź aktualne badanie internetu. Wszystkie dane sprawdź na moment
+sporządzania raportu. Preferuj źródła pierwotne i wiarygodne: oficjalne
+strony ligi, klubów i federacji, komunikaty dotyczące składów oraz uznane
+serwisy statystyczne.
 
-Korzystaj z możliwie aktualnych danych i statystyk z następujących źródeł, jeśli masz do nich dostęp:
-- https://footystats.org/
-- https://www.soccerstats.com/
-- https://www.statbunker.com/
-- https://www.sofascore.com/
-- https://www.fotmob.com/
-- https://fbref.com/
-- https://www.transfermarkt.com/
-- https://int.soccerway.com/
-- https://www.worldfootball.net/
-- https://www.flashscore.com/football/
+Zbadaj:
 
-Nie opieraj analizy na jednym źródle. Porównuj dane między serwisami, a gdy występują rozbieżności, zaznacz je i oceń, które dane są bardziej wiarygodne. Jeżeli brakuje danych, napisz jasno, których danych brakuje i jak wpływa to na pewność analizy. Nie zgaduj.
+1. Formę obu drużyn:
+   - ostatnie 10 spotkań;
+   - osobno mecze domowe i wyjazdowe;
+   - siłę przeciwników;
+   - wyniki, bramki, xG i xGA.
 
-1. Analiza meczu
+2. Statystyki:
+   - strzały i strzały celne;
+   - duże okazje;
+   - posiadanie piłki;
+   - stałe fragmenty;
+   - PPDA lub inne dane dotyczące pressingu;
+   - gole oczekiwane z gry i ze stałych fragmentów;
+   - częstotliwość BTTS oraz over/under 1,5, 2,5 i 3,5 gola.
 
-Dla spotkania przeanalizuj:
-- aktualną formę obu drużyn,
-- 5 ostatnich meczów każdej drużyny osobno,
-- 5 ostatnich meczów w obecnym sezonie, jeśli są dostępne,
-- wyniki u siebie i na wyjeździe,
-- średnią liczbę strzelanych bramek,
-- średnią liczbę traconych bramek,
-- xG,
-- xGA,
-- jakość tworzonych sytuacji,
-- jakość dopuszczanych sytuacji,
-- liczbę strzałów,
-- strzały celne,
-- posiadanie piłki,
-- tempo gry,
-- styl gry obu drużyn,
-- skuteczność ofensywną,
-- stabilność defensywną,
-- stałe fragmenty gry,
-- kartki,
-- kontuzje,
-- zawieszenia,
-- możliwe rotacje,
-- przewidywane składy,
-- atmosferę w drużynie,
-- znaczenie meczu dla obu zespołów,
-- motywację,
-- sytuację w tabeli,
-- terminarz i możliwe zmęczenie,
-- bezpośrednie mecze H2H, ale nie traktuj ich jako najważniejszego czynnika.
+3. Sytuację kadrową:
+   - potwierdzone kontuzje i zawieszenia;
+   - zawodników niepewnych występu;
+   - przewidywane składy;
+   - możliwą rotację;
+   - znaczenie brakujących piłkarzy.
+   Wyraźnie oddziel informacje potwierdzone od przypuszczeń.
 
-2. Charakterystyka ligi i rozgrywek
+4. Taktykę:
+   - prawdopodobne ustawienia;
+   - styl gry;
+   - pressing, budowanie ataku i obronę przejściową;
+   - słabe i mocne strony;
+   - najważniejsze pojedynki pozycyjne;
+   - wzajemne dopasowanie stylów.
 
-Oceń, czy dana liga lub rozgrywki mają charakter:
-- overowy,
-- underowy,
-- wyrównany,
-- ofensywny,
-- defensywny,
-- chaotyczny,
-- mocno zależny od gospodarzy,
-- podatny na niespodzianki.
+5. Czynniki zewnętrzne:
+   - odpoczynek od poprzedniego meczu;
+   - napięcie terminarza i podróże;
+   - pogodę i stan boiska;
+   - znaczenie spotkania oraz motywację;
+   - sędziego i jego aktualne statystyki, jeżeli są wiarygodnie dostępne.
 
-Uwzględnij średnią liczbę bramek w lidze, częstotliwość wyników over/under, BTTS, czyste konta, dominujące trendy oraz specyfikę danej ligi.
+6. Bezpośrednie spotkania:
+   - uwzględnij tylko te mecze, które nadal mają znaczenie;
+   - nie przeceniaj starych wyników po zmianach trenerów lub składów.
 
-Jeżeli jest to mecz ligowy, oceń wagę spotkania:
-- czy drużyna walczy o mistrzostwo,
-- europejskie puchary,
-- awans,
-- utrzymanie,
-- baraże,
-- środek tabeli,
-- czy mecz ma niską, średnią czy wysoką stawkę.
+Zasady:
 
-Jeżeli jest to mecz pucharowy, barażowy lub rewanżowy, oceń:
-- charakter takich spotkań w danej lidze,
-- czy zwykle są ofensywne czy defensywne,
-- czy pada dużo bramek,
-- czy zespoły grają ostrożniej,
-- wpływ pierwszego meczu, jeśli dotyczy,
-- możliwe dogrywki, rzuty karne lub kalkulację wyniku.
+- Nie wymyślaj żadnych danych.
+- Każdą istotną aktualną informację opatrz linkiem do źródła.
+- Podaj datę i godzinę dostępu do danych.
+- Przy sprzecznych danych pokaż rozbieżności i oceń wiarygodność źródeł.
+- Wskaż dane niedostępne albo niepewne.
+- Nie wyciągaj wniosków wyłącznie z tabeli ligowej lub wyników H2H.
+- Oddziel fakty, własne wnioski i prognozy.
+- Nie traktuj kursów bukmacherskich jako dowodu sportowego.
 
-3. Ocena typu wygenerowanego przez bota
+Na końcu przedstaw:
 
-Dla meczu oceń typ bota:
-- czy typ jest logiczny,
-- czy ma pokrycie w danych,
-- czy kurs jest adekwatny do ryzyka,
-- czy typ ma value,
-- jakie są największe argumenty za typem,
-- jakie są największe argumenty przeciw typowi,
-- jakie czynniki mogą zepsuć ten typ,
-- jak oceniasz prawdopodobieństwo powodzenia typu.
+A. Krótkie podsumowanie najważniejszych faktów.
+B. Mocne i słabe strony obu zespołów.
+C. Trzy najbardziej prawdopodobne scenariusze meczu.
+D. Prawdopodobieństwa:
+   - wygrana gospodarzy;
+   - remis;
+   - wygrana gości;
+   - over/under 2,5 gola;
+   - BTTS tak/nie.
+   W każdej parze wartości muszą sumować się do 100%.
+E. Trzy najbardziej prawdopodobne dokładne wyniki.
+F. Ocenę pewności prognozy w skali 1–10.
+G. Najważniejsze ryzyka, które mogą zmienić prognozę.
+H. Listę wykorzystanych źródeł wraz z oceną ich jakości.
 
-Nadaj typowi ocenę ryzyka:
-- Niskie ryzyko
-- Średnie ryzyko
-- Wysokie ryzyko
-- Bardzo wysokie ryzyko
+Jeżeli oficjalne składy nie zostały jeszcze ogłoszone, przygotuj analizę
+wstępną i napisz, które elementy trzeba ponownie sprawdzić 60–75 minut
+przed rozpoczęciem spotkania.
 
-Nadaj też ocenę jakości typu w skali 1-10.
+Dodatkowy kontekst przekazany przez system:
+{json.dumps(system_context, ensure_ascii=False, default=str)}
 
-4. Propozycja zmiany typu
-
-Jeżeli uznasz, że typ bota jest słaby, ryzykowny lub nieopłacalny, zaproponuj lepszą alternatywę dla tego samego meczu.
-
-Możesz zaproponować:
-- over/under bramek,
-- BTTS,
-- 1X2,
-- podwójną szansę,
-- handicap,
-- draw no bet,
-- gole drużyny,
-- rzuty rożne,
-- kartki,
-- typ bezpieczniejszy,
-- typ o lepszym value.
-
-Każdą zmianę dokładnie uzasadnij. Wyjaśnij, dlaczego nowy typ jest lepszy od typu bota.
-
-5. Zasady jakości analizy
-
-Analiza ma być konkretna, statystyczna i profesjonalna. Nie pisz ogólników typu "drużyna jest w dobrej formie", jeśli nie podasz danych, wyników lub argumentów.
-
-Nie zakładaj, że typ bota jest poprawny. Traktuj go jako hipotezę do sprawdzenia.
-
-Nie obiecuj pewnej wygranej. Każdy typ oceniaj jako decyzję probabilistyczną.
-
-Celem jest znalezienie najlepszej możliwej oceny typu na podstawie danych, formy, kontekstu meczu, stylu drużyn i ryzyka bukmacherskiego.
-
-6. Format wyniku dla bota
-
-Zwróć WYŁĄCZNIE poprawny JSON, bez markdown. JSON musi dać się sparsować automatycznie:
+Wymóg techniczny panelu: zwróć WYŁĄCZNIE poprawny JSON bez markdownu.
+Nie pomijaj wymaganych wyżej sekcji A–H. Użyj dokładnie tej struktury:
 {{
   "decision": "PLAY albo WATCH albo SKIP",
   "confidence": 0,
   "value_score": 0,
   "risk": "low albo medium albo high albo very_high",
   "quality_score": 0,
-  "main_reason": "jednozdaniowy główny powód decyzji po polsku",
-  "summary": "krótkie podsumowanie po polsku",
+  "main_reason": "jednozdaniowy główny wniosek po polsku",
+  "summary": "sekcja A: krótkie podsumowanie najważniejszych faktów",
   "analysis": {{
-    "najwazniejsze_dane": "konkretne dane i wnioski, bez ogólników",
-    "forma": "forma obu drużyn",
-    "styl_matchup": "styl gry i dopasowanie drużyn",
-    "liga_rozgrywki": "charakterystyka ligi lub rozgrywek",
-    "kontuzje_kadra": "kontuzje, zawieszenia, rotacje, składy lub brak danych",
-    "motywacja_atmosfera": "motywacja, tabela, terminarz, znaczenie meczu",
-    "value_kurs": "ocena kursu i value",
-    "argumenty_za": "najważniejsze argumenty za typem",
-    "argumenty_przeciw": "najważniejsze argumenty przeciw typowi",
-    "ryzyka": "co może zepsuć typ",
-    "dopasowanie_profilu": "czy typ pasuje do profilu ryzyka",
+    "najwazniejsze_dane": "zweryfikowane fakty z linkami do źródeł",
+    "forma": "forma obu drużyn z ostatnich 10 spotkań",
+    "statystyki": "xG, xGA, strzały, duże okazje, posiadanie, PPDA i trendy bramkowe",
+    "kontuzje_kadra": "potwierdzone braki, niepewni zawodnicy, składy i rotacje",
+    "styl_matchup": "taktyka, ustawienia i dopasowanie stylów",
+    "czynniki_zewnetrzne": "odpoczynek, terminarz, podróże, pogoda, boisko i sędzia",
+    "h2h": "wyłącznie nadal istotne bezpośrednie spotkania",
+    "mocne_slabe_strony": "sekcja B dla obu zespołów",
+    "scenariusze": ["scenariusz 1", "scenariusz 2", "scenariusz 3"],
+    "prawdopodobienstwa": {{
+      "wygrana_gospodarzy": 0,
+      "remis": 0,
+      "wygrana_gosci": 0,
+      "over_2_5": 0,
+      "under_2_5": 0,
+      "btts_tak": 0,
+      "btts_nie": 0
+    }},
+    "dokladne_wyniki": ["wynik 1", "wynik 2", "wynik 3"],
+    "pewnosc_1_10": 0,
+    "ryzyka": "sekcja G: czynniki mogące zmienić prognozę",
+    "elementy_do_sprawdzenia": "co sprawdzić ponownie 60–75 minut przed meczem",
+    "zrodla": [
+      {{"nazwa": "źródło", "url": "https://...", "jakosc": "wysoka/średnia/niska", "dostep": "data i godzina"}}
+    ],
+    "value_kurs": "kurs oceniaj dopiero po analizie sportowej; nie traktuj go jako dowodu",
+    "argumenty_za": "najważniejsze argumenty za typem systemu",
+    "argumenty_przeciw": "najważniejsze argumenty przeciw typowi systemu",
     "alternatywa": "lepsza alternatywa dla tego meczu albo brak",
     "rekomendacja": "końcowa rekomendacja po polsku"
   }}
 }}
+
+Warunki walidacji liczb:
+- wygrana_gospodarzy + remis + wygrana_gosci = 100;
+- over_2_5 + under_2_5 = 100;
+- btts_tak + btts_nie = 100;
+- confidence i value_score podaj w skali 0–100, a pewnosc_1_10 w skali 1–10.
 """.strip()

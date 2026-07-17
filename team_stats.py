@@ -1,7 +1,9 @@
+import math
+import os
 import requests
 import time
 
-API_KEY = "5fa34697895a8e2dc8a46e91bcd6dc81"
+API_KEY = os.getenv("API_FOOTBALL_KEY", "").strip()
 BASE_URL = "https://v3.football.api-sports.io"
 
 HEADERS = {
@@ -9,8 +11,12 @@ HEADERS = {
 }
 
 CACHE = {}
+MIN_COMPLETED_MATCHES = 5
+FINISHED_STATUSES = {"FT", "AET", "PEN"}
 
 def safe_request(url, params):
+    if not API_KEY:
+        return None
     for _ in range(3):
         try:
             r = requests.get(url, headers=HEADERS, params=params, timeout=15)
@@ -46,7 +52,7 @@ def calculate_team_strength(team_id, league_id):
     matches = get_last_matches(team_id, league_id)
 
     if not matches:
-        return 1.2, 1.2
+        return None
 
     goals_for = 0
     goals_against = 0
@@ -54,6 +60,9 @@ def calculate_team_strength(team_id, league_id):
 
     for m in matches:
         try:
+            status = str(m.get("fixture", {}).get("status", {}).get("short") or "").upper()
+            if status not in FINISHED_STATUSES:
+                continue
             h_id = m["teams"]["home"]["id"]
             a_id = m["teams"]["away"]["id"]
             h = m["goals"]["home"]
@@ -73,13 +82,13 @@ def calculate_team_strength(team_id, league_id):
         except:
             continue
 
-    if games == 0:
-        return 1.2, 1.2
+    if games < MIN_COMPLETED_MATCHES:
+        return None
 
     attack = goals_for / games
     defense = goals_against / games
 
-    return attack, defense
+    return attack, defense, games
 
 
 def get_match_xg(match):
@@ -90,21 +99,23 @@ def get_match_xg(match):
     if not home_id or not away_id or not league_id:
         return None, None
 
-    h_att, h_def = calculate_team_strength(home_id, league_id)
-    a_att, a_def = calculate_team_strength(away_id, league_id)
+    home_stats = calculate_team_strength(home_id, league_id)
+    away_stats = calculate_team_strength(away_id, league_id)
+    if home_stats is None or away_stats is None:
+        return None, None
+    h_att, h_def, h_games = home_stats
+    a_att, a_def, a_games = away_stats
+    if h_games <= 0 or a_games <= 0:
+        return None, None
 
-    league_avg = 1.35
+    # Wyłącznie średnie z rzeczywistych zakończonych meczów; bez stałej ligowej
+    # i bez domyślnej przewagi gospodarza.
+    home_xg = (h_att + a_def) / 2
+    away_xg = (a_att + h_def) / 2
 
-    # NORMALIZACJA
-    h_att_n = h_att / league_avg
-    h_def_n = h_def / league_avg
-    a_att_n = a_att / league_avg
-    a_def_n = a_def / league_avg
+    if not math.isfinite(home_xg) or not math.isfinite(away_xg):
+        return None, None
+    if home_xg < 0 or away_xg < 0:
+        return None, None
 
-    home_xg = league_avg * h_att_n * a_def_n * 1.08
-    away_xg = league_avg * a_att_n * h_def_n
-
-    home_xg = round(min(max(home_xg, 0.3), 4.2), 2)
-    away_xg = round(min(max(away_xg, 0.3), 4.2), 2)
-
-    return home_xg, away_xg
+    return round(home_xg, 4), round(away_xg, 4)

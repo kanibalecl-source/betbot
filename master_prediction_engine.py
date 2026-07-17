@@ -129,7 +129,7 @@ class MasterPredictionEngine:
             raw_probability = _to_float(
                 _first(
                     match,
-                    ["probability", "prawd_final", "prawd_model", "confidence", "conf"],
+                    ["probability", "prawd_final", "prawd_model"],
                     "0"
                 ),
                 0
@@ -138,11 +138,13 @@ class MasterPredictionEngine:
             if raw_probability > 1:
                 raw_probability = raw_probability / 100
 
-            if raw_probability <= 0 and self.xg_engine and (home_xg > 0 or away_xg > 0):
-                raw_probability = self.xg_engine.calculate_probability(home_xg, away_xg)
-
             if raw_probability <= 0:
-                raw_probability = 0.50
+                return {
+                    **dict(match), "probability": None, "fair_odds": None,
+                    "confidence": 0, "ev": None, "filter_status": "REJECTED",
+                    "filter_reason": "MISSING_VERIFIED_MARKET_PROBABILITY",
+                    "probability_source": "NO_DATA",
+                }
 
             # ETAP 2 — Tempo
             shots_on_target = _to_float(_first(match, ["shots_on_target", "sot"], "0"), 0)
@@ -197,7 +199,16 @@ class MasterPredictionEngine:
             if self.confidence_engine:
                 calibrated_probability = self.confidence_engine.calibrate(ensemble_probability)
 
-            final_probability = max(0.03, min(0.97, float(calibrated_probability)))
+            # Own odds cannot use bookmaker prices or untrained fixed
+            # calibration. Preserve the verified market-model input exactly.
+            if raw_probability >= 1:
+                return {
+                    **dict(match), "probability": None, "fair_odds": None,
+                    "confidence": 0, "ev": None, "filter_status": "REJECTED",
+                    "filter_reason": "INVALID_MARKET_PROBABILITY",
+                    "probability_source": "INVALID_DATA",
+                }
+            final_probability = float(raw_probability)
             confidence_percent = round(final_probability * 100, 2)
 
             # Fair odds + EV
@@ -280,6 +291,9 @@ class MasterPredictionEngine:
                 "fair_odds": fair_odds,
                 "confidence": confidence_percent,
                 "probability": round(final_probability, 4),
+                "probability_source": "VERIFIED_INPUT_OR_MARKET_MODEL",
+                "bookmaker_used_in_own_odds": False,
+                "calibration_applied": False,
                 "ev": ev,
                 "tempo_score": tempo_score,
                 "tempo_level": tempo_level,

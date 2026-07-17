@@ -8,13 +8,14 @@ from typing import Any, Dict, Optional
 from advanced_calibration_analytics import AdvancedCalibrationAnalytics
 from ml_training_pipeline import MLTrainingPipeline
 from walk_forward_lab import WalkForwardLab
+from storage_paths import DATA_DIR
 
 
 class AutoRetrainingRuntime:
     """Nightly/periodic retraining runtime with state file and reports."""
 
-    def __init__(self, data_dir: str | Path = "data/enterprise", min_hours_between_runs: int = 12):
-        self.data_dir = Path(data_dir)
+    def __init__(self, data_dir: str | Path | None = None, min_hours_between_runs: int = 12):
+        self.data_dir = Path(data_dir) if data_dir is not None else DATA_DIR / "enterprise"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.state_path = self.data_dir / "auto_retraining_state.json"
         self.min_hours_between_runs = min_hours_between_runs

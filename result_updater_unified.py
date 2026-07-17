@@ -32,7 +32,13 @@ def fetch_result(fixture_id: str) -> Optional[Dict[str, Any]]:
     ag = g.get("goals", {}).get("away")
     if hg is None or ag is None:
         return None
-    return {"home_goals": int(hg), "away_goals": int(ag), "status": status}
+    return {
+        "home_goals": int(hg),
+        "away_goals": int(ag),
+        "status": status,
+        "fixture_id": str(fixture_id),
+        "source": "API_FOOTBALL",
+    }
 
 
 def evaluate_market(market: str, hg: int, ag: int) -> Optional[bool]:
@@ -68,6 +74,7 @@ def settle_stored_picks(limit: int = 200) -> Dict[str, int]:
     """, (limit,)).fetchall()
     checked = 0
     settled = 0
+    audit_events = []
     for row in rows:
         checked += 1
         try:
@@ -77,20 +84,42 @@ def settle_stored_picks(limit: int = 200) -> Dict[str, int]:
             won = evaluate_market(row["market"], res["home_goals"], res["away_goals"])
             if won is None:
                 continue
-            stake = float(row["stake"] or 1)
+            stake = float(row["stake"] or 0)
             odds = float(row["odds"] or 0)
+            if stake <= 0 or odds <= 1:
+                audit_events.append({
+                    "event_type": "settlement_skipped",
+                    "pick_key": row["pick_key"], "fixture_id": row["fixture_id"],
+                    "reason": "missing_real_stake_or_odds", "stake": stake, "odds": odds,
+                })
+                continue
             profit = stake * (odds - 1) if won else -stake
             roi = (profit / stake) * 100 if stake else 0
             result = "WIN" if won else "LOSE"
             c.execute("""
-                UPDATE picks_history SET updated_at=?, status='CLOSED', result=?, profit=?, roi=? WHERE id=?
-            """, (now_iso(), result, round(profit, 4), round(roi, 2), row["id"]))
+                UPDATE picks_history SET updated_at=?, status='CLOSED', result=?, profit=?, roi=?,
+                    home_goals=?, away_goals=?, result_score=?, settlement_source=?, settled_at=?
+                WHERE id=? AND status='OPEN'
+            """, (
+                now_iso(), result, round(profit, 4), round(roi, 2),
+                res["home_goals"], res["away_goals"],
+                f"{res['home_goals']}:{res['away_goals']}", res["source"], now_iso(), row["id"]
+            ))
+            audit_events.append({
+                "event_type": "pick_settled",
+                "pick_key": row["pick_key"], "fixture_id": row["fixture_id"],
+                "market": row["market"], "result": result,
+                "score": f"{res['home_goals']}:{res['away_goals']}", "source": res["source"],
+            })
             settled += 1
         except Exception as exc:
             log_event("settlement_error", {"id": row["id"], "error": str(exc)})
     c.commit()
     c.close()
     export_history_csv()
+    for event in audit_events:
+        event_type = event.pop("event_type", "settlement_audit")
+        log_event(event_type, event)
     log_event("settlement_cycle", {"checked": checked, "settled": settled})
     return {"checked": checked, "settled": settled, "skipped": 0}
 

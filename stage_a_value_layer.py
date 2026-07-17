@@ -15,11 +15,9 @@ class StageAValueLayer:
             betfair_odds=betfair_odds,
         )
 
-        adjusted_probability = self.league_profiles.adjust_probability(
-            probability=probability,
-            league_name=league,
-            market=market,
-        )
+        # Nie stosujemy ręcznie wpisanych profili lig jako rzekomych danych.
+        # Korekty ligi mogą pochodzić wyłącznie z rozliczonej historii.
+        adjusted_probability = float(probability)
 
         result = dict(pick)
         result.update({
@@ -27,6 +25,6 @@ class StageAValueLayer:
             "sharp_score": sharp_data["sharp_score"],
             "sharp_label": sharp_data["sharp_label"],
             "sharp_signals": sharp_data["sharp_signals"],
-            "league_profile_active": "YES",
+            "league_profile_active": "NO_UNVERIFIED_ADJUSTMENT",
         })
         return result

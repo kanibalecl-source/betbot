@@ -1,4 +1,5 @@
 from datetime import datetime, UTC
+from fastapi import HTTPException
 from app.core.config import get_settings
 from app.domain.schemas import PredictionInput, PredictionOutput
 
@@ -22,10 +23,17 @@ class PredictionService:
         })
         legacy = self.legacy_engine.process_match(raw) if self.legacy_engine else {}
 
-        probability = float(legacy.get("prawd_final") or legacy.get("probability") or payload.probability or 0.5)
+        probability_value = legacy.get("prawd_final") or legacy.get("probability") or payload.probability
+        if probability_value is None:
+            raise HTTPException(
+                status_code=422,
+                detail="Brak zweryfikowanego prawdopodobieństwa rynku; kurs bota nie został wyliczony.",
+            )
+        probability = float(probability_value)
         if probability > 1:
             probability /= 100
-        probability = max(0.01, min(0.99, probability))
+        if not 0 < probability < 1:
+            raise HTTPException(status_code=422, detail="Prawdopodobieństwo musi być w zakresie 0-1.")
 
         fair_odds = round(1 / probability, 3)
         edge = round((payload.odds * probability) - 1, 4)

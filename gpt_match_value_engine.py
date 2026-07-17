@@ -28,6 +28,7 @@ except Exception:
 
 REPORT_FILE = Path("data/gpt_analysis_report.json")
 CACHE_DIR = Path("cache/gpt_analysis")
+PROMPT_VERSION = "v2"
 try:
     from storage_paths import DATA_DIR as SHARED_DATA_DIR
 except Exception:
@@ -124,7 +125,7 @@ def _safe_name(text: str) -> str:
 
 def _cache_path(base_dir: Path, item: Dict[str, Any]) -> Path:
     profile = _safe_name(str(item.get("profile") or "prematch"))
-    return base_dir / CACHE_DIR / f"{profile}_{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
+    return base_dir / CACHE_DIR / f"{PROMPT_VERSION}_{profile}_{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
 
 
 def _load_cache(base_dir: Path, item: Dict[str, Any], ttl_seconds: int = 1800):
@@ -143,38 +144,6 @@ def _save_cache(base_dir: Path, item: Dict[str, Any], data: Dict[str, Any]):
     p = _cache_path(base_dir, item)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _prompt(item: Dict[str, Any]) -> str:
-    return f"""
-Jesteś profesjonalnym analitykiem zakładów sportowych. Oceń, czy wskazany zakład jest warty grania.
-
-Mecz: {item.get('match')}
-Liga: {item.get('league')}
-Termin: {item.get('time')}
-Typ zakładu: {item.get('bet')}
-Kurs: {item.get('odds')}
-
-Wykorzystaj aktualnie dostępne informacje z internetu: forma drużyn, styl gry, kontuzje, zawieszenia, rotacje, atmosfera w klubie, terminarz, motywacja, newsy, przewidywane składy, H2H i ryzyko pułapki bukmacherskiej.
-
-Zwróć WYŁĄCZNIE poprawny JSON bez markdown:
-{{
-  "decision": "PLAY albo SKIP",
-  "confidence": 0-100,
-  "value_score": 0-10,
-  "risk": "low albo medium albo high",
-  "summary": "krótka decyzja po polsku",
-  "analysis": {{
-    "forma": "opis po polsku",
-    "kontuzje_kadra": "opis po polsku",
-    "styl_matchup": "opis po polsku",
-    "motywacja_atmosfera": "opis po polsku",
-    "value_kurs": "opis po polsku",
-    "ryzyka": "opis po polsku",
-    "rekomendacja": "opis po polsku"
-  }}
-}}
-""".strip()
 
 
 def _prompt(item: Dict[str, Any]) -> str:
@@ -225,24 +194,11 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
         # Najpierw próbujemy z web search, bo użytkownik chce analizę formy, kontuzji i newsów.
         # Jeśli konto/model nie obsłuży web_search_preview, robimy drugi bezpieczny fallback bez narzędzia,
         # żeby zakładka GPT nie wywróciła całego dashboardu.
-        try:
-            response = client.responses.create(
-                model=model,
-                tools=[{"type": "web_search_preview"}],
-                input=prompt,
-            )
-        except Exception:
-            try:
-                response = client.responses.create(
-                    model=model,
-                    input=prompt,
-                )
-            except Exception:
-                fallback_model = os.getenv("GPT_ANALYSIS_FALLBACK_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
-                response = client.responses.create(
-                    model=fallback_model,
-                    input=prompt,
-                )
+        response = client.responses.create(
+            model=model,
+            tools=[{"type": "web_search_preview"}],
+            input=prompt,
+        )
 
         text = getattr(response, "output_text", "") or ""
         parsed = _parse_json(text)
@@ -259,6 +215,7 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
         data["quality_score"] = float(data.get("quality_score", 0) or 0)
         data["decision"] = str(data.get("decision", "SKIP")).upper()
         data["profile"] = str(item.get("profile") or "")
+        data["data_provenance"] = "OPENAI_WEB_SEARCH"
         _save_cache(base_dir, item, data)
         return data
     except Exception as e:

@@ -1,5 +1,6 @@
 ﻿from stage_a_value_layer import StageAValueLayer
 import argparse
+import math
 from stage_b_model_layer import StageBModelLayer
 from stage_c_meta_layer import StageCMetaLayer
 import json
@@ -255,7 +256,7 @@ def get_market_group(market):
     }
 
     # Double chance markets overlap, so standard margin sum is not meaningful.
-    # We do not use margin rejection for these; calculate_market_margin returns 1.0.
+    # We do not use a classic margin for these; the function returns None/N/A.
     if market in {"DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"}:
         return ["DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"]
 
@@ -264,43 +265,34 @@ def get_market_group(market):
 
 def calculate_market_margin(odds_dict, market):
     # Double chance outcomes overlap, therefore classic implied-probability margin
-    # is not suitable. Returning 1.0 prevents false rejection.
+    # is not suitable, so it is explicitly unavailable rather than invented.
     if market in {"DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"}:
-        return 1.0
+        return None
 
     group = get_market_group(market)
     if not group:
-        return 1.0
+        return None
 
-    probs = []
-
+    bookmaker_names = None
     for outcome in group:
-        data = odds_dict.get(outcome)
-        if not data:
-            continue
+        prices = (odds_dict.get(outcome) or {}).get("by_bookmaker") or {}
+        names = {name for name, odd in prices.items() if safe_float(odd, 0) > 1}
+        bookmaker_names = names if bookmaker_names is None else bookmaker_names & names
+    if not bookmaker_names:
+        return None
 
-        odd = data.get("best_odds")
-
-        if odd and odd > 1:
-            probs.append(1 / odd)
-
-    if len(probs) != len(group):
-        # Missing opposite side should not crash the bot.
-        # Use neutral margin so the pick can still be evaluated.
-        return 1.0
-
-    return sum(probs)
-
-
-def remove_margin(book_prob, margin_sum):
-    if not margin_sum or margin_sum <= 0:
-        return book_prob
-    return book_prob / margin_sum
-
-
-def blend_probability(model_prob, true_book_prob, model_weight, market_weight):
-    blended = (model_weight * model_prob) + (market_weight * true_book_prob)
-    return min(max(blended, 0.01), 0.99)
+    complete_margins = []
+    for bookmaker in bookmaker_names:
+        margin = sum(1 / float(odds_dict[outcome]["by_bookmaker"][bookmaker]) for outcome in group)
+        if math.isfinite(margin) and margin > 0:
+            complete_margins.append(margin)
+    if not complete_margins:
+        return None
+    complete_margins.sort()
+    middle = len(complete_margins) // 2
+    if len(complete_margins) % 2:
+        return complete_margins[middle]
+    return (complete_margins[middle - 1] + complete_margins[middle]) / 2
 
 
 def kelly_fraction(prob, odds):
@@ -321,7 +313,7 @@ def classify_risk(final_prob, edge, ev, margin_sum, thresholds):
             edge >= t["min_edge"]
             and ev >= t["min_ev"]
             and final_prob >= t["min_probability"]
-            and margin_sum <= t["max_margin_sum"]
+            and (margin_sum is None or margin_sum <= t["max_margin_sum"])
         ):
             return label.upper()
 
@@ -384,6 +376,23 @@ def clamp_probability(value):
         return 0.50
 
 
+def strict_probability(value):
+    """Validate a real model output; never manufacture a neutral 50%."""
+    try:
+        if value is None or str(value).strip() == "":
+            return None
+        probability = float(value)
+        if not math.isfinite(probability):
+            return None
+        if probability > 1:
+            probability /= 100
+        if probability <= 0 or probability >= 1:
+            return None
+        return probability
+    except (TypeError, ValueError):
+        return None
+
+
 def safe_float(value, default=0.0):
     try:
         if value in [None, ""]:
@@ -414,12 +423,15 @@ def build_stage_engines():
 
 
 def stage_tempo(engines, match, home_xg, away_xg):
-    pressure = safe_float(match.get("pressure"), 50)
-    momentum = safe_float(match.get("momentum"), 50)
+    required = ("shots_on_target", "dangerous_attacks", "possession", "pressure", "xg_live")
+    if not all(match.get(key) not in (None, "") for key in required):
+        return {"tempo_score": None, "tempo_level": "NO_DATA", "data_verified": False}, None, None
+    pressure = safe_float(match.get("pressure"), 0)
+    momentum = safe_float(match.get("momentum"), pressure)
     shots_on_target = safe_float(match.get("shots_on_target"), 0)
     dangerous_attacks = safe_float(match.get("dangerous_attacks"), 0)
-    possession = safe_float(match.get("possession"), 50)
-    xg_live = safe_float(match.get("xg_live"), (home_xg + away_xg) / 2)
+    possession = safe_float(match.get("possession"), 0)
+    xg_live = safe_float(match.get("xg_live"), 0)
 
     if engines["tempo"]:
         tempo = engines["tempo"].calculate_tempo(
@@ -437,6 +449,7 @@ def stage_tempo(engines, match, home_xg, away_xg):
             "tempo_level": level
         }
 
+    tempo["data_verified"] = True
     return tempo, pressure, momentum
 
 
@@ -454,62 +467,17 @@ def stage_probability(
     model_weight,
     market_weight
 ):
-    # Existing stable probability
-    blended_prob = blend_probability(
-        model_prob,
-        true_book_prob,
-        model_weight,
-        market_weight
-    )
-
-    # ETAP 3 â€” xG helper probability
-    xg_probability = None
-    if engines["xg"]:
-        try:
-            xg_probability = engines["xg"].calculate_probability(home_xg, away_xg)
-        except Exception:
-            xg_probability = None
-
-    # ETAP 5 â€” Bayesian LIVE adjustment
-    bayesian_probability = blended_prob
-    if engines["bayesian"]:
-        try:
-            bayesian_probability = engines["bayesian"].update_probability(
-                prematch_probability=blended_prob,
-                tempo_score=tempo_score,
-                pressure=pressure,
-                momentum=momentum
-            )
-        except Exception:
-            bayesian_probability = blended_prob
-
-    # ETAP 6 â€” Ensemble
-    ensemble_probability = bayesian_probability
-    if engines["ensemble"]:
-        try:
-            ensemble_probability = engines["ensemble"].combine_probabilities(
-                xg_probability=xg_probability,
-                market_probability=true_book_prob,
-                ml_probability=bayesian_probability
-            )
-        except Exception:
-            ensemble_probability = bayesian_probability
-
-    # ETAP 2 â€” calibration
-    calibrated_probability = ensemble_probability
-    if engines["confidence"]:
-        try:
-            calibrated_probability = engines["confidence"].calibrate(ensemble_probability)
-        except Exception:
-            calibrated_probability = ensemble_probability
-
-    final_probability = clamp_probability(calibrated_probability)
-
-    # Bookmaker odds protection: avoid irrational drift from calibration
-    # Final probability is blended 70% old stable model, 30% stage engine.
-    final_probability = clamp_probability((blended_prob * 0.70) + (final_probability * 0.30))
-
-    fair_odds_model = 1 / clamp_probability(model_prob)
+    # The bot's own probability must be independent of bookmaker odds. Until
+    # a calibration model has enough genuinely settled labels, no hand-written
+    # calibration, market blend or live-value fallback may alter this price.
+    final_probability = strict_probability(model_prob)
+    if final_probability is None:
+        return None
+    blended_prob = final_probability
+    xg_probability = final_probability
+    bayesian_probability = final_probability
+    ensemble_probability = final_probability
+    fair_odds_model = 1 / final_probability
     fair_odds_final = 1 / final_probability
 
     return {
@@ -519,7 +487,10 @@ def stage_probability(
         "ensemble_probability": ensemble_probability,
         "final_probability": final_probability,
         "fair_odds_model": fair_odds_model,
-        "fair_odds_final": fair_odds_final
+        "fair_odds_final": fair_odds_final,
+        "probability_source": "REAL_FINISHED_RESULTS_POISSON",
+        "bookmaker_used_in_own_odds": False,
+        "calibration_applied": False,
     }
 
 
@@ -751,16 +722,21 @@ def run_bot(mode="main"):
                 continue
 
             margin_sum = calculate_market_margin(odds_data, market)
-
-            if not margin_sum or margin_sum > filters["max_margin_sum"]:
+            # For ordinary exclusive-outcome markets a complete book from the
+            # same bookmaker is required. Double-chance outcomes overlap, so a
+            # classic overround does not exist and is intentionally N/A.
+            if market not in {"DOUBLE_1X", "DOUBLE_X2", "DOUBLE_12"} and (
+                margin_sum is None or margin_sum > filters["max_margin_sum"]
+            ):
                 skip_stats["margin"] += 1
                 continue
 
             book_prob = 1 / book_odds
-            true_book_prob = remove_margin(book_prob, margin_sum)
-
-            model_prob = clamp_probability(model_prob)
-            true_book_prob = clamp_probability(true_book_prob)
+            true_book_prob = strict_probability(book_prob)
+            model_prob = strict_probability(model_prob)
+            if model_prob is None or true_book_prob is None:
+                skip_stats["no_model_prob"] += 1
+                continue
 
             probability_data = stage_probability(
                 engines=engines,
@@ -776,6 +752,10 @@ def run_bot(mode="main"):
                 model_weight=model_weight,
                 market_weight=market_weight
             )
+
+            if probability_data is None:
+                skip_stats["no_model_prob"] += 1
+                continue
 
             final_prob = probability_data["final_probability"]
 
@@ -796,12 +776,12 @@ def run_bot(mode="main"):
                 probability=final_prob,
                 home_xg=home_xg,
                 away_xg=away_xg,
-                minute=match.get("minute", 0),
-                shots_on_target=match.get("shots_on_target", 0),
-                dangerous_attacks=match.get("dangerous_attacks", 0),
-                possession=match.get("possession", 50),
-                pressure=pressure,
-                corners=match.get("corners", 0),
+                minute=match.get("minute") if match.get("minute") not in (None, "") else 0,
+                shots_on_target=match.get("shots_on_target") if match.get("shots_on_target") not in (None, "") else 0,
+                dangerous_attacks=match.get("dangerous_attacks") if match.get("dangerous_attacks") not in (None, "") else 0,
+                possession=match.get("possession") if match.get("possession") not in (None, "") else 0,
+                pressure=pressure if pressure is not None else 0,
+                corners=match.get("corners") if match.get("corners") not in (None, "") else 0,
                 sharp_score=stage_a_data.get("sharp_score", 0),
                 clv_score=0
             )
@@ -809,7 +789,9 @@ def run_bot(mode="main"):
             fair_odds_model = probability_data["fair_odds_model"]
             fair_odds_final = probability_data["fair_odds_final"]
 
-            edge = (final_prob / true_book_prob) - 1
+            # Edge is the probability-point advantage over the exact offered
+            # price. EV remains the expected return per unit staked.
+            edge = final_prob - true_book_prob
             ev = stage_ev(engines, final_prob, book_odds)
 
             if edge < filters["min_edge"] or ev < filters["min_ev"] or edge > filters["max_edge"]:
@@ -865,8 +847,8 @@ def run_bot(mode="main"):
                 market=market,
                 model_prob=model_prob,
                 market_prob=true_book_prob,
-                xg_prob=stage_b_data.get("advanced_over25_prob"),
-                momentum_prob=stage_b_data.get("confidence_calibrated_v2"),
+                xg_prob=model_prob,
+                momentum_prob=final_prob,
                 sharp_prob=stage_a_data.get("stage_a_probability"),
                 base_stake=recommended_stake,
                 confidence=confidence_percent,
@@ -972,6 +954,11 @@ def run_bot(mode="main"):
                 "xg_probability": probability_data["xg_probability"],
                 "bayesian_probability": probability_data["bayesian_probability"],
                 "ensemble_probability": probability_data["ensemble_probability"],
+                "probability_source": probability_data["probability_source"],
+                "bookmaker_used_in_own_odds": probability_data["bookmaker_used_in_own_odds"],
+                "calibration_applied": probability_data["calibration_applied"],
+                "market_margin": round(margin_sum, 6) if margin_sum is not None else None,
+                "market_probability_kind": "RAW_IMPLIED_FROM_SELECTED_ODDS",
 
                 "edge": round(edge, 4),
                 "ev": round(ev, 4),
@@ -983,13 +970,20 @@ def run_bot(mode="main"):
                 "recommended_stake": recommended_stake,
                 "stake": recommended_stake,
 
+                # Legacy column names retained for compatibility. These values
+                # are empirical goal-rate inputs, not provider-supplied xG.
                 "home_xg": round(home_xg, 3),
                 "away_xg": round(away_xg, 3),
+                "home_goal_rate": round(home_xg, 3),
+                "away_goal_rate": round(away_xg, 3),
+                "model_input_kind": "EMPIRICAL_GOALS_FROM_FINISHED_MATCHES",
 
                 "tempo_score": tempo_score,
                 "tempo_level": tempo_level,
                 "pressure": pressure,
                 "momentum": momentum,
+                "tempo_data_verified": bool(tempo_data.get("data_verified", False)),
+                "data_provenance": "API_FOOTBALL_FIXTURES+API_FOOTBALL_ODDS+API_FOOTBALL_TEAM_RESULTS",
 
                 "market_movement": movement.get("movement_percent", 0),
                 "market_direction": movement.get("direction", "STABLE"),
@@ -1001,8 +995,8 @@ def run_bot(mode="main"):
                 "filter_status": "ACCEPTED",
                 "filter_reason": filter_decision.get("reason", "ACCEPTED"),
 
-                "marza_sum": round(margin_sum, 4),
-                "marza_%": round((margin_sum - 1) * 100, 2),
+                "marza_sum": round(margin_sum, 4) if margin_sum is not None else None,
+                "marza_%": round((margin_sum - 1) * 100, 2) if margin_sum is not None else None,
                 "risk_level": risk_level,
                 "ai_risk": ai_risk,
                 "risk": ai_risk,
@@ -1069,4 +1063,3 @@ if __name__ == "__main__":
     parser.add_argument("--mode", choices=sorted(BOT_MODE_SETTINGS), default="main")
     args = parser.parse_args()
     run_bot(mode=args.mode)
-

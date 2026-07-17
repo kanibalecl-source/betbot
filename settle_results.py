@@ -73,9 +73,14 @@ def settle_open_bets():
                 result = ?,
                 profit = ?,
                 closing_odds = ?,
-                clv = ?
-            WHERE id = ?
-        """, (result_text, profit, closing_odds, clv, bet["id"]))
+                clv = ?,
+                home_goals = ?,
+                away_goals = ?,
+                result_score = ?,
+                settlement_source = 'API_FOOTBALL',
+                settled_at = datetime('now')
+            WHERE id = ? AND status = 'OPEN'
+        """, (result_text, profit, closing_odds, clv, home_goals, away_goals, f"{home_goals}:{away_goals}", bet["id"]))
 
         updated += 1
 

@@ -39,8 +39,10 @@ def now_iso() -> str:
 
 def conn() -> sqlite3.Connection:
     DATA_DIR.mkdir(exist_ok=True)
-    c = sqlite3.connect(DB_FILE)
+    c = sqlite3.connect(DB_FILE, timeout=30)
     c.row_factory = sqlite3.Row
+    c.execute("PRAGMA busy_timeout=30000")
+    c.execute("PRAGMA journal_mode=WAL")
     return c
 
 
@@ -66,11 +68,16 @@ def init_storage() -> None:
         edge REAL,
         ev REAL,
         probability REAL,
-        stake REAL DEFAULT 1,
+        stake REAL DEFAULT 0,
         status TEXT DEFAULT 'OPEN',
         result TEXT DEFAULT 'PENDING',
         profit REAL DEFAULT 0,
         roi REAL DEFAULT 0,
+        home_goals INTEGER,
+        away_goals INTEGER,
+        result_score TEXT,
+        settlement_source TEXT,
+        settled_at TEXT,
         raw_json TEXT
     )
     """)
@@ -100,6 +107,17 @@ def init_storage() -> None:
         payload_json TEXT
     )
     """)
+    c.commit()
+    existing = {row[1] for row in c.execute("PRAGMA table_info(picks_history)").fetchall()}
+    for column, ddl in {
+        "home_goals": "INTEGER",
+        "away_goals": "INTEGER",
+        "result_score": "TEXT",
+        "settlement_source": "TEXT",
+        "settled_at": "TEXT",
+    }.items():
+        if column not in existing:
+            c.execute(f"ALTER TABLE picks_history ADD COLUMN {column} {ddl}")
     c.commit()
     c.close()
 
@@ -174,7 +192,7 @@ def normalize_pick(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]
         "edge": _float(_first(row, ["edge", "value"]), 0.0),
         "ev": _float(_first(row, ["ev", "value"]), 0.0),
         "probability": _float(_first(row, ["prawd_final", "probability", "prob"]), 0.0),
-        "stake": _float(_first(row, ["stake", "stawka_pln"]), 1.0),
+        "stake": _float(_first(row, ["stake", "stawka_pln"]), 0.0),
         "raw_json": json.dumps(row, ensure_ascii=False),
     }
 
@@ -193,12 +211,16 @@ def sync_picks_from_csv() -> Dict[str, int]:
             pick = normalize_pick(raw, source)
             if not pick:
                 continue
-            exists = c.execute("SELECT id FROM picks_history WHERE pick_key=?", (pick["pick_key"],)).fetchone()
+            exists = c.execute("SELECT id,status FROM picks_history WHERE pick_key=?", (pick["pick_key"],)).fetchone()
             if exists:
-                c.execute("""
-                    UPDATE picks_history SET updated_at=?, confidence=?, edge=?, ev=?, odds=?, raw_json=? WHERE pick_key=?
-                """, (now_iso(), pick["confidence"], pick["edge"], pick["ev"], pick["odds"], pick["raw_json"], pick["pick_key"]))
-                updated += 1
+                # A settled record is historical evidence and is immutable.
+                # A later CSV generation must never rewrite its odds/features.
+                if str(exists["status"] or "").upper() != "CLOSED":
+                    c.execute("""
+                        UPDATE picks_history SET updated_at=?, confidence=?, edge=?, ev=?, odds=?, raw_json=?
+                        WHERE pick_key=? AND UPPER(COALESCE(status,''))!='CLOSED'
+                    """, (now_iso(), pick["confidence"], pick["edge"], pick["ev"], pick["odds"], pick["raw_json"], pick["pick_key"]))
+                    updated += 1
             else:
                 c.execute("""
                     INSERT INTO picks_history (
@@ -248,7 +270,9 @@ def load_history_dataframe() -> pd.DataFrame:
     init_storage()
     c = conn()
     try:
-        df = pd.read_sql_query("SELECT * FROM picks_history ORDER BY created_at DESC LIMIT 5000", c)
+        # Never truncate the canonical export after the history grows beyond a
+        # dashboard-oriented display limit.
+        df = pd.read_sql_query("SELECT * FROM picks_history ORDER BY created_at DESC", c)
     finally:
         c.close()
     if df.empty:

@@ -17,7 +17,7 @@ def _int_env(name: str, default: int) -> int:
 def main() -> None:
     check_minutes = _int_env("RETRAIN_CHECK_MINUTES", 60)
     min_hours = _int_env("RETRAIN_MIN_HOURS", 12)
-    runtime = AutoRetrainingRuntime(data_dir="data/enterprise", min_hours_between_runs=min_hours)
+    runtime = AutoRetrainingRuntime(min_hours_between_runs=min_hours)
     print(f"🚀 AUTO RETRAINING LOOP START | check={check_minutes}m | min_hours={min_hours}")
 
     while True:

@@ -1,7 +1,7 @@
 {
   "model": {
-    "model_weight": 0.85,
-    "market_weight": 0.15
+    "model_weight": 1.0,
+    "market_weight": 0.0
   },
   "filters": {
     "min_edge": 0.03,

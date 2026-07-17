@@ -1,8 +1,7 @@
 import sqlite3
-from pathlib import Path
 
-BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
+from storage_paths import DATA_DIR
+
 DATA_DIR.mkdir(exist_ok=True)
 DB_FILE = DATA_DIR / "bot_tracker.sqlite3"
 
@@ -53,7 +52,12 @@ def init_db():
         edge REAL,
         ev REAL,
         probability REAL,
-        risk_level TEXT
+        risk_level TEXT,
+        home_goals INTEGER,
+        away_goals INTEGER,
+        result_score TEXT,
+        settlement_source TEXT,
+        settled_at TEXT
     )
     """)
 
@@ -69,6 +73,11 @@ def init_db():
         "closing_odds": "REAL",
         "clv": "REAL",
         "risk_level": "TEXT",
+        "home_goals": "INTEGER",
+        "away_goals": "INTEGER",
+        "result_score": "TEXT",
+        "settlement_source": "TEXT",
+        "settled_at": "TEXT",
     }
 
     for column, ddl in migrations.items():

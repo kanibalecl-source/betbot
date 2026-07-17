@@ -1,8 +1,9 @@
+import os
 import pandas as pd
 import requests
 from pathlib import Path
 
-API_KEY = "272be17b5c62994697794e6fc017996c".strip()
+API_KEY = os.getenv("API_FOOTBALL_KEY", "").strip()
 BASE_URL = "https://v3.football.api-sports.io"
 
 BASE_DIR = Path(__file__).parent

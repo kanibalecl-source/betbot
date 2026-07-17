@@ -1,9 +1,9 @@
 import math
 
 MAX_GOALS = 10
-DIXON_COLES_RHO = -0.10
-MIN_XG = 0.20
-MAX_XG = 4.00
+# Fixed corrections and arbitrary clamps would change the bot's own price
+# without evidence learned from settled records. Keep the model transparent.
+DIXON_COLES_RHO = 0.0
 
 
 def clamp(value, low, high):
@@ -11,8 +11,10 @@ def clamp(value, low, high):
 
 
 def poisson_prob(lmbda, goals):
-    if lmbda <= 0:
+    if lmbda < 0:
         return 0.0
+    if lmbda == 0:
+        return 1.0 if goals == 0 else 0.0
     return (lmbda ** goals) * math.exp(-lmbda) / math.factorial(goals)
 
 
@@ -29,8 +31,12 @@ def dixon_coles_adjustment(home_goals, away_goals, home_xg, away_xg, rho=DIXON_C
 
 
 def build_score_matrix(home_xg, away_xg):
-    home_xg = clamp(float(home_xg), MIN_XG, MAX_XG)
-    away_xg = clamp(float(away_xg), MIN_XG, MAX_XG)
+    home_xg = float(home_xg)
+    away_xg = float(away_xg)
+    if not math.isfinite(home_xg) or not math.isfinite(away_xg):
+        raise ValueError("Goal rates must be finite")
+    if home_xg < 0 or away_xg < 0:
+        raise ValueError("Goal rates cannot be negative")
 
     matrix = []
     for home_goals in range(MAX_GOALS + 1):
@@ -82,7 +88,13 @@ def calculate_over(matrix, line):
 
 
 def sanity_check_model(model):
-    return {market: clamp(float(prob), 0.01, 0.99) for market, prob in model.items()}
+    checked = {}
+    for market, probability in model.items():
+        probability = float(probability)
+        if not math.isfinite(probability) or probability < 0 or probability > 1:
+            raise ValueError(f"Invalid probability for {market}: {probability}")
+        checked[market] = probability
+    return checked
 
 
 def build_model(home_xg, away_xg):
