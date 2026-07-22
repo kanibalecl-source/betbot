@@ -1,4 +1,5 @@
 from datetime import datetime, UTC
+import os
 from fastapi import HTTPException
 from app.core.config import get_settings
 from app.domain.schemas import PredictionInput, PredictionOutput
@@ -43,7 +44,7 @@ class PredictionService:
         recommendation = "BET" if edge >= self.settings.min_edge and risk_level in {"LOW", "MEDIUM"} else "PASS"
         stake_pct = min(self.settings.max_stake_pct, max(0.0, edge / 10)) if recommendation == "BET" else 0.0
 
-        return PredictionOutput(
+        output = PredictionOutput(
             model_version=self.settings.model_version,
             match_name=f"{payload.home_team} vs {payload.away_team}",
             market=payload.market or raw.get("market") or "UNKNOWN",
@@ -58,3 +59,11 @@ class PredictionService:
             stake_pct=round(stake_pct, 4),
             generated_at=datetime.now(UTC),
         )
+        if os.getenv("BETBOT_QUALITY_SHADOW", "0").strip().lower() in {"1", "true", "yes", "on"}:
+            try:
+                from app.services.safe_upgrades.shadow_mode import run_shadow_mode
+                run_shadow_mode(raw, output.model_dump(mode="json"))
+            except Exception:
+                # Shadow diagnostics must never alter or interrupt a prediction.
+                pass
+        return output

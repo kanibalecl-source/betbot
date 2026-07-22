@@ -1,6 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 import math
+import os
 
 # Optional imports. Engine works even if some etap files are missing.
 try:
@@ -278,7 +279,7 @@ class MasterPredictionEngine:
                 filter_status = "ACCEPTED" if decision.get("accepted") else "REJECTED"
                 filter_reason = decision.get("reason", "UNKNOWN")
 
-            return {
+            output = {
                 "timestamp": datetime.utcnow().isoformat(),
                 "home": home,
                 "away": away,
@@ -309,6 +310,26 @@ class MasterPredictionEngine:
                 "filter_status": filter_status,
                 "filter_reason": filter_reason,
             }
+            if os.getenv("BETBOT_QUALITY_SHADOW", "0").strip().lower() in {"1", "true", "yes", "on"}:
+                try:
+                    from app.services.safe_upgrades.shadow_mode import run_shadow_mode
+                    run_shadow_mode(
+                        match,
+                        {
+                            **output,
+                            "match_name": f"{home} vs {away}",
+                            "bookmaker_odds": bookmaker_odds,
+                            "edge": ev / 100.0,
+                            "risk_level": risk,
+                            "recommendation": (
+                                "BET" if filter_status == "ACCEPTED" else "PASS"
+                            ),
+                        },
+                    )
+                except Exception:
+                    # Shadow quality diagnostics may never interrupt the bot.
+                    pass
+            return output
 
         except Exception as e:
             print(f"❌ MASTER ENGINE ERROR: {e}")

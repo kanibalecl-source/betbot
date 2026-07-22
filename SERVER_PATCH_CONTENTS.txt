@@ -1,0 +1,44 @@
+KANIBAL QUALITY SHADOW - MINIMAL PRODUCTION OVERLAY
+===================================================
+
+Production baseline audited read-only:
+- Railway project: bot
+- service: betbot
+- Git commit: cf5e6b6b8a96d24158160af22bcf2fccfb02744f
+- persistent Volume: /data
+- production start command: python -u app_launcher.py
+
+Included:
+- quality_upgrade_engine.py
+- master_prediction_engine.py
+- build_quality_training_from_history.py
+- train_quality_shadow.py
+- server_readonly_audit.py
+- app/services/prediction_service.py
+- app/services/safe_upgrades/shadow_mode.py
+- tests/test_quality_upgrade_engine.py
+- tests/test_server_quality_safety.py
+- INSTRUKCJA_QUALITY_SHADOW.md
+- SERVER_QUALITY_SAFE_DEPLOY.md
+- PRODUCTION_BASELINE_AUDIT.txt
+
+Deliberately NOT included because production already owns these files:
+- app_launcher.py
+- railway.json and Dockerfile
+- storage_paths.py
+- server_data_guard.py
+- server_start_guard.py
+- start.sh
+
+Explicitly forbidden and not included:
+- data/ and Railway Volume contents
+- CSV, SQLite, DB, JSONL and runtime state
+- history, ai_learning and enterprise directories
+- .env, secrets and users.json
+- active or candidate learned state
+
+Default behavior after overlay:
+- BETBOT_QUALITY_SHADOW is absent/disabled, so the live result is unchanged;
+- no training runs automatically;
+- no derived file is created automatically;
+- current production startup and persistence protection remain unchanged.

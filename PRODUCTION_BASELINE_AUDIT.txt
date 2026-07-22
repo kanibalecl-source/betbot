@@ -1,0 +1,37 @@
+KANIBAL PRODUCTION BASELINE AUDIT - 2026-07-22
+================================================
+
+Railway project: bot
+Service: betbot
+Environment: production
+Source repository: kanibalecl-source/betbot
+Branch: main
+Active deployment label: 17/07/ver5
+Audited commit: cf5e6b6b8a96d24158160af22bcf2fccfb02744f
+Start command: python -u app_launcher.py
+Volume: betbot-volume
+Mount path: /data
+RAILWAY_VOLUME_MOUNT_PATH: /data
+Volume file count during read-only audit: 791
+Volume bytes during read-only audit: 1577312758
+Production bundled /app/data: absent
+results_history.csv rows: 4415
+settled rows: 3927
+complete quality candidates after raw_json merge: 3401
+
+Production variables found only by name; secret values were never revealed.
+BETBOT_QUALITY_SHADOW: absent
+BETBOT_QUALITY_STATE: absent
+PERSISTENT_DATA_DIR: absent
+KANIBAL_DATA_DIR: absent
+KANIBAL_REQUIRE_PERSISTENT_STORAGE: absent (production default remains strict)
+
+Regression result:
+- master_prediction_engine.py differs from the audited baseline only by the
+  disabled-by-default shadow hook and returning the same output object;
+- app/services/prediction_service.py differs only by the same shadow hook;
+- shadow_mode.py adds quality diagnostics only;
+- production app_launcher.py, railway.json, Dockerfile, storage_paths.py,
+  server_data_guard.py and start.sh are not replaced by this overlay.
+
+No server file, variable, deployment or Volume content was changed during this audit.

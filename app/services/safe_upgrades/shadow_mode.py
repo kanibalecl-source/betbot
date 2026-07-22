@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from typing import Any, Mapping
 
+from quality_upgrade_engine import assess_quality
+
 
 @dataclass(frozen=True)
 class ShadowAssessment:
@@ -34,6 +36,7 @@ class ShadowAssessment:
     self_learning_signal: float
     combined_shadow_score: float
     shadow_comment: str
+    quality_upgrade: dict[str, Any]
 
 
 def _num(value: Any, default: float = 0.0) -> float:
@@ -109,6 +112,7 @@ def assess_shadow(raw: Mapping[str, Any], current_output: Mapping[str, Any]) -> 
     clv = _clv_signal(raw, odds)
     anomaly = _odds_anomaly(raw, odds)
     learning = _self_learning_signal(raw)
+    quality = assess_quality(raw=raw, current_output=current_output)
 
     combined = round(
         dynamic * 0.35
@@ -144,6 +148,7 @@ def assess_shadow(raw: Mapping[str, Any], current_output: Mapping[str, Any]) -> 
         self_learning_signal=learning,
         combined_shadow_score=combined,
         shadow_comment=comment,
+        quality_upgrade=quality.to_dict(),
     )
 
 
