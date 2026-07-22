@@ -108,9 +108,9 @@ def _inject_gpt_css() -> None:
             align-items:center;
         }
         .gpt-row-head{
-            background:rgba(255,255,255,.026);
-            border-bottom:1px solid rgba(112,255,39,.22);
-            color:#aab2af;
+            background:#fff;
+            border-bottom:1px solid #dfe6ef;
+            color:#111;
             text-transform:uppercase;
             font-size:11px;
             font-weight:950;
@@ -118,46 +118,48 @@ def _inject_gpt_css() -> None:
         .gpt-row-head div{padding:13px 12px;}
         .gpt-row{
             min-height:62px;
-            background:rgba(3,9,8,.56);
-            border-bottom:1px solid rgba(255,255,255,.06);
-            color:#fff;
+            background:#fff;
+            border:1px solid #dfe6ef;
+            color:#111;
             font-size:13px;
             font-weight:850;
         }
-        .gpt-row.selected{background:rgba(112,255,39,.075);}
+        .gpt-row.selected{background:#fff;}
         .gpt-row div{padding:11px 12px;}
-        .muted-small{color:#a7b0ad;font-size:12px;font-weight:850;}
+        .gpt-row b,.gpt-row .green,.gpt-row .yellow,.gpt-row .red{color:#111!important;}
+        .muted-small{color:#111;font-size:12px;font-weight:700;}
         .gpt-footnote{color:#8f9a96;font-size:12px;font-weight:850;margin:12px 0 0;}
         .gpt-action div[data-testid="stButton"] button{
             min-height:34px!important;
             border-radius:7px!important;
-            border:1px solid rgba(112,255,39,.25)!important;
-            background:rgba(112,255,39,.10)!important;
-            color:var(--green)!important;
+            border:1px solid #cfd7e1!important;
+            background:#fff!important;
+            color:#111!important;
             font-size:11px!important;
             font-weight:950!important;
             padding:5px 8px!important;
             width:100%!important;
         }
         .gpt-action div[data-testid="stButton"] button:hover{
-            background:rgba(112,255,39,.18)!important;
-            color:#fff!important;
+            background:#fff!important;
+            border-color:#929eac!important;
+            color:#111!important;
         }
         .gpt-side-panel{height:100%;}
-        .gpt-detail-head{border:1px solid var(--line);border-radius:8px;padding:16px;background:rgba(255,255,255,.018);display:grid;gap:8px;margin-bottom:14px;}
-        .gpt-detail-head span{font-size:13px;font-weight:850;color:#fff;}
+        .gpt-detail-head{border:1px solid #dfe6ef;border-radius:8px;padding:16px;background:#fff;display:grid;gap:8px;margin-bottom:14px;}
+        .gpt-detail-head span{font-size:13px;font-weight:850;color:#111;}
         .green{color:var(--green)!important}.yellow{color:var(--yellow)!important}.red{color:var(--red)!important}
         .gpt-score-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
-        .gpt-score-grid div{border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.018);padding:13px;}
-        .gpt-score-grid span{display:block;color:#aab2af;text-transform:uppercase;font-size:10px;font-weight:950;margin-bottom:8px;}
+        .gpt-score-grid div{border:1px solid #dfe6ef;border-radius:8px;background:#fff;color:#111;padding:13px;}
+        .gpt-score-grid span{display:block;color:#111;text-transform:uppercase;font-size:10px;font-weight:950;margin-bottom:8px;}
         .gpt-score-grid b{font-size:24px;}
         .gpt-notes{display:grid;gap:10px;}
-        .gpt-notes div{border-left:3px solid var(--green);border-radius:7px;background:rgba(112,255,39,.035);padding:12px 13px;font-size:13px;line-height:1.45;font-weight:800;}
+        .gpt-notes div{border:1px solid #dfe6ef;border-left:3px solid #1478e8;border-radius:7px;background:#fff;color:#111;padding:12px 13px;font-size:13px;line-height:1.45;font-weight:800;}
         .gpt-ako-wrap{margin-top:14px;}
         .gpt-ako-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-        .gpt-ako-card{border:1px solid var(--line);border-radius:8px;background:rgba(255,255,255,.018);padding:14px;min-height:106px;}
+        .gpt-ako-card{border:1px solid #dfe6ef;border-radius:8px;background:#fff;color:#111;padding:14px;min-height:106px;}
         .gpt-ako-card h4{margin:0 0 10px;font-size:13px;text-transform:uppercase;}
-        .gpt-ako-card p{margin:0;color:#d7e0dc;font-size:12px;line-height:1.45;font-weight:800;}
+        .gpt-ako-card p{margin:0;color:#111;font-size:12px;line-height:1.45;font-weight:800;}
         @media(max-width:1100px){.gpt-row-head,.gpt-row{grid-template-columns:1fr}.gpt-ako-grid,.gpt-score-grid{grid-template-columns:1fr;}}
         </style>
         """,

@@ -1314,12 +1314,14 @@ def _metric_icon(label: str) -> str:
 
 
 def metric(label, value, sub="") -> str:
-    positive = " positive" if str(value).lstrip().startswith("+") else ""
+    value_text = str(value)
+    positive = " positive" if value_text.lstrip().startswith("+") else ""
+    compact = " compact" if len(value_text) > 12 else ""
     return (
         '<div class="ka-card">'
         f'<div class="ka-metric-icon">{_metric_icon(label)}</div>'
         f'<div class="ka-label">{html.escape(str(label))}</div>'
-        f'<div class="ka-value{positive}">{value}</div>'
+        f'<div class="ka-value{positive}{compact}">{value}</div>'
         f'<div class="ka-sub">{html.escape(str(sub))}</div>'
         '</div>'
     )
