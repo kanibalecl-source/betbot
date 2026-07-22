@@ -1,4 +1,4 @@
-"""Fail-closed protection for persistent history during server redeploys."""
+"""Fail-closed, non-destructive protection for persistent server history."""
 from __future__ import annotations
 
 import hashlib
@@ -14,19 +14,32 @@ from typing import Any
 from storage_paths import BASE_DIR, DATA_DIR, require_persistent_storage_on_server
 
 
-SERVER_ENV_NAMES = ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "KANIBAL_SERVER_MODE")
-BACKUP_PATTERNS = (
-    "*.sqlite3", "*.db", "results_history.csv", "*_history.csv",
-    "history/**/*", "ai_learning*/**/*", "enterprise/**/*",
+CRITICAL_PATTERNS = (
+    "*.sqlite3",
+    "*.db",
+    "results_history.csv",
+    "*_history.csv",
+    "history/**/*",
+    "ai_learning*/**/*",
+    "enterprise/**/*",
     "gpt_analysis_report*.json",
 )
 
+BACKUP_REUSE_HOURS_ENV = "BETBOT_SERVER_BACKUP_REUSE_HOURS"
+BACKUP_KEEP_ENV = "BETBOT_SERVER_BACKUP_KEEP"
+DEFAULT_BACKUP_REUSE_HOURS = 24
+DEFAULT_BACKUP_KEEP = 1
+MIN_FREE_RESERVE_BYTES = 64 * 1024 * 1024
 
-def _is_server() -> bool:
-    return any(os.getenv(name, "").strip() for name in SERVER_ENV_NAMES)
+
+def _server_mode() -> bool:
+    return any(
+        os.getenv(name, "").strip()
+        for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "KANIBAL_SERVER_MODE")
+    )
 
 
-def _sha256(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
@@ -35,31 +48,92 @@ def _sha256(path: Path) -> str:
 
 
 def _deployment_key() -> str:
-    raw = os.getenv("RAILWAY_DEPLOYMENT_ID", "").strip()
-    if raw:
-        return re.sub(r"[^A-Za-z0-9_.-]", "_", raw)[:120]
+    value = os.getenv("RAILWAY_DEPLOYMENT_ID", "").strip()
+    if value:
+        return re.sub(r"[^A-Za-z0-9_.-]", "_", value)[:120]
     return datetime.now(timezone.utc).strftime("startup_%Y%m%dT%H%M%S_%fZ")
 
 
-def _critical_files(data_dir: Path, backup_root: Path) -> list[Path]:
+def _int_env(name: str, default: int, minimum: int = 0) -> int:
+    try:
+        return max(minimum, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return max(minimum, default)
+
+
+def _complete_backups(backup_root: Path) -> list[Path]:
+    complete = [
+        path
+        for path in backup_root.iterdir()
+        if path.is_dir() and (path / "manifest.json").is_file()
+    ]
+    return sorted(
+        complete,
+        key=lambda path: (path / "manifest.json").stat().st_mtime,
+        reverse=True,
+    )
+
+
+def _backup_age_hours(path: Path) -> float:
+    created = datetime.fromtimestamp(
+        (path / "manifest.json").stat().st_mtime, timezone.utc
+    )
+    return max(0.0, (datetime.now(timezone.utc) - created).total_seconds() / 3600)
+
+
+def _remove_verified_backup(path: Path, backup_root: Path) -> None:
+    resolved = path.resolve()
+    root = backup_root.resolve()
+    if resolved.parent != root or not (resolved / "manifest.json").is_file():
+        raise RuntimeError(f"Refusing to prune unverified backup path: {path}")
+    shutil.rmtree(resolved)
+
+
+def _prune_complete_backups(backup_root: Path, keep: int) -> list[str]:
+    complete = _complete_backups(backup_root)
+    removed: list[str] = []
+    for path in complete[max(1, keep):]:
+        _remove_verified_backup(path, backup_root)
+        removed.append(path.name)
+    return removed
+
+
+def critical_files(data_dir: Path, backup_root: Path | None = None) -> list[Path]:
     files: set[Path] = set()
-    for pattern in BACKUP_PATTERNS:
+    for pattern in CRITICAL_PATTERNS:
         for path in data_dir.glob(pattern):
-            if path.is_file() and backup_root not in path.parents:
-                files.add(path)
-    return sorted(files, key=lambda path: str(path).lower())
+            if not path.is_file():
+                continue
+            if backup_root is not None and backup_root in path.parents:
+                continue
+            files.add(path)
+    return sorted(files, key=lambda item: str(item).lower())
+
+
+def snapshot_hashes(data_dir: str | Path) -> dict[str, dict[str, Any]]:
+    data_path = Path(data_dir).resolve()
+    backup_root = data_path / "server_backups"
+    return {
+        path.relative_to(data_path).as_posix(): {
+            "size": path.stat().st_size,
+            "sha256": sha256_file(path),
+        }
+        for path in critical_files(data_path, backup_root)
+    }
 
 
 def _backup_sqlite(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    source_conn = sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True, timeout=30)
-    target_conn = sqlite3.connect(destination, timeout=30)
+    source_connection = sqlite3.connect(
+        f"file:{source.as_posix()}?mode=ro", uri=True, timeout=30
+    )
+    destination_connection = sqlite3.connect(destination, timeout=30)
     try:
-        source_conn.backup(target_conn)
-        target_conn.commit()
+        source_connection.backup(destination_connection)
+        destination_connection.commit()
     finally:
-        target_conn.close()
-        source_conn.close()
+        destination_connection.close()
+        source_connection.close()
 
 
 def prepare_server_data_backup(
@@ -68,34 +142,26 @@ def prepare_server_data_backup(
     deployment_key: str | None = None,
     force_server: bool = False,
 ) -> dict[str, Any]:
-    """Validate external storage and create a non-destructive pre-start backup.
-
-    No source file is opened for writing. Existing backups are never replaced.
-    A repeated process start for the same Railway deployment is idempotent.
-    """
-    if not (force_server or _is_server()):
+    """Validate the Volume and create an immutable pre-start backup."""
+    if not (force_server or _server_mode()):
         return {"status": "LOCAL_SKIPPED"}
-
     if data_dir is None:
         require_persistent_storage_on_server()
     data_path = Path(data_dir or DATA_DIR).resolve()
-    code_path = Path(base_dir or BASE_DIR).resolve()
-    bundled_path = (code_path / "data").resolve()
+    code_data = (Path(base_dir or BASE_DIR) / "data").resolve()
     railway_mount = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
-    try:
-        confirmed_railway_volume = bool(railway_mount) and data_path == Path(railway_mount).resolve()
-    except Exception:
-        confirmed_railway_volume = False
-    if (data_path == bundled_path or code_path in data_path.parents) and not confirmed_railway_volume:
-        raise RuntimeError("Katalog danych serwera znajduje się wewnątrz deploymentu; start przerwany.")
-
-    bundled_files = (
-        [p for p in bundled_path.rglob("*") if p.is_file()]
-        if bundled_path.exists() and not (confirmed_railway_volume and bundled_path == data_path)
-        else []
-    )
-    if bundled_files:
-        raise RuntimeError("Paczka serwerowa zawiera katalog data; start przerwany, aby nie nadpisać Volume.")
+    confirmed_same_mount = False
+    if railway_mount:
+        try:
+            confirmed_same_mount = data_path == Path(railway_mount).resolve()
+        except Exception:
+            confirmed_same_mount = False
+    if data_path == code_data and not confirmed_same_mount:
+        raise RuntimeError("Server data resolves inside deployment; startup blocked.")
+    if code_data.exists() and code_data != data_path:
+        bundled = [path for path in code_data.rglob("*") if path.is_file()]
+        if bundled:
+            raise RuntimeError("Deployment contains data files; startup blocked.")
 
     data_path.mkdir(parents=True, exist_ok=True)
     backup_root = data_path / "server_backups" / "deployments"
@@ -104,9 +170,40 @@ def prepare_server_data_backup(
     destination_root = backup_root / key
     manifest_path = destination_root / "manifest.json"
     if manifest_path.exists():
-        return {"status": "ALREADY_BACKED_UP", "deployment": key, "backup": str(destination_root)}
+        return {
+            "status": "ALREADY_BACKED_UP",
+            "deployment": key,
+            "backup": str(destination_root),
+        }
     if destination_root.exists():
-        raise RuntimeError(f"Niekompletna kopia bezpieczeństwa deploymentu: {destination_root}")
+        raise RuntimeError(f"Incomplete deployment backup exists: {destination_root}")
+
+    complete = _complete_backups(backup_root)
+    latest = complete[0] if complete else None
+    reuse_hours = _int_env(
+        BACKUP_REUSE_HOURS_ENV, DEFAULT_BACKUP_REUSE_HOURS, minimum=0
+    )
+    if latest is not None and reuse_hours > 0 and _backup_age_hours(latest) <= reuse_hours:
+        return {
+            "status": "RECENT_BACKUP_REUSED",
+            "deployment": key,
+            "backup": str(latest),
+            "backup_age_hours": round(_backup_age_hours(latest), 3),
+            "reuse_hours": reuse_hours,
+        }
+
+    sources = critical_files(data_path, backup_root)
+    expected_bytes = sum(source.stat().st_size for source in sources)
+    free_bytes = shutil.disk_usage(data_path).free
+    reserve_bytes = max(MIN_FREE_RESERVE_BYTES, expected_bytes // 20)
+    if latest is not None and free_bytes < expected_bytes + reserve_bytes:
+        return {
+            "status": "BACKUP_REUSED_LOW_SPACE",
+            "deployment": key,
+            "backup": str(latest),
+            "required_bytes": expected_bytes + reserve_bytes,
+            "free_bytes": free_bytes,
+        }
 
     destination_root.mkdir(parents=True, exist_ok=False)
     manifest: dict[str, Any] = {
@@ -115,35 +212,35 @@ def prepare_server_data_backup(
         "data_dir": str(data_path),
         "files": [],
     }
-    for source in _critical_files(data_path, backup_root):
+    for source in sources:
         relative = source.relative_to(data_path)
         destination = destination_root / relative
-        before_hash = _sha256(source)
+        before = sha256_file(source)
         if source.suffix.lower() in {".sqlite3", ".db"}:
             _backup_sqlite(source, destination)
         else:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
-        after_hash = _sha256(source)
-        if before_hash != after_hash:
-            raise RuntimeError(f"Plik źródłowy zmienił się podczas backupu: {relative}")
+        after = sha256_file(source)
+        if before != after:
+            raise RuntimeError(f"Source changed while backing up: {relative}")
         manifest["files"].append({
             "path": relative.as_posix(),
             "size": source.stat().st_size,
-            "source_sha256": after_hash,
-            "backup_sha256": _sha256(destination),
+            "source_sha256": after,
+            "backup_sha256": sha256_file(destination),
         })
-
     temporary = destination_root / "manifest.tmp"
     temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(temporary, manifest_path)
+    removed = _prune_complete_backups(
+        backup_root,
+        _int_env(BACKUP_KEEP_ENV, DEFAULT_BACKUP_KEEP, minimum=1),
+    )
     return {
         "status": "BACKUP_CREATED",
         "deployment": key,
         "files": len(manifest["files"]),
         "backup": str(destination_root),
+        "pruned_backups": removed,
     }
-
-
-if __name__ == "__main__":
-    print(prepare_server_data_backup())
