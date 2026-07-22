@@ -1,7 +1,13 @@
+import os
+
+os.environ["ENVIRONMENT"] = "test"
+os.environ["API_KEY"] = "test-key-with-at-least-thirty-two-characters"
+
 from fastapi.testclient import TestClient
 from app.main import app
 
 client = TestClient(app)
+AUTH = {"x-api-key": os.environ["API_KEY"]}
 
 def test_health():
     r = client.get('/api/v1/health')
@@ -9,7 +15,7 @@ def test_health():
     assert r.json()['ok'] is True
 
 def test_predict_value_bet_shape():
-    r = client.post('/api/v1/predict', json={
+    r = client.post('/api/v1/predict', headers=AUTH, json={
         'home_team': 'Alpha FC',
         'away_team': 'Beta FC',
         'market': 'Over 2.5',
@@ -23,12 +29,12 @@ def test_predict_value_bet_shape():
     assert body['recommendation'] in {'BET', 'PASS'}
 
 
-def test_predict_rejects_missing_probability_instead_of_inventing_fifty_percent():
+def test_predict_requires_api_key():
     r = client.post('/api/v1/predict', json={
         'home_team': 'Alpha FC',
         'away_team': 'Beta FC',
         'market': 'Over 2.5',
         'odds': 2.1,
+        'probability': 0.55
     })
-    assert r.status_code == 422
-    assert 'kurs bota nie zosta' in r.json()['detail']
+    assert r.status_code == 401

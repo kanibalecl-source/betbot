@@ -27,8 +27,8 @@ CRITICAL_PATTERNS = (
 
 BACKUP_REUSE_HOURS_ENV = "BETBOT_SERVER_BACKUP_REUSE_HOURS"
 BACKUP_KEEP_ENV = "BETBOT_SERVER_BACKUP_KEEP"
-DEFAULT_BACKUP_REUSE_HOURS = 24
-DEFAULT_BACKUP_KEEP = 1
+DEFAULT_BACKUP_REUSE_HOURS = 0
+DEFAULT_BACKUP_KEEP = 5
 MIN_FREE_RESERVE_BYTES = 64 * 1024 * 1024
 
 
@@ -197,13 +197,10 @@ def prepare_server_data_backup(
     free_bytes = shutil.disk_usage(data_path).free
     reserve_bytes = max(MIN_FREE_RESERVE_BYTES, expected_bytes // 20)
     if latest is not None and free_bytes < expected_bytes + reserve_bytes:
-        return {
-            "status": "BACKUP_REUSED_LOW_SPACE",
-            "deployment": key,
-            "backup": str(latest),
-            "required_bytes": expected_bytes + reserve_bytes,
-            "free_bytes": free_bytes,
-        }
+        raise RuntimeError(
+            "Insufficient space for a deployment-specific backup; startup blocked "
+            f"(required={expected_bytes + reserve_bytes}, free={free_bytes})."
+        )
 
     destination_root.mkdir(parents=True, exist_ok=False)
     manifest: dict[str, Any] = {

@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from build_quality_training_from_history import build
 from server_data_guard import prepare_server_data_backup, sha256_file
@@ -124,6 +125,69 @@ class ServerQualitySafetyTests(unittest.TestCase):
                 force_server=True,
             )
             self.assertEqual(repeated["status"], "ALREADY_BACKED_UP")
+
+    def test_guard_creates_backup_for_each_deployment(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            code = root / "code"
+            volume = root / "volume"
+            code.mkdir()
+            volume.mkdir()
+            history = volume / "results_history.csv"
+            self._history(history, rows=4)
+            first = prepare_server_data_backup(
+                volume,
+                base_dir=code,
+                deployment_key="first",
+                force_server=True,
+            )
+            self.assertEqual(first["status"], "BACKUP_CREATED")
+            before = sha256_file(history)
+            second = prepare_server_data_backup(
+                volume,
+                base_dir=code,
+                deployment_key="second",
+                force_server=True,
+            )
+            self.assertEqual(second["status"], "BACKUP_CREATED")
+            self.assertEqual(before, sha256_file(history))
+            backups = volume / "server_backups" / "deployments"
+            self.assertTrue((backups / "first" / "manifest.json").exists())
+            self.assertTrue((backups / "second" / "manifest.json").exists())
+
+    def test_guard_prunes_old_backup_only_after_new_manifest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            code = root / "code"
+            volume = root / "volume"
+            code.mkdir()
+            volume.mkdir()
+            self._history(volume / "results_history.csv", rows=4)
+            with patch.dict(
+                "os.environ",
+                {
+                    "BETBOT_SERVER_BACKUP_REUSE_HOURS": "0",
+                    "BETBOT_SERVER_BACKUP_KEEP": "1",
+                },
+            ):
+                first = prepare_server_data_backup(
+                    volume,
+                    base_dir=code,
+                    deployment_key="first",
+                    force_server=True,
+                )
+                second = prepare_server_data_backup(
+                    volume,
+                    base_dir=code,
+                    deployment_key="second",
+                    force_server=True,
+                )
+            self.assertEqual(first["status"], "BACKUP_CREATED")
+            self.assertEqual(second["status"], "BACKUP_CREATED")
+            self.assertEqual(second["pruned_backups"], ["first"])
+            backups = volume / "server_backups" / "deployments"
+            self.assertFalse((backups / "first").exists())
+            self.assertTrue((backups / "second" / "manifest.json").exists())
 
 
 if __name__ == "__main__":

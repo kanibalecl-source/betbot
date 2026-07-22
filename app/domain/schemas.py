@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
@@ -20,7 +21,10 @@ class PredictionInput(BaseModel):
         if value is None:
             return value
         value = float(value)
-        return value / 100 if value > 1 else value
+        value = value / 100 if value > 1 else value
+        if not math.isfinite(value) or not 0 < value < 1:
+            raise ValueError("probability must be finite and between 0 and 1")
+        return value
 
 class PredictionOutput(BaseModel):
     model_version: str

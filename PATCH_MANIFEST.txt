@@ -1,0 +1,56 @@
+KANIBAL SERVER P0/P1 PRODUCTION HARDENING SAFE v3
+Date: 2026-07-22
+
+PURPOSE
+- Production security and model-quality hardening patch.
+- Argon2id password verification through cryptography.
+- Fail-closed authentication and betting execution guard.
+- Server data, history, models and learning artifacts remain untouched.
+
+DEPLOYMENT SAFETY
+- This archive is an explicit allowlist patch, not a complete repository snapshot.
+- BETTING_ENABLED defaults to false for controlled deployment.
+- Configure BETBOT_ADMIN_USERNAME and BETBOT_ADMIN_PASSWORD_HASH in Railway variables.
+- Do not upload secure_admin_railway.env or users.json.
+
+FILES INCLUDED
+.env.example
+.gitignore
+.dockerignore
+Dockerfile
+PRODUCTION_RUNTIME.md
+SERVER_DEPLOY_PRECHECK_P0_P1.md
+requirements.txt
+auth_manager.py
+password_security.py
+manage_users.py
+bot.py
+data_api.py
+master_prediction_engine.py
+server_data_guard.py
+execution_guard.py
+app/core/config.py
+app/core/security.py
+app/main.py
+app/domain/schemas.py
+app/realtime/routes.py
+app/services/prediction_service.py
+tests/test_api.py
+tests/test_production_hardening.py
+tests/test_server_quality_safety.py
+
+EXPLICITLY EXCLUDED
+- users.json
+- secure_admin_railway.env
+- .admin_setup_token
+- data/**
+- history/** and all collected result/history files
+- models/** and model artifacts
+- quality candidates, registries, reports and training outputs
+- logs, databases, caches and runtime state
+
+VERIFICATION
+- Python compileall: PASS
+- Production hardening: 13 tests PASS
+- Quality suite: 28 tests PASS
+- Server quality safety: 7 tests PASS

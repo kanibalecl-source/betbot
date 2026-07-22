@@ -1,6 +1,6 @@
 ﻿import os
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 API_KEY = os.getenv("API_FOOTBALL_KEY", "")
 
@@ -355,22 +355,29 @@ def get_odds_market_data(match):
     try:
         rows = _iter_fixture_odds(match)
         markets = {}
+        observed_at = datetime.now(timezone.utc).isoformat()
 
         for row in rows:
             key = row["market"]
-            item = markets.setdefault(key, {
-                "best_odds": None,
-                "bookmaker": "",
-                "all_odds": [],
-                "by_bookmaker": {},
-            })
-            item["all_odds"].append(row["odds"])
-            # Keep the exact outcome price per bookmaker. This allows margin
-            # checks only on complete, internally consistent market books.
-            item["by_bookmaker"][row["bookmaker"]] = row["odds"]
-            if item["best_odds"] is None or row["odds"] > item["best_odds"]:
-                item["best_odds"] = row["odds"]
-                item["bookmaker"] = row["bookmaker"]
+            bookmaker = str(row.get("bookmaker") or "").strip()
+            odd = row.get("odds")
+            if not bookmaker or not isinstance(odd, (int, float)) or odd <= 1:
+                continue
+            market = markets.setdefault(
+                key,
+                {
+                    "best_odds": odd,
+                    "bookmaker": bookmaker,
+                    "by_bookmaker": {},
+                    "observed_at": observed_at,
+                },
+            )
+            previous = market["by_bookmaker"].get(bookmaker)
+            if previous is None or odd > previous:
+                market["by_bookmaker"][bookmaker] = odd
+            if odd > market["best_odds"]:
+                market["best_odds"] = odd
+                market["bookmaker"] = bookmaker
 
         if markets:
             print(f"ODDS MARKETS: {sorted(list(markets.keys()))}")

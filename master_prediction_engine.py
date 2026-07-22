@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import math
 import os
@@ -280,7 +280,7 @@ class MasterPredictionEngine:
                 filter_reason = decision.get("reason", "UNKNOWN")
 
             output = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "home": home,
                 "away": away,
                 "league": league,

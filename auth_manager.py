@@ -2,23 +2,21 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
+import os
+import time
 from pathlib import Path
 from typing import Any, Dict
 
 import streamlit as st
+from password_security import verify_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
 USERS_FILE = BASE_DIR / "users.json"
 
-DEFAULT_USERS = {
-    "admin": {
-        "password": "admin123",
-        "role": "admin",
-        "active": True,
-    }
-}
+DEFAULT_USERS: Dict[str, Any] = {}
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_LOCK_SECONDS = 300
 
 
 def ensure_users_file() -> None:
@@ -35,28 +33,27 @@ def load_users() -> Dict[str, Any]:
         return {}
 
 
-def sha256_password(password: str) -> str:
-    return "sha256$" + hashlib.sha256(password.encode("utf-8")).hexdigest()
-
-
 def verify_password(saved: Any, password: str) -> bool:
-    saved_str = str(saved or "")
-    if saved_str.startswith("sha256$"):
-        return saved_str == sha256_password(password)
-    return saved_str == password
+    return verify_password_hash(str(saved or ""), password)
 
 
 def authenticate(username: str, password: str) -> bool:
     users = load_users()
+    bootstrap_username = os.getenv("BETBOT_ADMIN_USERNAME", "").strip()
+    bootstrap_hash = os.getenv("BETBOT_ADMIN_PASSWORD_HASH", "").strip()
+    if bootstrap_username and bootstrap_hash and bootstrap_username not in users:
+        users[bootstrap_username] = {
+            "password_hash": bootstrap_hash,
+            "role": "admin",
+            "active": True,
+        }
     user = users.get(username)
     if not user:
         return False
-    if isinstance(user, str):
-        return verify_password(user, password)
     if isinstance(user, dict):
         if user.get("active", True) is False:
             return False
-        return verify_password(user.get("password"), password)
+        return verify_password(user.get("password_hash"), password)
     return False
 
 
@@ -319,6 +316,10 @@ def require_login() -> None:
         st.session_state.auth_ok = False
     if "auth_user" not in st.session_state:
         st.session_state.auth_user = ""
+    if "auth_failures" not in st.session_state:
+        st.session_state.auth_failures = 0
+    if "auth_locked_until" not in st.session_state:
+        st.session_state.auth_locked_until = 0.0
 
     if st.session_state.auth_ok:
         return
@@ -355,11 +356,23 @@ def require_login() -> None:
     )
 
     if submitted:
-        if authenticate(username.strip(), password):
+        now = time.time()
+        if now < float(st.session_state.auth_locked_until or 0):
+            remaining = max(1, int(st.session_state.auth_locked_until - now))
+            st.error(f"Logowanie czasowo zablokowane. Spróbuj ponownie za {remaining} s.")
+        elif authenticate(username.strip(), password):
             st.session_state.auth_ok = True
             st.session_state.auth_user = username.strip()
+            st.session_state.auth_failures = 0
+            st.session_state.auth_locked_until = 0.0
             st.rerun()
         else:
-            st.error("Nieprawidłowy login lub hasło.")
+            st.session_state.auth_failures += 1
+            if st.session_state.auth_failures >= MAX_LOGIN_ATTEMPTS:
+                st.session_state.auth_locked_until = now + LOGIN_LOCK_SECONDS
+                st.session_state.auth_failures = 0
+                st.error("Zbyt wiele prób. Logowanie zablokowane na 5 minut.")
+            else:
+                st.error("Nieprawidłowy login lub hasło.")
 
     st.stop()

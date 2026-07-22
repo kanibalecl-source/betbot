@@ -10,3 +10,4 @@ fastapi>=0.111
 uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
+cryptography>=44.0.0,<47

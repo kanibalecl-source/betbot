@@ -1,4 +1,5 @@
 from datetime import datetime, UTC
+import logging
 import os
 from fastapi import HTTPException
 from app.core.config import get_settings
@@ -8,6 +9,8 @@ try:
     from master_prediction_engine import MasterPredictionEngine
 except Exception:  # pragma: no cover
     MasterPredictionEngine = None
+
+logger = logging.getLogger(__name__)
 
 class PredictionService:
     def __init__(self):
@@ -67,6 +70,6 @@ class PredictionService:
                 from quality_live_shadow import record_live_shadow
                 record_live_shadow(raw, frozen_output)
             except Exception:
-                # Shadow diagnostics must never alter or interrupt a prediction.
-                pass
+                # Shadow remains non-blocking, but degradation must be visible.
+                logger.exception("QUALITY shadow recording failed")
         return output
