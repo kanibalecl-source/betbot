@@ -1,9 +1,4 @@
-"""
-Simple closed login layer for Streamlit dashboard.
-- No public registration.
-- Users are managed manually in users.json.
-- Supports plain text passwords for easy setup and sha256 hashes for safer use.
-"""
+"""Closed authentication layer and presentation for the Streamlit dashboard."""
 from __future__ import annotations
 
 import base64
@@ -81,153 +76,239 @@ def _asset_data_uri(path: Path) -> str:
 
 
 def _login_css() -> None:
-    visual_uri = _asset_data_uri(BASE_DIR / "kanibal_login_visual_reference.png")
+    logo_uri = _asset_data_uri(BASE_DIR / "kanibal_icon_512.png")
     st.markdown(
         f"""
         <style>
-        :root {{ --login-lime:#72ff27; --login-bg:#050808; --login-panel:#0a0f10; --login-line:#263033; }}
-        html,body,.stApp {{ min-height:100%; overflow:hidden!important; background:var(--login-bg)!important; }}
+        :root {{
+          --login-navy:#061d3b;
+          --login-blue:#087af5;
+          --login-blue-dark:#0569db;
+          --login-muted:#64748b;
+          --login-line:#cfdae9;
+          --login-soft:#eef5ff;
+          --login-green:#42c95a;
+        }}
+        html,body,.stApp {{
+          min-height:100%; overflow:hidden!important; background:#fff!important;
+          color:var(--login-navy)!important;
+        }}
         [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stSidebar"],
         [data-testid="stDecoration"],footer {{ display:none!important; }}
         .block-container {{ max-width:none!important; padding:0!important; min-height:100vh!important; }}
-        .ka-login-visual {{
-            position:fixed; inset:0 42.5vw 0 0; z-index:0;
-            background-image:linear-gradient(90deg,rgba(2,5,5,.05) 0%,rgba(2,5,5,.08) 72%,#050808 100%),url('{visual_uri}');
-            background-repeat:no-repeat; background-position:left center; background-size:auto 100%;
-        }}
-        .ka-login-visual::after {{ content:""; position:absolute; inset:0; background:linear-gradient(180deg,rgba(0,0,0,.06),transparent 38%,rgba(0,0,0,.32)); pointer-events:none; }}
-        .ka-login-system {{
-            position:fixed; z-index:3; top:28px; right:4.2vw; display:flex; align-items:center; gap:18px;
-            color:#758083; font:700 10px/1 Inter,Arial,sans-serif; letter-spacing:.13em; text-transform:uppercase;
-        }}
-        .ka-login-system .online {{ color:#a9b4b5; display:flex; align-items:center; gap:8px; }}
-        .ka-login-system .online::before {{ content:""; width:7px; height:7px; border-radius:50%; background:var(--login-lime); box-shadow:0 0 10px rgba(114,255,39,.75); }}
-        .ka-login-system .lang {{ color:#d4d9d9; padding-left:18px; border-left:1px solid #252c2e; }}
-        div[data-testid="stForm"] {{
-            position:fixed!important; z-index:4!important; top:50%!important; right:4.2vw!important;
-            transform:translateY(-50%)!important; width:min(36.2vw,520px)!important;
-            margin:0!important; padding:34px 36px 31px!important;
-            border:1px solid var(--login-line)!important; border-radius:14px!important;
-            background:linear-gradient(145deg,rgba(15,21,22,.98),rgba(7,11,12,.99))!important;
-            box-shadow:0 30px 90px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.025)!important;
-        }}
-        .ka-login-card-head {{ margin:0 0 28px; }}
-        .ka-login-security {{ color:var(--login-lime); font:800 9px/1 Inter,Arial,sans-serif; letter-spacing:.19em; text-transform:uppercase; margin-bottom:14px; }}
-        .ka-login-security::before {{ content:"◆"; font-size:8px; margin-right:8px; }}
-        .ka-login-card-head h1 {{ margin:0 0 9px; color:#f4f7f6; font:750 28px/1.15 Inter,Arial,sans-serif; letter-spacing:-.025em; }}
-        .ka-login-card-head p {{ margin:0; color:#737f82; font:500 12px/1.55 Inter,Arial,sans-serif; }}
-        div[data-testid="stForm"] [data-testid="stTextInput"] {{ margin-bottom:17px!important; }}
-        div[data-testid="stForm"] [data-testid="stTextInput"] label p {{ color:#aeb7b8!important; font-size:10px!important; font-weight:800!important; letter-spacing:.105em!important; text-transform:uppercase!important; }}
-        div[data-testid="stForm"] [data-baseweb="input"] {{ height:54px!important; border:1px solid #293235!important; border-radius:8px!important; background:#080d0e!important; box-shadow:none!important; transition:border-color .16s,box-shadow .16s!important; }}
-        div[data-testid="stForm"] [data-baseweb="input"] > div {{ background:transparent!important; }}
-        div[data-testid="stForm"] [data-baseweb="input"]:focus-within {{ border-color:#5d9f3d!important; box-shadow:0 0 0 2px rgba(114,255,39,.09)!important; }}
-        div[data-testid="stForm"] input {{ background:transparent!important; color:#e8eeee!important; -webkit-text-fill-color:#e8eeee!important; font:600 13px Inter,Arial,sans-serif!important; caret-color:var(--login-lime)!important; }}
-        div[data-testid="stForm"] input::placeholder {{ color:#505a5d!important; -webkit-text-fill-color:#505a5d!important; opacity:1!important; }}
-        div[data-testid="stForm"] [data-testid="stHorizontalBlock"] {{ margin:-2px 0 17px!important; align-items:center!important; }}
-        div[data-testid="stForm"] [data-testid="stCheckbox"] label {{ gap:8px!important; }}
-        div[data-testid="stForm"] [data-testid="stCheckbox"] p {{ color:#7f898b!important; font-size:10px!important; font-weight:650!important; }}
-        div[data-testid="stForm"] [data-testid="stCheckbox"] span {{ border-color:#3a4547!important; background:#090e0f!important; border-radius:3px!important; }}
-        .ka-login-forgot {{ color:#8f999b; font:700 10px/1.4 Inter,Arial,sans-serif; text-align:right; padding-top:7px; }}
-        div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button {{
-            height:56px!important; min-height:56px!important; border:1px solid #8aff4d!important; border-radius:8px!important;
-            background:linear-gradient(180deg,#7dff36,#67e829)!important; color:#071006!important;
-            font:900 11px/1 Inter,Arial,sans-serif!important; letter-spacing:.105em!important; text-transform:uppercase!important;
-            box-shadow:0 10px 30px rgba(87,229,31,.13),inset 0 1px 0 rgba(255,255,255,.3)!important;
-        }}
-        div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover {{ background:linear-gradient(180deg,#8bff4e,#70ef31)!important; transform:translateY(-1px); }}
-        .ka-login-note {{ margin-top:18px; color:#596366; font:600 9px/1.45 Inter,Arial,sans-serif; letter-spacing:.035em; text-align:center; }}
-        .ka-login-note::before {{ content:"▣"; color:#798486; margin-right:7px; }}
-        .ka-login-footer {{ position:fixed; z-index:3; right:4.2vw; bottom:25px; width:min(36.2vw,520px); color:#4d5759; font:650 8px/1.4 Inter,Arial,sans-serif; letter-spacing:.09em; text-align:center; text-transform:uppercase; }}
-        div[data-testid="stAlert"] {{ position:fixed!important; z-index:8!important; right:4.2vw!important; top:calc(50% + 295px)!important; width:min(36.2vw,520px)!important; }}
 
-        /* Approved full-screen login — reference no. 2. */
-        .ka-login-visual {{
-            inset:0 42.6vw 0 0!important;
-            background-image:url('{visual_uri}')!important;
-            background-position:left top!important;
-            background-size:auto 100%!important;
+        .ka-login-brand {{
+          position:fixed; z-index:2; left:3.7vw; top:4.1vh;
+          display:flex; align-items:center; gap:18px;
         }}
-        .ka-login-visual::after {{
-            display:block!important; content:""!important; position:absolute!important;
-            top:0!important; right:0!important; bottom:0!important; left:102.35vh!important;
-            background:#050808!important; pointer-events:none!important;
+        .ka-login-brand img {{
+          width:94px; height:94px; object-fit:cover; border-radius:2px;
+          box-shadow:0 6px 20px rgba(6,29,59,.08);
         }}
-        .ka-login-system {{ top:30px!important; right:3.75vw!important; gap:26px!important; font-size:12px!important; letter-spacing:.02em!important; }}
-        .ka-login-system .online {{ color:#aeb4b4!important; gap:12px!important; }}
-        .ka-login-system .online::before {{ width:11px!important; height:11px!important; background:#a8db00!important; box-shadow:0 0 11px rgba(168,219,0,.55)!important; }}
-        .ka-login-system .lang {{ padding-left:27px!important; color:#d8dddd!important; }}
-        .ka-login-system .lang::after {{ content:"⌄"; margin-left:27px; color:#aeb5b5; font-size:18px; }}
+        .ka-login-wordmark strong {{
+          display:block; color:var(--login-navy); font:850 34px/1 Inter,Arial,sans-serif;
+          letter-spacing:.035em;
+        }}
+        .ka-login-wordmark span {{
+          display:block; margin-top:16px; color:#0a70e6;
+          font:800 15px/1 Inter,Arial,sans-serif; letter-spacing:.31em;
+        }}
+        .ka-login-wordmark small {{
+          display:block; margin-top:17px; color:#73839a;
+          font:750 9px/1 Inter,Arial,sans-serif; letter-spacing:.24em;
+        }}
+        .ka-login-system {{
+          position:fixed; z-index:5; top:5.2vh; right:4vw;
+          display:flex; align-items:center; gap:22px; color:#334155;
+          font:800 12px/1 Inter,Arial,sans-serif; letter-spacing:.06em; text-transform:uppercase;
+        }}
+        .ka-login-system .online {{ display:flex; align-items:center; gap:12px; }}
+        .ka-login-system .online::before {{
+          content:""; width:11px; height:11px; border-radius:50%; background:var(--login-green);
+          box-shadow:0 0 0 4px rgba(66,201,90,.08);
+        }}
+        .ka-login-system .lang {{ padding-left:24px; border-left:1px solid #d6dfeb; }}
+        .ka-login-system .lang::after {{ content:"⌄"; margin-left:20px; font-size:18px; }}
+
+        .ka-login-story {{
+          position:fixed; z-index:1; left:3.7vw; top:19.3vh; width:47vw; height:61vh;
+          color:var(--login-navy);
+        }}
+        .ka-login-story h2 {{
+          margin:0; max-width:600px; color:var(--login-navy);
+          font:850 clamp(44px,3.55vw,68px)/.99 Inter,Arial,sans-serif; letter-spacing:-.045em;
+        }}
+        .ka-login-story p {{
+          margin:22px 0 0; max-width:560px; color:#536780;
+          font:500 clamp(16px,1.3vw,23px)/1.55 Inter,Arial,sans-serif;
+        }}
+        .ka-login-chart {{ position:absolute; left:-1vw; right:0; bottom:0; height:46vh; }}
+        .ka-login-chart svg {{ width:100%; height:100%; overflow:visible; }}
+        .ka-metric {{
+          position:absolute; z-index:2; min-width:112px; padding:13px 16px;
+          border:1px solid #d3deec; border-radius:13px; background:rgba(255,255,255,.96);
+          box-shadow:0 9px 24px rgba(32,77,130,.10); color:var(--login-navy);
+        }}
+        .ka-metric span {{ display:block; color:#718198; font:800 9px/1 Inter,Arial,sans-serif; text-transform:uppercase; }}
+        .ka-metric strong {{ display:block; margin-top:7px; font:850 20px/1 Inter,Arial,sans-serif; }}
+        .ka-metric.one {{ left:1.5vw; top:38%; }}
+        .ka-metric.two {{ left:34%; top:8%; }}
+        .ka-metric.three {{ right:3%; bottom:7%; }}
+
         div[data-testid="stForm"] {{
-            top:9.25vh!important; right:3.75vw!important; transform:none!important;
-            width:38.8vw!important; height:78vh!important; min-height:0!important;
-            box-sizing:border-box!important; overflow:hidden!important;
-            padding:clamp(28px,5.2vh,50px) clamp(32px,2.75vw,44px) clamp(25px,4vh,38px)!important;
-            border:1px solid #3a4345!important; border-radius:9px!important;
-            background:linear-gradient(145deg,rgba(12,18,20,.985),rgba(7,12,14,.99))!important;
-            box-shadow:0 28px 72px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.025)!important;
+          position:fixed!important; z-index:4!important; top:50%!important; right:6.2vw!important;
+          transform:translateY(-48%)!important; width:min(37vw,660px)!important;
+          box-sizing:border-box!important; margin:0!important;
+          padding:clamp(34px,4.2vh,50px) clamp(34px,3.2vw,54px) clamp(30px,3.7vh,44px)!important;
+          border:1px solid var(--login-line)!important; border-radius:20px!important;
+          background:#fff!important; box-shadow:0 24px 70px rgba(27,72,124,.10)!important;
         }}
-        .ka-login-card-head {{ margin:0 0 clamp(14px,2.4vh,24px)!important; text-align:center!important; }}
         div[data-testid="stForm"] [data-testid="stVerticalBlock"] {{ gap:0!important; }}
-        .ka-login-security {{ margin:0 0 clamp(12px,1.8vh,18px)!important; color:#a9dd00!important; font-size:12px!important; letter-spacing:.13em!important; }}
-        .ka-login-security::before {{
-            content:""!important; display:inline-block; width:16px; height:16px; margin:0 11px -3px 0;
-            background:#a9dd00; -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10V7a5 5 0 0110 0v3h1a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h1zm2 0h6V7a3 3 0 00-6 0v3z'/%3E%3C/svg%3E") center/contain no-repeat;
+        .ka-login-card-head {{ margin:0 0 clamp(22px,2.7vh,31px)!important; }}
+        .ka-login-security {{
+          display:flex; align-items:center; gap:12px; margin-bottom:clamp(20px,2.6vh,29px);
+          color:var(--login-blue); font:850 13px/1 Inter,Arial,sans-serif;
+          letter-spacing:.025em; text-transform:uppercase;
         }}
-        .ka-login-card-head h1 {{ margin:0 0 8px!important; color:#f3f5f4!important; font-size:clamp(32px,2.75vw,44px)!important; font-weight:760!important; line-height:1.08!important; letter-spacing:-.025em!important; }}
-        .ka-login-card-head p {{ margin:0!important; color:#9aa1a2!important; font-size:clamp(13px,1.15vw,18px)!important; font-weight:450!important; line-height:1.5!important; }}
-        div[data-testid="stForm"] [data-testid="stTextInput"] {{ margin-bottom:clamp(10px,1.7vh,16px)!important; }}
-        div[data-testid="stForm"] [data-testid="stTextInput"] label p {{ color:#e4e7e6!important; font-size:clamp(13px,1.05vw,16px)!important; font-weight:600!important; letter-spacing:0!important; text-transform:none!important; }}
-        div[data-testid="stForm"] [data-baseweb="input"] {{ position:relative!important; height:clamp(55px,7.2vh,66px)!important; border:1px solid #485153!important; border-radius:8px!important; background:#0b1113!important; }}
-        div[data-testid="stForm"] div[data-testid="stTextInput"] [data-baseweb="input"] > div,
-        div[data-testid="stForm"] div[data-testid="stTextInput"] [data-baseweb="input"] input {{ background:#0b1113!important; background-color:#0b1113!important; }}
-        div[data-testid="stForm"] div[data-testid="stTextInput"] [data-baseweb="input"]:focus-within {{ border-color:#aee000!important; box-shadow:0 0 0 2px rgba(174,224,0,.10)!important; }}
-        div[data-testid="stForm"] input:-webkit-autofill,
-        div[data-testid="stForm"] input:-webkit-autofill:hover,
-        div[data-testid="stForm"] input:-webkit-autofill:focus {{
-            -webkit-box-shadow:0 0 0 1000px #0b1113 inset!important;
-            -webkit-text-fill-color:#eef1f0!important;
-            caret-color:#aee000!important;
+        .ka-login-security::before {{
+          content:""; width:21px; height:21px; background:var(--login-blue);
+          -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l8 4v6c0 5-3.4 9.5-8 10-4.6-.5-8-5-8-10V6l8-4zm0 2.2L6 7.1V12c0 3.9 2.5 7.3 6 7.9 3.5-.6 6-4 6-7.9V7.1l-6-2.9zm-1.1 10.9l-2.8-2.8 1.4-1.4 1.4 1.4 3.7-3.7L16 10l-5.1 5.1z'/%3E%3C/svg%3E") center/contain no-repeat;
+        }}
+        .ka-login-card-head h1 {{
+          margin:0 0 12px!important; color:var(--login-navy)!important;
+          font:850 clamp(34px,2.5vw,46px)/1.08 Inter,Arial,sans-serif!important; letter-spacing:-.035em!important;
+        }}
+        .ka-login-card-head p {{
+          margin:0!important; color:#63748b!important;
+          font:500 clamp(14px,1.03vw,18px)/1.5 Inter,Arial,sans-serif!important;
+        }}
+        div[data-testid="stForm"] [data-testid="stTextInput"] {{ margin-bottom:clamp(13px,1.75vh,19px)!important; }}
+        div[data-testid="stForm"] [data-testid="stTextInput"] label p {{
+          color:var(--login-navy)!important; font-size:14px!important; font-weight:750!important;
+          letter-spacing:0!important; text-transform:none!important;
+        }}
+        div[data-testid="stForm"] [data-baseweb="input"] {{
+          position:relative!important; height:clamp(52px,6.1vh,62px)!important;
+          border:1px solid #b9c8da!important; border-radius:10px!important;
+          background:#fff!important; box-shadow:none!important; transition:.16s ease!important;
+        }}
+        div[data-testid="stForm"] [data-baseweb="input"] > div,
+        div[data-testid="stForm"] [data-baseweb="input"] input {{ background:#fff!important; background-color:#fff!important; }}
+        div[data-testid="stForm"] [data-baseweb="input"]:focus-within {{
+          border-color:var(--login-blue)!important; box-shadow:0 0 0 3px rgba(8,122,245,.10)!important;
         }}
         div[data-testid="stForm"] [data-testid="InputInstructions"] {{ display:none!important; }}
-        div[data-testid="stForm"] [data-baseweb="input"]::before {{ content:""; position:absolute; z-index:2; left:21px; top:50%; width:24px; height:24px; transform:translateY(-50%); background-position:center; background-size:contain; background-repeat:no-repeat; opacity:.9; }}
-        div[data-testid="stForm"] [data-baseweb="input"]:has(input[aria-label="Adres e-mail lub login"])::before {{ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b4b9ba' stroke-width='1.8'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4.5 21c0-4.2 3.4-7 7.5-7s7.5 2.8 7.5 7z'/%3E%3C/svg%3E"); }}
-        div[data-testid="stForm"] [data-baseweb="input"]:has(input[type="password"])::before {{ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b4b9ba' stroke-width='1.8'%3E%3Crect x='5' y='10' width='14' height='11' rx='2'/%3E%3Cpath d='M8 10V7a4 4 0 018 0v3'/%3E%3C/svg%3E"); }}
-        div[data-testid="stForm"] input {{ padding-left:66px!important; color:#eef1f0!important; -webkit-text-fill-color:#eef1f0!important; font-size:clamp(14px,1.12vw,18px)!important; font-weight:500!important; }}
-        div[data-testid="stForm"] input::placeholder {{ color:#7d8486!important; -webkit-text-fill-color:#7d8486!important; }}
-        div[data-testid="stForm"] [data-testid="stHorizontalBlock"] {{ margin:-1px 0 clamp(17px,2.6vh,24px)!important; }}
-        div[data-testid="stForm"] [data-testid="stCheckbox"] p {{ color:#e5e8e7!important; font-size:clamp(13px,1.05vw,16px)!important; font-weight:550!important; letter-spacing:0!important; text-transform:none!important; }}
-        div[data-testid="stForm"] [data-testid="stCheckbox"] label:has(input:checked) span {{ background:#aee000!important; border-color:#aee000!important; color:#071000!important; }}
-        div[data-testid="stForm"] [data-testid="stCheckbox"] label:has(input:checked) span::after {{ content:"✓"; color:#071000; font-size:13px; font-weight:950; line-height:1; }}
-        .ka-login-forgot {{ color:#aee000!important; font-size:clamp(13px,1.05vw,16px)!important; font-weight:600!important; padding-top:7px!important; }}
+        div[data-testid="stForm"] [data-baseweb="input"]::before {{
+          content:""; position:absolute; z-index:3; left:17px; top:50%; width:23px; height:23px;
+          transform:translateY(-50%); background:#6a7b92; opacity:.92;
+          -webkit-mask-position:center; -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat;
+        }}
+        div[data-testid="stForm"] [data-baseweb="input"]:has(input[aria-label="Adres e-mail lub login"])::before {{
+          -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 12a5 5 0 100-10 5 5 0 000 10zm0-2a3 3 0 110-6 3 3 0 010 6zm0 4c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6zm-6.8 6c.5-2.2 3.4-4 6.8-4s6.3 1.8 6.8 4H5.2z'/%3E%3C/svg%3E");
+        }}
+        div[data-testid="stForm"] [data-baseweb="input"]:has(input[type="password"])::before {{
+          -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M17 8h-1V6a4 4 0 00-8 0v2H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V10a2 2 0 00-2-2zm-7-2a2 2 0 014 0v2h-4V6zm7 14H7V10h10v10z'/%3E%3C/svg%3E");
+        }}
+        div[data-testid="stForm"] input {{
+          padding-left:52px!important; color:var(--login-navy)!important; -webkit-text-fill-color:var(--login-navy)!important;
+          font:550 clamp(14px,1vw,17px) Inter,Arial,sans-serif!important; caret-color:var(--login-blue)!important;
+        }}
+        div[data-testid="stForm"] input::placeholder {{ color:#8998ab!important; -webkit-text-fill-color:#8998ab!important; opacity:1!important; }}
+        div[data-testid="stForm"] input:-webkit-autofill {{
+          -webkit-box-shadow:0 0 0 1000px #fff inset!important; -webkit-text-fill-color:var(--login-navy)!important;
+        }}
+        div[data-testid="stForm"] [data-testid="stHorizontalBlock"] {{ margin:0 0 clamp(19px,2.6vh,28px)!important; align-items:center!important; }}
+        div[data-testid="stForm"] [data-testid="stCheckbox"] label {{ gap:9px!important; }}
+        div[data-testid="stForm"] [data-testid="stCheckbox"] p {{ color:var(--login-navy)!important; font-size:14px!important; font-weight:600!important; }}
+        div[data-testid="stForm"] [data-testid="stCheckbox"] span {{ border-color:#aebfd2!important; border-radius:4px!important; background:#fff!important; }}
+        div[data-testid="stForm"] [data-testid="stCheckbox"] label:has(input:checked) span {{ background:var(--login-blue)!important; border-color:var(--login-blue)!important; color:#fff!important; }}
+        .ka-login-forgot {{ color:var(--login-blue); font:700 14px/1.45 Inter,Arial,sans-serif; text-align:right; padding-top:7px; }}
         div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button {{
-            height:clamp(58px,8vh,72px)!important; min-height:clamp(58px,8vh,72px)!important;
-            border-color:#b9eb08!important; border-radius:7px!important;
-            background:linear-gradient(180deg,#bceb08 0%,#8fd500 100%)!important;
-            color:#071006!important; font-size:clamp(17px,1.55vw,24px)!important; font-weight:850!important; letter-spacing:.065em!important;
+          height:clamp(54px,6.4vh,64px)!important; min-height:clamp(54px,6.4vh,64px)!important;
+          border:1px solid #0875e9!important; border-radius:11px!important;
+          background:linear-gradient(180deg,#1187ff 0%,#0874ed 100%)!important; color:#fff!important;
+          font:850 clamp(15px,1.12vw,19px)/1 Inter,Arial,sans-serif!important;
+          letter-spacing:.035em!important; text-transform:uppercase!important;
+          box-shadow:0 11px 25px rgba(8,116,237,.20)!important; transition:.16s ease!important;
         }}
-        div[data-testid="stForm"] div[data-testid="stFormSubmitButton"] button p {{ font-size:clamp(17px,1.55vw,24px)!important; font-weight:850!important; letter-spacing:.065em!important; }}
-        .ka-login-note {{ margin-top:clamp(18px,3.8vh,34px)!important; padding-top:clamp(16px,2.9vh,27px)!important; border-top:1px solid #424a4c!important; color:#909899!important; font-size:clamp(11px,.9vw,14px)!important; }}
-        .ka-login-note::before {{ content:"◉"!important; color:#a6adae!important; font-size:17px!important; margin-right:12px!important; }}
-        .ka-login-note b {{ color:#aee000; padding:0 9px; }}
+        div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover {{
+          background:linear-gradient(180deg,#087df4,#0669db)!important; transform:translateY(-1px);
+          box-shadow:0 14px 28px rgba(8,116,237,.26)!important;
+        }}
+        div[data-testid="stForm"] [data-testid="stFormSubmitButton"] button p {{ color:#fff!important; font-weight:850!important; }}
+        .ka-login-note {{
+          margin-top:clamp(21px,3vh,32px); padding-top:clamp(18px,2.4vh,25px);
+          border-top:1px solid #dbe4ef; color:#687a90;
+          font:550 13px/1.4 Inter,Arial,sans-serif; text-align:center;
+        }}
+        .ka-login-note::before {{ content:"✓"; display:inline-grid; place-items:center; width:18px; height:18px; margin-right:9px; border:2px solid var(--login-green); border-radius:50%; color:var(--login-green); font-size:10px; font-weight:900; }}
+        .ka-login-note b {{ color:#91a0b2; padding:0 8px; }}
         .ka-login-footer {{
-            left:0!important; right:0!important; bottom:0!important; width:100vw!important; height:74px!important;
-            box-sizing:border-box!important; padding:0 4.8vw!important; border-top:1px solid #22292b!important;
-            display:flex!important; align-items:center!important; justify-content:space-between!important;
-            color:#697173!important; font-size:13px!important; letter-spacing:.025em!important; text-align:left!important; text-transform:none!important;
+          position:fixed; z-index:5; left:2.5vw; right:2.5vw; bottom:0; height:8vh; min-height:62px;
+          display:flex; align-items:center; justify-content:space-between; box-sizing:border-box;
+          border-top:1px solid #d6e0ec; color:#62738a; font:600 13px/1.4 Inter,Arial,sans-serif;
         }}
-        .ka-login-footer b {{ color:#a8d900; padding:0 12px; }}
-        .ka-login-footer > span:first-child {{ visibility:hidden!important; }}
-        div[data-testid="stAlert"] {{ right:3.75vw!important; top:auto!important; bottom:80px!important; width:38.8vw!important; }}
-        @media (max-width:900px) {{
-            .ka-login-visual {{ display:none; }}
-            .ka-login-system {{ right:24px; }}
-            div[data-testid="stForm"] {{ left:16px!important; right:16px!important; top:72px!important; width:auto!important; height:calc(100vh - 158px)!important; min-height:0!important; padding:28px 24px 25px!important; }}
-            .ka-login-footer {{ padding:0 18px!important; font-size:10px!important; }}
-            .ka-login-footer > span:first-child {{ visibility:visible!important; }}
+        .ka-login-footer b {{ color:#8fa0b5; padding:0 14px; }}
+        div[data-testid="stAlert"] {{
+          position:fixed!important; z-index:8!important; right:6.2vw!important; bottom:8.4vh!important;
+          width:min(37vw,660px)!important; box-sizing:border-box!important;
+        }}
+
+        @media (max-height:850px) and (min-width:901px) {{
+          .ka-login-brand {{ top:2.6vh; transform:scale(.82); transform-origin:left top; }}
+          .ka-login-system {{ top:3.7vh; }}
+          .ka-login-story {{ top:17vh; transform:scale(.88); transform-origin:left top; }}
+          div[data-testid="stForm"] {{ transform:translateY(-49%) scale(.88)!important; transform-origin:right center!important; }}
+        }}
+        @media (max-width:1100px) {{
+          .ka-login-story {{ width:43vw; }}
+          .ka-login-wordmark strong {{ font-size:27px; }}
+          .ka-login-wordmark span {{ font-size:12px; }}
+          div[data-testid="stForm"] {{ right:3.2vw!important; width:48vw!important; }}
+        }}
+        @media (max-width:760px) {{
+          html,body,.stApp {{ overflow:auto!important; }}
+          .ka-login-story {{ display:none!important; }}
+          .ka-login-brand {{ left:22px; top:20px; transform:scale(.72); transform-origin:left top; }}
+          .ka-login-system {{ top:29px; right:20px; font-size:9px; gap:10px; }}
+          .ka-login-system .lang {{ padding-left:10px; }}
+          .ka-login-system .lang::after {{ margin-left:8px; }}
+          div[data-testid="stForm"] {{
+            position:absolute!important; left:16px!important; right:16px!important; top:138px!important;
+            width:auto!important; transform:none!important; padding:28px 22px!important; border-radius:16px!important;
+          }}
+          .ka-login-card-head h1 {{ font-size:32px!important; }}
+          .ka-login-footer {{ left:18px; right:18px; height:58px; font-size:9px; }}
+          div[data-testid="stAlert"] {{ left:16px!important; right:16px!important; bottom:62px!important; width:auto!important; }}
         }}
         </style>
-        <div class="ka-login-visual" aria-hidden="true"></div>
+
+        <div class="ka-login-brand">
+          <img src="{logo_uri}" alt="KANIBAL Analytics">
+          <div class="ka-login-wordmark">
+            <strong>KANIBAL</strong><span>ANALYTICS</span><small>ANALIZA · PRZEWAGA · ZYSK</small>
+          </div>
+        </div>
         <div class="ka-login-system"><span class="online">System online</span><span class="lang">PL</span></div>
+        <section class="ka-login-story" aria-label="Analityka KANIBAL">
+          <h2>Dane, które<br>dają przewagę.</h2>
+          <p>Precyzyjne analizy. Sprawdzone strategie.<br>Lepsze decyzje.</p>
+          <div class="ka-login-chart" aria-hidden="true">
+            <svg viewBox="0 0 850 480" role="img">
+              <defs><linearGradient id="barFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d7e8ff"/><stop offset="1" stop-color="#eef5ff"/></linearGradient></defs>
+              <g stroke="#e5eef9" stroke-width="1"><path d="M120 40V430M210 40V430M300 40V430M390 40V430M480 40V430M570 40V430M660 40V430M750 40V430"/><path d="M70 90H810M70 170H810M70 250H810M70 330H810M70 410H810"/></g>
+              <g fill="url(#barFade)"><rect x="160" y="360" width="24" height="62"/><rect x="225" y="332" width="24" height="90"/><rect x="290" y="302" width="24" height="120"/><rect x="355" y="318" width="24" height="104"/><rect x="420" y="266" width="24" height="156"/><rect x="485" y="235" width="24" height="187"/><rect x="550" y="249" width="24" height="173"/><rect x="615" y="190" width="24" height="232"/><rect x="680" y="140" width="24" height="282"/><rect x="745" y="88" width="24" height="334"/></g>
+              <path d="M45 425C115 368 155 389 220 342S335 312 395 272 505 305 560 230 640 242 690 170 738 138 790 66" fill="none" stroke="#087af5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M45 425C115 368 155 389 220 342S335 312 395 272 505 305 560 230 640 242 690 170 738 138 790 66" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="1 20"/>
+              <g fill="#fff" stroke="#087af5" stroke-width="4"><circle cx="220" cy="342" r="7"/><circle cx="395" cy="272" r="7"/><circle cx="560" cy="230" r="7"/><circle cx="690" cy="170" r="7"/></g>
+              <path d="M790 66l-26 8 20 13z" fill="#087af5"/>
+              <path d="M36 435H810" stroke="#cbdcf1" stroke-width="2"/>
+            </svg>
+            <div class="ka-metric one"><span>Kurs śr.</span><strong>2.07</strong></div>
+            <div class="ka-metric two"><span>Value</span><strong>48.0</strong></div>
+            <div class="ka-metric three"><span>Pewność</span><strong>72%</strong></div>
+          </div>
+        </section>
         """,
         unsafe_allow_html=True,
     )
@@ -240,13 +321,6 @@ def require_login() -> None:
         st.session_state.auth_user = ""
 
     if st.session_state.auth_ok:
-        with st.sidebar:
-            st.markdown("---")
-            st.caption(f"Zalogowany: **{st.session_state.auth_user}**")
-            if st.button("Wyloguj", use_container_width=True):
-                st.session_state.auth_ok = False
-                st.session_state.auth_user = ""
-                st.rerun()
         return
 
     _login_css()
@@ -254,9 +328,9 @@ def require_login() -> None:
         st.markdown(
             """
             <div class="ka-login-card-head">
-              <div class="ka-login-security">Bezpieczny dostęp</div>
+              <div class="ka-login-security">Bezpieczne logowanie</div>
               <h1>Witaj ponownie</h1>
-              <p>Zaloguj się, aby przejść do panelu analitycznego</p>
+              <p>Zaloguj się, aby przejść do panelu analitycznego.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -268,10 +342,17 @@ def require_login() -> None:
             st.checkbox("Zapamiętaj mnie", value=True)
         with forgot_col:
             st.markdown('<div class="ka-login-forgot">Nie pamiętasz hasła?</div>', unsafe_allow_html=True)
-        submitted = st.form_submit_button("Zaloguj się", use_container_width=True)
-        st.markdown('<div class="ka-login-note">Bezpieczne połączenie <b>•</b> Szyfrowanie 256-bit</div>', unsafe_allow_html=True)
+        submitted = st.form_submit_button("ZALOGUJ SIĘ", use_container_width=True)
+        st.markdown(
+            '<div class="ka-login-note">Bezpieczne połączenie <b>•</b> Szyfrowanie 256-bit</div>',
+            unsafe_allow_html=True,
+        )
 
-    st.markdown('<div class="ka-login-footer"><span>© 2026 KANIBAL ANALYTICS</span><span>Polityka prywatności <b>•</b> Pomoc</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="ka-login-footer"><span>© 2026 KANIBAL ANALYTICS</span>'
+        '<span>Polityka prywatności <b>•</b> Pomoc</span></div>',
+        unsafe_allow_html=True,
+    )
 
     if submitted:
         if authenticate(username.strip(), password):
@@ -282,4 +363,3 @@ def require_login() -> None:
             st.error("Nieprawidłowy login lub hasło.")
 
     st.stop()
-
