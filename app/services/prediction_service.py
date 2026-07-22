@@ -62,7 +62,10 @@ class PredictionService:
         if os.getenv("BETBOT_QUALITY_SHADOW", "0").strip().lower() in {"1", "true", "yes", "on"}:
             try:
                 from app.services.safe_upgrades.shadow_mode import run_shadow_mode
-                run_shadow_mode(raw, output.model_dump(mode="json"))
+                frozen_output = output.model_dump(mode="json")
+                run_shadow_mode(raw, frozen_output)
+                from quality_live_shadow import record_live_shadow
+                record_live_shadow(raw, frozen_output)
             except Exception:
                 # Shadow diagnostics must never alter or interrupt a prediction.
                 pass

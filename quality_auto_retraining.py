@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from build_quality_training_from_history import build
+from quality_champion_challenger import train_candidate_state, walk_forward_validate
 from quality_upgrade_engine import BetaCalibrator, train_time_safe_state
 from storage_paths import get_data_dir
 
@@ -128,27 +129,20 @@ def validate_candidate(
     min_brier_improvement: float,
     min_log_loss_improvement: float,
 ) -> dict[str, Any]:
-    candidate_metrics = score_state(rows, candidate)
-    current_metrics = score_state(rows, None)
-    reference_metrics = score_state(rows, active) if active else current_metrics
-    brier_gain = reference_metrics["brier_score"] - candidate_metrics["brier_score"]
-    log_gain = reference_metrics["log_loss"] - candidate_metrics["log_loss"]
-    passed = (
-        brier_gain >= min_brier_improvement
-        and log_gain >= min_log_loss_improvement
-        and candidate_metrics["brier_score"] <= current_metrics["brier_score"]
-        and candidate_metrics["log_loss"] <= current_metrics["log_loss"]
+    # The final candidate is intentionally not scored on rows used to fit it.
+    # Every walk-forward fold trains a separate challenger on past-only rows.
+    report = walk_forward_validate(
+        rows,
+        active or None,
+        min_brier_improvement=min_brier_improvement,
+        min_log_loss_improvement=min_log_loss_improvement,
+        min_test_samples=int(os.getenv("BETBOT_QUALITY_WF_MIN_TEST_SAMPLES", "300")),
+        min_folds=int(os.getenv("BETBOT_QUALITY_WF_MIN_FOLDS", "4")),
+        min_edge=float(os.getenv("BETBOT_QUALITY_WF_MIN_EDGE", "0.02")),
     )
     return {
-        "status": "POSITIVE_VALIDATION" if passed else "REJECTED_OR_REVIEW",
-        "candidate": candidate_metrics,
-        "active_reference": reference_metrics,
-        "current_model": current_metrics,
-        "brier_improvement": round(brier_gain, 8),
-        "log_loss_improvement": round(log_gain, 8),
-        "required_brier_improvement": min_brier_improvement,
-        "required_log_loss_improvement": min_log_loss_improvement,
-        "automatic_promotion": False,
+        **report,
+        "candidate_state_created": candidate.get("status") == "TRAINED_TIME_SAFE",
     }
 
 
@@ -242,7 +236,13 @@ class ControlledQualityRetrainer:
                 _append_event(self.events_path, result)
                 return result
 
-            candidate = train_time_safe_state(rows)
+            candidate = train_candidate_state(
+                rows,
+                min_segment_samples=int(
+                    os.getenv("BETBOT_QUALITY_SEGMENT_MIN_SAMPLES", "500")
+                ),
+                max_segments=int(os.getenv("BETBOT_QUALITY_MAX_SEGMENTS", "12")),
+            )
             if candidate.get("status") != "TRAINED_TIME_SAFE":
                 result = {"status": "TRAINING_REJECTED", "checked_at": now, "training": candidate}
                 _append_event(self.events_path, result)

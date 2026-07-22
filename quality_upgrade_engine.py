@@ -281,6 +281,15 @@ def assess_quality(
     sources = {"current": current, "dixon_coles": dc_probability, "market": market_probability}
     available = {key: value for key, value in sources.items() if value is not None}
     state = dict(state or _load_state())
+    segment_models = state.get("segment_models", {})
+    if isinstance(segment_models, Mapping):
+        league = str(raw.get("league") or raw.get("liga") or "")
+        selected = (
+            segment_models.get(f"market::{market}")
+            or segment_models.get(f"league::{league}")
+        )
+        if isinstance(selected, Mapping):
+            state = dict(selected)
     configured = state.get("stacking_weights", {})
     configured = configured if isinstance(configured, Mapping) else {}
     default_weights = {"current": 0.45, "dixon_coles": 0.35, "market": 0.20}

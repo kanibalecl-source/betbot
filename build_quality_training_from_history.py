@@ -190,6 +190,14 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
     market_probability, market_method = _market_probability(row, market)
     if market_probability is None:
         return None
+    odds = _num(_first(row, ("odds", "kurs_buk", "bookmaker_odds", "odd")))
+    closing_odds = _num(
+        _first(row, ("closing_odds", "close_odds", "closing_line_odds", "odds_close"))
+    )
+    league = str(
+        _first(row, ("league", "liga", "competition", "tournament")) or "UNKNOWN"
+    )
+    fixture_id = str(_first(row, ("fixture_id", "event_id", "match_id", "id")) or "")
     timestamp = str(
         _first(
             row,
@@ -214,10 +222,18 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
         "source": source,
         "record_id": fingerprint,
         "market": market,
+        "league": league,
+        "fixture_id": fixture_id,
         "current_probability": round(current, 8),
         "dixon_coles_probability": round(dixon, 8),
         "market_probability": round(market_probability, 8),
         "market_probability_method": market_method,
+        "odds": round(odds, 8) if odds is not None and odds > 1.0 else "",
+        "closing_odds": (
+            round(closing_odds, 8)
+            if closing_odds is not None and closing_odds > 1.0
+            else ""
+        ),
         "target": target,
     }
 
@@ -315,9 +331,10 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
     fields = [
-        "timestamp", "source", "record_id", "market",
+        "timestamp", "source", "record_id", "fixture_id", "market", "league",
         "current_probability", "dixon_coles_probability",
         "market_probability", "market_probability_method", "target",
+        "odds", "closing_odds",
     ]
     with temporary.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
