@@ -1582,18 +1582,21 @@ def title(text: str) -> None:
 
 
 def page_banner(section: str, name: str, subtitle: str) -> None:
-    image = b64_image(BANNER_FILE)
-    if image:
-        mime = "image/jpeg" if BANNER_FILE.suffix.lower() in {".jpg", ".jpeg"} else "image/png"
-        st.markdown(
-            f'''<div class="ka-page-banner ka-image-banner"><img src="data:{mime};base64,{image}" alt="KANIBAL ANALYTICS"></div>''',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            '''<div class="ka-page-banner ka-image-banner"></div>''',
-            unsafe_allow_html=True,
-        )
+    logo_file = BASE_DIR / "kanibal_logo.png"
+    logo = b64_image(logo_file)
+    logo_html = (
+        f'<img src="data:image/png;base64,{logo}" alt="Logo KANIBAL">'
+        if logo else '<div class="ka-brand-logo-fallback">K</div>'
+    )
+    st.markdown(
+        '<div class="ka-brand-banner">'
+        f'{logo_html}<div class="ka-brand-copy">'
+        '<div class="ka-brand-name">KANIBAL</div>'
+        '<div class="ka-brand-analytics">ANALYTICS</div>'
+        '<div class="ka-brand-tagline">Analiza · Przewaga · Zysk</div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def subpage_banner(section: str, name: str, subtitle: str) -> None:
