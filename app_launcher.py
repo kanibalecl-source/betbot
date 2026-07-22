@@ -5,21 +5,22 @@ import sys
 import threading
 import time
 
-from storage_paths import require_persistent_storage_on_server
-from server_data_guard import prepare_server_data_backup
-
-require_persistent_storage_on_server()
-print(f"SERVER DATA GUARD: {prepare_server_data_backup()}")
+from server_start_guard import run_server_start_guard_once
 
 print("🚀 APP LAUNCHER START")
 sys.stdout.flush()
+
+run_server_start_guard_once()
 
 PORT = os.environ.get("PORT", "8080")
 PYTHON = sys.executable or "python3"
 
 PROCESS_SPECS = {
     "scheduler": [PYTHON, "scheduler_engine.py"],
+    "live_pipeline": [PYTHON, "live_pipeline_runtime.py"],
     "settlement": [PYTHON, "settle_loop.py"],
+    "persistence": [PYTHON, "persistence_runtime.py"],
+    "retraining": [PYTHON, "auto_retraining_loop.py"],
     "dashboard": [
         PYTHON, "-m", "streamlit", "run", "dashboard_streamlit.py",
         "--server.port", str(PORT),

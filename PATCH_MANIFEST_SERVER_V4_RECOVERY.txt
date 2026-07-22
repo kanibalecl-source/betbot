@@ -1,0 +1,45 @@
+KANIBAL SERVER PRODUCTION RECOVERY SAFE v4
+Date: 2026-07-22
+
+PURPOSE
+- Recover the Railway service from the failed v4 deployment.
+- Correct mounted-volume ownership before the application drops to uid 10001.
+- Run the fail-closed server data guard before QUALITY or any other worker starts.
+- Reuse a recent backup during low disk space only when every protected source file
+  exactly matches the existing full backup by path, byte size and SHA-256.
+
+DEPLOYMENT SAFETY
+- This archive is an explicit allowlist patch, not a repository snapshot.
+- The application remains non-root after the volume ownership preflight.
+- BETTING_ENABLED remains false by default.
+- No history, learning data, models, credentials or runtime state is included.
+- A changed protected file still requires a new complete backup; low disk space then
+  blocks startup instead of weakening protection.
+
+FILES INCLUDED
+.env.example
+Dockerfile
+docker-entrypoint.sh
+server_data_guard.py
+server_start_guard.py
+storage_paths.py
+app_launcher.py
+app_launcher_quality.py
+railway.json
+tests/test_production_hardening.py
+tests/test_server_quality_safety.py
+
+EXPLICITLY EXCLUDED
+- users.json
+- secure_admin_railway.env
+- .admin_setup_token
+- data/**
+- history/** and collected result/history files
+- models/** and model artifacts
+- quality candidates, registries, reports and training outputs
+- logs, databases, caches and runtime state
+
+VERIFICATION
+- Python compileall: PASS
+- Unit tests available in the local runtime: 59 PASS
+- API test requires the server dependency set (FastAPI) and is executed by the image.

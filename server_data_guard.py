@@ -27,8 +27,10 @@ CRITICAL_PATTERNS = (
 
 BACKUP_REUSE_HOURS_ENV = "BETBOT_SERVER_BACKUP_REUSE_HOURS"
 BACKUP_KEEP_ENV = "BETBOT_SERVER_BACKUP_KEEP"
+BACKUP_EMERGENCY_REUSE_HOURS_ENV = "BETBOT_SERVER_BACKUP_EMERGENCY_REUSE_HOURS"
 DEFAULT_BACKUP_REUSE_HOURS = 0
 DEFAULT_BACKUP_KEEP = 5
+DEFAULT_BACKUP_EMERGENCY_REUSE_HOURS = 24
 MIN_FREE_RESERVE_BYTES = 64 * 1024 * 1024
 
 
@@ -74,6 +76,22 @@ def _complete_backups(backup_root: Path) -> list[Path]:
     )
 
 
+def _read_manifest(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _complete_full_backups(backup_root: Path) -> list[Path]:
+    return [
+        path
+        for path in _complete_backups(backup_root)
+        if _read_manifest(path).get("kind", "full") == "full"
+    ]
+
+
 def _backup_age_hours(path: Path) -> float:
     created = datetime.fromtimestamp(
         (path / "manifest.json").stat().st_mtime, timezone.utc
@@ -90,12 +108,63 @@ def _remove_verified_backup(path: Path, backup_root: Path) -> None:
 
 
 def _prune_complete_backups(backup_root: Path, keep: int) -> list[str]:
-    complete = _complete_backups(backup_root)
+    # Reference manifests are tiny and may point to an older full backup. Only
+    # prune full snapshots here so a reference can never become dangling.
+    complete = _complete_full_backups(backup_root)
     removed: list[str] = []
     for path in complete[max(1, keep):]:
         _remove_verified_backup(path, backup_root)
         removed.append(path.name)
     return removed
+
+
+def _backup_matches_sources(backup: Path, data_path: Path, sources: list[Path]) -> bool:
+    manifest = _read_manifest(backup)
+    entries = manifest.get("files")
+    if not isinstance(entries, list):
+        return False
+    expected = {
+        str(entry.get("path")): entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("path")
+    }
+    current_paths = {source.relative_to(data_path).as_posix() for source in sources}
+    if set(expected) != current_paths:
+        return False
+    for source in sources:
+        relative = source.relative_to(data_path).as_posix()
+        entry = expected[relative]
+        if int(entry.get("size", -1)) != source.stat().st_size:
+            return False
+        if str(entry.get("source_sha256", "")) != sha256_file(source):
+            return False
+    return True
+
+
+def _create_reference_manifest(
+    destination_root: Path,
+    manifest_path: Path,
+    data_path: Path,
+    key: str,
+    reused_backup: Path,
+    free_bytes: int,
+    required_bytes: int,
+) -> None:
+    destination_root.mkdir(parents=True, exist_ok=False)
+    manifest = {
+        "kind": "reference",
+        "deployment": key,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "data_dir": str(data_path),
+        "reused_backup": reused_backup.name,
+        "reason": "identical_verified_snapshot_reused_due_to_low_space",
+        "free_bytes": free_bytes,
+        "required_bytes": required_bytes,
+        "files": [],
+    }
+    temporary = destination_root / "manifest.tmp"
+    temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, manifest_path)
 
 
 def critical_files(data_dir: Path, backup_root: Path | None = None) -> list[Path]:
@@ -178,7 +247,7 @@ def prepare_server_data_backup(
     if destination_root.exists():
         raise RuntimeError(f"Incomplete deployment backup exists: {destination_root}")
 
-    complete = _complete_backups(backup_root)
+    complete = _complete_full_backups(backup_root)
     latest = complete[0] if complete else None
     reuse_hours = _int_env(
         BACKUP_REUSE_HOURS_ENV, DEFAULT_BACKUP_REUSE_HOURS, minimum=0
@@ -196,14 +265,47 @@ def prepare_server_data_backup(
     expected_bytes = sum(source.stat().st_size for source in sources)
     free_bytes = shutil.disk_usage(data_path).free
     reserve_bytes = max(MIN_FREE_RESERVE_BYTES, expected_bytes // 20)
-    if latest is not None and free_bytes < expected_bytes + reserve_bytes:
+    required_bytes = expected_bytes + reserve_bytes
+    if latest is not None and free_bytes < required_bytes:
+        emergency_hours = _int_env(
+            BACKUP_EMERGENCY_REUSE_HOURS_ENV,
+            DEFAULT_BACKUP_EMERGENCY_REUSE_HOURS,
+            minimum=0,
+        )
+        latest_age = _backup_age_hours(latest)
+        if (
+            emergency_hours > 0
+            and latest_age <= emergency_hours
+            and _backup_matches_sources(latest, data_path, sources)
+        ):
+            _create_reference_manifest(
+                destination_root,
+                manifest_path,
+                data_path,
+                key,
+                latest,
+                free_bytes,
+                required_bytes,
+            )
+            return {
+                "status": "IDENTICAL_BACKUP_REUSED_LOW_SPACE",
+                "deployment": key,
+                "backup": str(destination_root),
+                "reused_backup": str(latest),
+                "backup_age_hours": round(latest_age, 3),
+                "verified_files": len(sources),
+                "free_bytes": free_bytes,
+                "required_bytes": required_bytes,
+            }
         raise RuntimeError(
-            "Insufficient space for a deployment-specific backup; startup blocked "
-            f"(required={expected_bytes + reserve_bytes}, free={free_bytes})."
+            "Insufficient space for a deployment-specific backup and no identical "
+            "fresh snapshot can be reused; startup blocked "
+            f"(required={required_bytes}, free={free_bytes})."
         )
 
     destination_root.mkdir(parents=True, exist_ok=False)
     manifest: dict[str, Any] = {
+        "kind": "full",
         "deployment": key,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "data_dir": str(data_path),

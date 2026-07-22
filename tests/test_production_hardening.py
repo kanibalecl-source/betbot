@@ -4,6 +4,7 @@ import sys
 import types
 import unittest
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 
 try:
@@ -121,6 +122,7 @@ class FinancialSafetyTests(unittest.TestCase):
     def test_backup_defaults_are_per_deployment(self):
         self.assertEqual(server_data_guard.DEFAULT_BACKUP_REUSE_HOURS, 0)
         self.assertGreaterEqual(server_data_guard.DEFAULT_BACKUP_KEEP, 5)
+        self.assertLessEqual(server_data_guard.DEFAULT_BACKUP_EMERGENCY_REUSE_HOURS, 24)
 
     def test_stale_or_unzoned_odds_are_rejected(self):
         fresh = datetime.now(timezone.utc).isoformat()
@@ -136,6 +138,22 @@ class FinancialSafetyTests(unittest.TestCase):
         third = bot.make_pick_id(match, "BTTS_YES", 2.0, "A", "v2")
         self.assertNotEqual(first, second)
         self.assertNotEqual(first, third)
+
+    def test_container_repairs_volume_permissions_before_dropping_privileges(self):
+        root = Path(__file__).resolve().parents[1]
+        dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+        entrypoint = (root / "docker-entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn('ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]', dockerfile)
+        self.assertIn("chown -R 10001:10001", entrypoint)
+        self.assertIn('exec gosu 10001:10001 "$@"', entrypoint)
+
+    def test_quality_process_starts_only_after_server_guard(self):
+        root = Path(__file__).resolve().parents[1]
+        launcher = (root / "app_launcher_quality.py").read_text(encoding="utf-8")
+        self.assertLess(
+            launcher.index("run_server_start_guard_once()"),
+            launcher.index("subprocess.Popen("),
+        )
 
 
 if __name__ == "__main__":

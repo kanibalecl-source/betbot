@@ -41,12 +41,11 @@ def authenticate(username: str, password: str) -> bool:
     users = load_users()
     bootstrap_username = os.getenv("BETBOT_ADMIN_USERNAME", "").strip()
     bootstrap_hash = os.getenv("BETBOT_ADMIN_PASSWORD_HASH", "").strip()
-    if bootstrap_username and bootstrap_hash and bootstrap_username not in users:
-        users[bootstrap_username] = {
-            "password_hash": bootstrap_hash,
-            "role": "admin",
-            "active": True,
-        }
+    # Production credentials stored as Railway secrets are authoritative.
+    # This permits a secure password rotation without committing password
+    # hashes to the repository and without touching persistent bot data.
+    if bootstrap_username and bootstrap_hash and username == bootstrap_username:
+        return verify_password(bootstrap_hash, password)
     user = users.get(username)
     if not user:
         return False
