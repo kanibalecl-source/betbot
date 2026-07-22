@@ -2,6 +2,8 @@
 import requests
 from datetime import datetime, timedelta, timezone
 
+from api_football_request_control import fetch_fixture_odds
+
 API_KEY = os.getenv("API_FOOTBALL_KEY", "")
 
 BASE_URL = "https://v3.football.api-sports.io"
@@ -277,16 +279,18 @@ def _iter_fixture_odds(match):
     url = f"{BASE_URL}/odds"
     params = {"fixture": fixture_id}
 
-    response = requests.get(
-        url,
+    result = fetch_fixture_odds(
+        fixture_id=fixture_id,
+        url=url,
         headers=HEADERS,
-        params=params,
-        timeout=25
+        requester=requests.get,
+    )
+    source = "CACHE" if result["cached"] else "API"
+    print(
+        f"ODDS STATUS: {result['status_code']} | fixture={fixture_id} | source={source}"
     )
 
-    print(f"ODDS STATUS: {response.status_code} | fixture={fixture_id}")
-
-    data = response.json()
+    data = result["payload"]
 
     if data.get("errors"):
         print(f"ODDS API ERRORS: {data.get('errors')}")
@@ -345,7 +349,12 @@ def _iter_fixture_odds(match):
                             key = f"UNDER_{line}"
 
                 if key:
-                    rows.append({"market": key, "odds": odd, "bookmaker": bookmaker_name})
+                    rows.append({
+                        "market": key,
+                        "odds": odd,
+                        "bookmaker": bookmaker_name,
+                        "observed_at": result["observed_at"],
+                    })
 
     return rows
 
@@ -355,7 +364,11 @@ def get_odds_market_data(match):
     try:
         rows = _iter_fixture_odds(match)
         markets = {}
-        observed_at = datetime.now(timezone.utc).isoformat()
+        observed_at = (
+            str(rows[0].get("observed_at") or "")
+            if rows
+            else datetime.now(timezone.utc).isoformat()
+        )
 
         for row in rows:
             key = row["market"]
