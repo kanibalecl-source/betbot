@@ -127,7 +127,8 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 /* Enforce the white executive surface over legacy per-tab dark styles. */
 .ka-layout,.ka-bottom,.ka-two,.ka-three,.live-layout,.ai-details-grid,.ai-reason,.ai-table-final,.ai-table-final-head,.ai-table-final-row,.ai-detail-final,.ai-detail-final-box,.ka-mini-banner,.ka-professional-note,.placeholder-bars,[data-testid="stDataFrame"],[data-testid="stTable"]{background:#fff!important;color:var(--ui-text)!important}
 .ai-table-final-head,.ai-table-final-row,.ai-detail-final,.ai-detail-final-box,.ai-reason,.ka-mini-banner,.ka-professional-note{border-color:var(--ui-line)!important;box-shadow:none!important}
-.ka-table tbody tr td,.ka-table tbody tr:nth-child(even) td,.ka-table tbody tr:hover td{background:#fff!important}
+.ka-value.compact{font-size:16px!important;line-height:1.08!important}
+.ka-table thead tr th,.ka-table tbody tr td,.ka-table tbody tr:nth-child(even) td,.ka-table tbody tr:hover td,[data-testid="stTable"] table th,[data-testid="stTable"] table td{background:#fff!important}
 
 /* Country flags */
 .ka-country-label,.ka-team-name{display:inline-flex;align-items:center;gap:7px}.ka-country-flag{display:inline-flex;width:22px;height:16px;border:1px solid #d5dde7;border-radius:3px;overflow:hidden;background:#fff;font-size:15px}.ka-country-flag svg{width:100%;height:100%}.ka-match-separator{margin:0 6px;color:#9aa6b5}
