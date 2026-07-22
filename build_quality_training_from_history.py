@@ -17,8 +17,23 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from quality_upgrade_engine import DixonColesEngine, no_vig_probabilities
-from server_data_guard import sha256_file
 from storage_paths import DATA_DIR
+
+try:
+    from server_data_guard import sha256_file as _guard_sha256_file
+except (ImportError, AttributeError):
+    _guard_sha256_file = None
+
+
+def sha256_file(path: Path) -> str:
+    """Hash a source even on older production guards lacking this helper."""
+    if _guard_sha256_file is not None:
+        return _guard_sha256_file(path)
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 OUTPUT_NAMES = {
@@ -322,7 +337,11 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
         "source_hashes_unchanged": True,
         "source_hashes": hashes_after,
     }
-    metadata_path = output.with_name("quality_training.meta.json")
+    metadata_path = (
+        output.with_name("quality_training.meta.json")
+        if output.name == "quality_training.csv"
+        else output.with_suffix(".meta.json")
+    )
     metadata_temp = metadata_path.with_suffix(".json.tmp")
     metadata_temp.write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"

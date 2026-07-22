@@ -1,0 +1,28 @@
+KANIBAL QUALITY AUTO RETRAINING - SAFE SERVER OVERLAY
+
+COPY ONLY THESE FILES OVER THE CURRENT PRODUCTION REPOSITORY:
+
+- app_launcher_quality.py
+- build_quality_training_from_history.py
+- quality_auto_retraining.py
+- quality_auto_retraining_loop.py
+- QUALITY_AUTO_RETRAINING_SERVER.md
+- QUALITY_AUTO_RETRAINING_PATCH_CONTENTS.txt
+- tests/test_quality_auto_retraining.py
+
+THE PACKAGE DOES NOT CONTAIN:
+
+- data directory;
+- CSV, SQLite, DB, JSONL or trained-state files;
+- secrets or .env files;
+- Railway Volume content;
+- active quality_shadow_state.json.
+- production app_launcher.py.
+
+DEFAULT BEHAVIOUR:
+
+- automatic quality retraining is disabled unless
+  BETBOT_QUALITY_RETRAIN_ENABLED=1;
+- candidates are validated and versioned;
+- candidates are never automatically promoted;
+- the active model is read-only for this process.
