@@ -69,20 +69,15 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .ui-side-logo{display:flex;align-items:center;gap:12px}.ui-side-logo img{width:54px;height:54px;object-fit:contain}
 .ui-side-word strong{display:block;color:#fff;font-size:20px;letter-spacing:.045em;line-height:1}.ui-side-word span{display:block;color:#b8c7da;font-size:8px;font-weight:800;letter-spacing:.28em;margin-top:7px}
 .ui-side-tag{margin-top:13px;color:#8395aa;font-size:11px;letter-spacing:.02em}
-[data-testid="stSidebar"] [data-testid="stRadio"]{padding:18px 0 0!important}
-[data-testid="stSidebar"] [data-testid="stRadio"]>label{display:none!important}
-[data-testid="stSidebar"] [role="radiogroup"]{gap:5px!important;padding:0 10px!important}
-[data-testid="stSidebar"] [role="radiogroup"] label{min-height:56px!important;margin:0!important;padding:0 17px!important;border-radius:8px!important;color:#c8d4e2!important;background:transparent!important;transition:.15s ease;cursor:pointer!important}
-[data-testid="stSidebar"] [role="radiogroup"] label:hover{background:rgba(255,255,255,.07)!important;color:#fff!important}
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked){background:linear-gradient(90deg,#1189ee,#24a9f5)!important;color:#fff!important;box-shadow:0 8px 22px rgba(0,122,230,.28)!important}
-[data-testid="stSidebar"] [role="radiogroup"] label>div:first-child{display:none!important}
-[data-testid="stSidebar"] [data-baseweb="radio"] input,[data-testid="stSidebar"] [data-baseweb="radio"] input+div,[data-testid="stSidebar"] [data-baseweb="radio"]>div:first-child{display:none!important}
-[data-testid="stSidebar"] [role="radiogroup"] label p{font-size:15px!important;font-weight:650!important;color:#c8d4e2!important;letter-spacing:0!important}
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p{color:#fff!important}
+[data-testid="stSidebar"] .ui-nav-start+div{margin-top:14px!important}
+[data-testid="stSidebar"] .stButton{padding:0 10px 4px!important}
+[data-testid="stSidebar"] .stButton button{height:47px!important;min-height:47px!important;margin:0!important;padding:0 17px!important;border:0!important;border-radius:8px!important;background:transparent!important;color:#c8d4e2!important;box-shadow:none!important;justify-content:flex-start!important;font-size:14px!important;font-weight:650!important;letter-spacing:0!important;text-align:left!important}
+[data-testid="stSidebar"] .stButton button:hover{background:rgba(255,255,255,.07)!important;color:#fff!important}
+[data-testid="stSidebar"] .stButton button[kind="primary"]{background:linear-gradient(90deg,#1189ee,#24a9f5)!important;color:#fff!important;box-shadow:0 8px 22px rgba(0,122,230,.28)!important}
 .ui-side-footer{position:fixed;left:0;bottom:65px;width:264px;border-top:1px solid rgba(255,255,255,.09);background:#071b35}
 .ui-online{display:flex;align-items:center;gap:10px;padding:18px 25px;color:#b7c5d5;font-size:12px;border-bottom:1px solid rgba(255,255,255,.07)}
 .ui-online:before{content:"";width:9px;height:9px;border-radius:50%;background:#59cf78;box-shadow:0 0 0 4px rgba(89,207,120,.12)}
-[data-testid="stSidebar"] .stButton:last-child{position:fixed!important;left:20px!important;bottom:14px!important;width:224px!important;z-index:20!important}
+[data-testid="stSidebar"] .stButton:last-child{position:fixed!important;left:10px!important;bottom:10px!important;width:244px!important;padding:0!important;z-index:20!important}
 [data-testid="stSidebar"] .stButton:last-child button{height:40px!important;background:rgba(255,255,255,.055)!important;border:1px solid rgba(255,255,255,.12)!important;color:#eaf1f8!important;box-shadow:none!important}
 [data-testid="stSidebar"] .stButton:last-child button:hover{background:rgba(255,255,255,.10)!important;border-color:rgba(255,255,255,.22)!important}
 
@@ -126,7 +121,7 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 /* Country flags */
 .ka-country-label,.ka-team-name{display:inline-flex;align-items:center;gap:7px}.ka-country-flag{display:inline-flex;width:22px;height:16px;border:1px solid #d5dde7;border-radius:3px;overflow:hidden;background:#fff;font-size:15px}.ka-country-flag svg{width:100%;height:100%}.ka-match-separator{margin:0 6px;color:#9aa6b5}
 
-@media(max-width:1200px){[data-testid="stSidebar"]{width:220px!important;min-width:220px!important}[data-testid="stSidebar"]>div:first-child{width:220px!important}.ui-side-footer{width:220px}[data-testid="stSidebar"] .stButton:last-child{width:180px!important}.ka-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ui-search{display:none}.block-container{padding-left:18px!important;padding-right:18px!important}.ui-topbar{margin-left:-18px;margin-right:-18px}}
+@media(max-width:1200px){[data-testid="stSidebar"]{width:220px!important;min-width:220px!important}[data-testid="stSidebar"]>div:first-child{width:220px!important}.ui-side-footer{width:220px}[data-testid="stSidebar"] .stButton:last-child{width:200px!important}.ka-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ui-search{display:none}.block-container{padding-left:18px!important;padding-right:18px!important}.ui-topbar{margin-left:-18px;margin-right:-18px}}
 @media(max-width:760px){[data-testid="stSidebar"]{display:none!important}.block-container{padding:0 10px 18px!important}.ui-topbar{margin:0 -10px 14px;padding:0 14px;height:72px}.ui-heading h1{font-size:19px}.ui-heading p,.ui-date{display:none}.ka-grid{grid-template-columns:1fr!important}.ka-page-banner,.ka-page-banner.ka-image-banner{height:92px!important}}
 </style>
 """
@@ -146,14 +141,19 @@ def render_navigation(base_dir: Path) -> str:
             '</div><div class="ui-side-tag">Dane. Decyzje. Przewaga.</div></div>',
             unsafe_allow_html=True,
         )
-        selected = st.radio(
-            "Nawigacja",
-            NAV_ITEMS,
-            index=1,
-            format_func=lambda item: NAV_LABELS[item],
-            key="executive_navigation",
-            label_visibility="collapsed",
-        )
+        st.markdown('<div class="ui-nav-start"></div>', unsafe_allow_html=True)
+        if st.session_state.get("executive_navigation") not in NAV_ITEMS:
+            st.session_state.executive_navigation = "Przedmeczowe"
+        for item in NAV_ITEMS:
+            active = st.session_state.executive_navigation == item
+            if st.button(
+                NAV_LABELS[item],
+                key=f"executive_nav_{item}",
+                use_container_width=True,
+                type="primary" if active else "secondary",
+            ):
+                st.session_state.executive_navigation = item
+        selected = st.session_state.executive_navigation
         st.markdown(
             '<div class="ui-side-footer"><div class="ui-online">System online</div></div>',
             unsafe_allow_html=True,
