@@ -142,11 +142,11 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .block-container{max-width:1740px!important;padding:0 36px 30px!important}
 [data-testid="stSidebar"],[data-testid="stSidebar"][aria-expanded="false"]{width:262px!important;min-width:262px!important;max-width:262px!important;flex-basis:262px!important;border-right:1px solid #dde5ee!important}
 [data-testid="stSidebar"]>div:first-child{width:262px!important}
-.ui-side-brand{height:122px!important;padding:34px 28px 20px!important;border-bottom:0!important}
+.ui-side-brand{height:110px!important;padding:24px 28px 14px!important;border-bottom:0!important}
 .ui-side-logo{gap:13px!important}.ui-side-logo img{width:58px!important;height:58px!important}.ui-side-word strong{font-size:20px!important;letter-spacing:.055em!important}.ui-side-word span{margin-top:7px!important;color:#086cff!important}
-[data-testid="stSidebar"] .ui-nav-start+div{margin-top:20px!important}
-[data-testid="stSidebar"] .stButton{padding:0 20px 8px!important}
-[data-testid="stSidebar"] .stButton button{height:50px!important;min-height:50px!important;padding:0 18px!important;border-radius:9px!important;color:#183453!important;font-size:14px!important;font-weight:600!important}
+[data-testid="stSidebar"] .ui-nav-start+div{margin-top:8px!important}
+[data-testid="stSidebar"] .stButton{padding:0 20px 4px!important}
+[data-testid="stSidebar"] .stButton button{height:44px!important;min-height:44px!important;padding:0 18px!important;border-radius:9px!important;color:#183453!important;font-size:14px!important;font-weight:600!important}
 [data-testid="stSidebar"] .stButton button:hover{background:#f1f6fd!important;color:#075ecf!important}
 [data-testid="stSidebar"] .stButton button[kind="primary"]{background:linear-gradient(100deg,#0878f9 0%,#0b65ed 100%)!important;color:#fff!important;box-shadow:0 9px 22px rgba(8,108,255,.24)!important}
 .ui-side-footer{width:262px!important;bottom:66px!important}.ui-online{padding:17px 29px!important}

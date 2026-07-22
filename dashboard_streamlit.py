@@ -1712,13 +1712,13 @@ def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
 def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:
     low_picks = normalize_picks(low_picks) if low_picks is not None and not low_picks.empty else pd.DataFrame()
     risk_picks = normalize_picks(risk_picks) if risk_picks is not None and not risk_picks.empty else pd.DataFrame()
+    page_banner("Typy przedmeczowe", "PRZEDMECZOWE", "Trzy czytelne tabele: główna, niskie ryzyko i podwyższone ryzyko.")
     metrics([
         ("Mecze", str(len(picks)), "dzisiaj"),
         ("Średni kurs", f"{as_float(numeric_series(picks, 'kurs_buk').mean(), 0):.2f}", "główne"),
         ("Średnia pewność", pct(as_float(numeric_series(picks, "confidence").mean(), 0)), "model"),
         ("Profile ryzyka", "3", f"low {len(low_picks)} / risk {len(risk_picks)}"),
     ])
-    page_banner("Typy przedmeczowe", "PRZEDMECZOWE", "Trzy czytelne tabele: główna, niskie ryzyko i podwyższone ryzyko.")
     filter_cols = st.columns([1.35, 1, 1, .8])
     league_col = "league" if "league" in picks.columns else "liga" if "liga" in picks.columns else None
     market_col = "market" if "market" in picks.columns else "typ" if "typ" in picks.columns else None
