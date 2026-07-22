@@ -449,11 +449,11 @@ def sleek_line_chart(title: str, values: List[float], stat: str = "", subtitle: 
         f'<div class="ka-viz-sub">{html.escape(subtitle)}</div>'
         '<svg viewBox="0 0 600 150" role="img" aria-label="Wykres liniowy">'
         '<defs><linearGradient id="kaArea" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0" stop-color="#7cff2b" stop-opacity=".36"/><stop offset="1" stop-color="#7cff2b" stop-opacity="0"/>'
+        '<stop offset="0" stop-color="#086cff" stop-opacity=".24"/><stop offset="1" stop-color="#086cff" stop-opacity="0"/>'
         '</linearGradient></defs>'
         '<path d="M16 34H584 M16 68H584 M16 102H584 M16 136H584" stroke="rgba(218,231,223,.08)" stroke-width="1"/>'
         f'<polygon points="{area}" fill="url(#kaArea)"/>'
-        f'<polyline points="{point_string}" fill="none" stroke="#7cff2b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
+        f'<polyline points="{point_string}" fill="none" stroke="#086cff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
         '</svg></div>'
     )
 
@@ -466,7 +466,7 @@ def ranked_bars(title: str, items: List[tuple], subtitle: str = "") -> str:
     rows = []
     for label, value in clean:
         width = max(3, abs(value) / max_value * 100)
-        color = "#ff4d43" if value < 0 else "#7cff2b"
+        color = "#d95151" if value < 0 else "#086cff"
         rows.append(
             '<div class="ka-bar-row">'
             f'<span>{html.escape(label)}</span><div class="ka-bar-track"><div class="ka-bar-fill" style="width:{width:.0f}%;background:{color}"></div></div>'
