@@ -240,13 +240,9 @@ def require_login() -> None:
         st.session_state.auth_user = ""
 
     if st.session_state.auth_ok:
-        with st.sidebar:
-            st.markdown("---")
-            st.caption(f"Zalogowany: **{st.session_state.auth_user}**")
-            if st.button("Wyloguj", use_container_width=True):
-                st.session_state.auth_ok = False
-                st.session_state.auth_user = ""
-                st.rerun()
+        # The authenticated account control is rendered by the dashboard's
+        # navigation rail.  Keeping it out of the authentication layer avoids
+        # duplicate controls and preserves a clean, predictable sidebar order.
         return
 
     _login_css()
@@ -282,4 +278,3 @@ def require_login() -> None:
             st.error("Nieprawidłowy login lub hasło.")
 
     st.stop()
-
