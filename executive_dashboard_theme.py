@@ -66,11 +66,10 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 [data-testid="stSidebar"]>div:first-child{width:264px!important;padding:0!important}
 [data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:0!important}
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:0!important}
-.ui-side-brand{height:142px;padding:28px 24px 20px;border-bottom:1px solid rgba(255,255,255,.08);box-sizing:border-box}
+.ui-side-brand{height:128px;padding:2px 24px 18px;border-bottom:1px solid rgba(255,255,255,.08);box-sizing:border-box}
 .ui-side-logo{display:flex;align-items:center;gap:12px}.ui-side-logo img{width:54px;height:54px;object-fit:contain}
 .ui-side-word strong{display:block;color:#fff;font-size:20px;letter-spacing:.045em;line-height:1}.ui-side-word span{display:block;color:#b8c7da;font-size:8px;font-weight:800;letter-spacing:.28em;margin-top:7px}
-.ui-side-tag{margin-top:13px;color:#8395aa;font-size:11px;letter-spacing:.02em}
-[data-testid="stSidebar"] .ui-nav-start+div{margin-top:14px!important}
+[data-testid="stSidebar"] .ui-nav-start+div{margin-top:28px!important}
 [data-testid="stSidebar"] .stButton{padding:0 10px 4px!important}
 [data-testid="stSidebar"] .stButton button{height:47px!important;min-height:47px!important;margin:0!important;padding:0 17px!important;border:0!important;border-radius:8px!important;background:transparent!important;color:#c8d4e2!important;box-shadow:none!important;justify-content:flex-start!important;font-size:14px!important;font-weight:650!important;letter-spacing:0!important;text-align:left!important}
 [data-testid="stSidebar"] .stButton button:hover{background:rgba(255,255,255,.07)!important;color:#fff!important}
@@ -140,7 +139,7 @@ def render_navigation(base_dir: Path) -> str:
         st.markdown(
             '<div class="ui-side-brand"><div class="ui-side-logo">'
             f'{image}<div class="ui-side-word"><strong>KANIBAL</strong><span>ANALYTICS</span></div>'
-            '</div><div class="ui-side-tag">Dane. Decyzje. Przewaga.</div></div>',
+            '</div></div>',
             unsafe_allow_html=True,
         )
         st.markdown('<div class="ui-nav-start"></div>', unsafe_allow_html=True)
