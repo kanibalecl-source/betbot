@@ -1,0 +1,20 @@
+KANIBAL QUALITY DATA GUARDIAN V6
+
+PLIKI WDROZENIOWE:
+- prediction_quality_pipeline.py
+- api_results.py
+- result_updater_unified.py
+- persistence_runtime.py
+- shadow_feature_collector.py
+- quality_data_guardian.py
+- dashboard_streamlit.py
+- .env.example
+- WDROZENIE_DATA_QUALITY_GUARDIAN_V6.md
+
+GWARANCJE:
+- brak katalogu data i brak plikow CSV/SQLite/modeli/historii,
+- brak automatycznej promocji modelu,
+- nowe cechy sa tylko shadow-only,
+- migracje dowodow sa addytywne i idempotentne,
+- aktywna logika prawdopodobienstw nie jest zmieniana,
+- serwerowy Volume /data pozostaje zrodlem danych historycznych.

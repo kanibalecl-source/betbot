@@ -1919,6 +1919,47 @@ def _render_advantage_diagnostic() -> None:
             )
 
 
+def _render_data_quality_guardian() -> None:
+    report_path = DATA_DIR / "quality_retraining" / "data_quality_guardian.json"
+    impact_path = DATA_DIR / "quality_retraining" / "shadow_feature_impact.json"
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        st.info("Data Quality Guardian utworzy raport po najbliższym cyklu danych.")
+        return
+    values = report.get("metrics", {})
+    readiness = report.get("training_readiness", {})
+    with st.expander("DATA QUALITY GUARDIAN | JAKOŚĆ DANYCH", expanded=True):
+        metrics([
+            ("Ledger", f"{as_float(values.get('ledger_coverage'), 0) * 100:.1f}%", "niezmienne snapshoty"),
+            ("Rozliczenia", f"{as_float(values.get('settlement_coverage'), 0) * 100:.1f}%", "mecze zakończone"),
+            ("Closing odds", f"{as_float(values.get('closing_odds_coverage'), 0) * 100:.1f}%", "pomiar CLV"),
+            ("Shadow features", str(values.get("shadow_feature_records", 0)),
+             "bez wpływu na typy"),
+        ])
+        snapshots = values.get("odds_snapshot_stages", {}) or {}
+        st.caption(
+            "Snapshoty kursów: " + ", ".join(
+                f"{name}: {snapshots.get(name, 0)}" for name in ("T24H", "T6H", "T1H", "T15M")
+            ) + f" · Walidacja: {'GOTOWA' if readiness.get('ready_for_validation') else 'ZBIERANIE DANYCH'}"
+        )
+        alerts = report.get("alerts", [])
+        if alerts:
+            st.warning("Aktywne alerty: " + ", ".join(str(item.get("code")) for item in alerts[:8]))
+        else:
+            st.success("Dane spełniają aktualne progi jakości.")
+        try:
+            impact = json.loads(impact_path.read_text(encoding="utf-8"))
+            feature_rows = impact.get("features", [])
+            ready = [item for item in feature_rows if item.get("status") == "DIAGNOSTIC_ONLY"]
+            st.caption(
+                f"Raport wpływu cech: {impact.get('joined_settled_samples', 0)} rozliczonych połączeń · "
+                f"{len(ready)} cech ma próbę diagnostyczną. Cechy pozostają shadow-only."
+            )
+        except Exception:
+            pass
+
+
 def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALITYKA") -> None:
     page_banner("Centrum decyzji", "ANALITYKA", "Centrum nauki bota: ligi, rynki, ryzyko, źródła, baza cech i wnioski z historii.")
     src = _result_source(results, picks)
@@ -1972,6 +2013,7 @@ def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALIT
         )
     _render_quality_governance()
     _render_advantage_diagnostic()
+    _render_data_quality_guardian()
 
 
 def render_history(results: pd.DataFrame) -> None:

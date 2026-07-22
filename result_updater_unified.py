@@ -13,14 +13,16 @@ except Exception:
 from agi_storage import conn, init_storage, now_iso, export_history_csv, log_event
 
 try:
-    from api_results import get_closing_odds_safe
+    from api_results import get_closing_odds_safe, get_odds_quote_safe
 except Exception:
     get_closing_odds_safe = None
+    get_odds_quote_safe = None
 
 try:
-    from prediction_quality_pipeline import record_closing_odds
+    from prediction_quality_pipeline import record_closing_odds, record_odds_observation
 except Exception:
     record_closing_odds = None
+    record_odds_observation = None
 
 BASE_URL = "https://v3.football.api-sports.io"
 API_KEY = os.getenv("APISPORTS_KEY") or os.getenv("FOOTBALL_API_KEY") or os.getenv("API_FOOTBALL_KEY") or ""
@@ -92,6 +94,15 @@ def _fetch_closing_for_row(row: Any) -> Optional[float]:
     if not get_closing_odds_safe:
         return None
     raw = _raw(row)
+    # Prefer the traceable exact-market/same-bookmaker path.  If the pick has
+    # a bookmaker identity, an unmatched consensus quote is not valid CLV.
+    if get_odds_quote_safe:
+        quote = _fetch_traceable_quote(row)
+        if quote and (quote.get("same_bookmaker") or not (raw.get("bookmaker") or raw.get("execution_bookmaker"))):
+            number = float(quote.get("odds"))
+            return number if number > 1.0 else None
+        if raw.get("bookmaker") or raw.get("execution_bookmaker"):
+            return None
     try:
         value = get_closing_odds_safe(
             fixture_id=row["fixture_id"],
@@ -106,6 +117,89 @@ def _fetch_closing_for_row(row: Any) -> Optional[float]:
     except Exception as exc:
         log_event("closing_odds_error", {"id": row["id"], "error": str(exc)})
         return None
+
+
+def _fetch_traceable_quote(row: Any) -> Optional[Dict[str, Any]]:
+    if not get_odds_quote_safe:
+        return None
+    raw = _raw(row)
+    try:
+        quote = get_odds_quote_safe(
+            odds_event_id=row["odds_event_id"] or raw.get("odds_event_id"),
+            home_team=row["home_team"], away_team=row["away_team"],
+            market_key=row["odds_api_market"] or raw.get("odds_api_market") or "h2h",
+            outcome_name=row["closing_outcome_name"] or raw.get("closing_outcome_name"),
+            bookmaker_name=raw.get("bookmaker") or raw.get("execution_bookmaker"),
+        )
+        return quote if isinstance(quote, dict) else None
+    except Exception as exc:
+        log_event("scheduled_odds_error", {"id": row["id"], "error": str(exc)})
+        return None
+
+
+def capture_scheduled_odds_for_open_picks(limit: int = 100) -> Dict[str, Any]:
+    """Capture T-24h/T-6h/T-1h/T-15m evidence, never prediction features."""
+    init_storage()
+    if not record_odds_observation:
+        return {"checked": 0, "captured": 0, "skipped": 1, "stages": {}}
+    c = conn()
+    rows = c.execute("""
+        SELECT * FROM picks_history
+        WHERE status='OPEN' AND fixture_id IS NOT NULL AND fixture_id != ''
+          AND prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''
+        ORDER BY match_date ASC LIMIT ?
+    """, (max(1, int(limit)),)).fetchall()
+    stages = (("T24H", 1440.0), ("T6H", 360.0), ("T1H", 60.0), ("T15M", 15.0))
+    now = datetime.now(timezone.utc)
+    checked = captured = 0
+    stage_counts: Dict[str, int] = {}
+    try:
+        for row in rows:
+            kickoff = _parse_time(row["match_date"])
+            if kickoff is None:
+                continue
+            minutes = (kickoff - now).total_seconds() / 60.0
+            if minutes < -5 or minutes > 1440:
+                continue
+            due_stage = next((name for name, target in reversed(stages) if minutes <= target), None)
+            if due_stage is None:
+                continue
+            checked += 1
+            # The immutable ledger enforces one quote per snapshot/stage.  This
+            # read avoids spending API quota when the stage already exists.
+            try:
+                from prediction_quality_pipeline import _connect as evidence_connect
+                evidence = evidence_connect()
+                exists = evidence.execute(
+                    "SELECT 1 FROM odds_observation_ledger WHERE snapshot_id=? AND stage=?",
+                    (row["prediction_snapshot_id"], due_stage),
+                ).fetchone()
+                evidence.close()
+            except Exception:
+                exists = None
+            if exists:
+                continue
+            quote = _fetch_traceable_quote(row)
+            if not quote:
+                continue
+            result = record_odds_observation({
+                "snapshot_id": row["prediction_snapshot_id"], "stage": due_stage,
+                "fixture_id": row["fixture_id"], "kickoff": row["match_date"],
+                "market": row["market"], "bookmaker": quote.get("bookmaker", ""),
+                "odds": quote.get("odds"), "minutes_to_kickoff": round(minutes, 2),
+                "recorded_at": now_iso(), "source": "scheduled_same_market_quote",
+                "same_bookmaker": bool(quote.get("same_bookmaker")),
+                "outcome_name": quote.get("outcome_name", ""),
+                "event_id": quote.get("event_id", ""),
+            })
+            if result.get("status") == "RECORDED":
+                captured += 1
+                stage_counts[due_stage] = stage_counts.get(due_stage, 0) + 1
+        payload = {"checked": checked, "captured": captured, "skipped": 0, "stages": stage_counts}
+        log_event("scheduled_odds_capture", payload)
+        return payload
+    finally:
+        c.close()
 
 
 def capture_closing_odds_for_open_picks(limit: int = 100) -> Dict[str, int]:

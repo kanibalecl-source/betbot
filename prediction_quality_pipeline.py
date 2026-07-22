@@ -137,6 +137,35 @@ def _connect(data_dir: str | Path | None = None) -> sqlite3.Connection:
     );
     CREATE INDEX IF NOT EXISTS idx_closing_odds_fixture
         ON closing_odds_ledger(fixture_id, market, recorded_at);
+    CREATE TABLE IF NOT EXISTS odds_observation_ledger (
+        observation_key TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL,
+        stage TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        fixture_id TEXT,
+        kickoff TEXT,
+        market TEXT,
+        bookmaker TEXT,
+        odds REAL NOT NULL,
+        minutes_to_kickoff REAL,
+        source TEXT,
+        raw_json TEXT NOT NULL,
+        UNIQUE(snapshot_id, stage)
+    );
+    CREATE INDEX IF NOT EXISTS idx_odds_observation_fixture
+        ON odds_observation_ledger(fixture_id, market, recorded_at);
+    CREATE TABLE IF NOT EXISTS shadow_feature_ledger (
+        feature_key TEXT PRIMARY KEY,
+        snapshot_id TEXT NOT NULL,
+        recorded_at TEXT NOT NULL,
+        fixture_id TEXT,
+        source TEXT,
+        completeness REAL,
+        raw_json TEXT NOT NULL,
+        raw_sha256 TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_shadow_feature_fixture
+        ON shadow_feature_ledger(fixture_id, recorded_at);
     """)
     connection.commit()
     return connection
@@ -231,6 +260,78 @@ def record_closing_odds(
             "closing_key": closing_key,
             "clv": round(clv, 8) if clv is not None else None,
         }
+    finally:
+        connection.close()
+
+
+def record_odds_observation(
+    observation: Mapping[str, Any], data_dir: str | Path | None = None
+) -> dict[str, Any]:
+    """Append one immutable quote for a scheduled pre-kickoff stage.
+
+    A stage can be written only once per prediction snapshot.  These quotes are
+    evidence for market-movement/CLV analysis and are never model inputs.
+    """
+    payload = dict(observation)
+    snapshot_id = str(payload.get("snapshot_id") or "").strip()
+    stage = str(payload.get("stage") or "").strip().upper()
+    odds = _number(payload.get("odds"))
+    if not snapshot_id or not stage or odds is None or odds <= 1.0:
+        return {"status": "INVALID_OBSERVATION"}
+    raw = _canonical(payload)
+    key = hashlib.sha256(f"{snapshot_id}|{stage}".encode("utf-8")).hexdigest()
+    connection = _connect(data_dir)
+    try:
+        cursor = connection.execute("""
+            INSERT OR IGNORE INTO odds_observation_ledger (
+                observation_key, snapshot_id, stage, recorded_at, fixture_id,
+                kickoff, market, bookmaker, odds, minutes_to_kickoff, source,
+                raw_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            key, snapshot_id, stage, str(payload.get("recorded_at") or _now()),
+            str(payload.get("fixture_id") or ""), str(payload.get("kickoff") or ""),
+            str(payload.get("market") or ""), str(payload.get("bookmaker") or ""),
+            odds, _number(payload.get("minutes_to_kickoff")),
+            str(payload.get("source") or "scheduled_odds_snapshot"), raw,
+        ))
+        connection.commit()
+        return {
+            "status": "RECORDED" if cursor.rowcount else "ALREADY_RECORDED",
+            "observation_key": key,
+            "stage": stage,
+        }
+    finally:
+        connection.close()
+
+
+def record_shadow_features(
+    observation: Mapping[str, Any], data_dir: str | Path | None = None
+) -> dict[str, Any]:
+    """Append a versioned shadow-only context snapshot; never update predictions."""
+    payload = dict(observation)
+    snapshot_id = str(payload.get("snapshot_id") or "").strip()
+    if not snapshot_id:
+        return {"status": "INVALID_SHADOW_FEATURES"}
+    recorded_at = str(payload.get("recorded_at") or _now())
+    raw = _canonical(payload)
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+    bucket = recorded_at[:13]  # at most one immutable context version per hour
+    key = hashlib.sha256(f"{snapshot_id}|{bucket}".encode("utf-8")).hexdigest()
+    connection = _connect(data_dir)
+    try:
+        cursor = connection.execute("""
+            INSERT OR IGNORE INTO shadow_feature_ledger (
+                feature_key, snapshot_id, recorded_at, fixture_id, source,
+                completeness, raw_json, raw_sha256
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            key, snapshot_id, recorded_at, str(payload.get("fixture_id") or ""),
+            str(payload.get("source") or "shadow_context_v1"),
+            _number(payload.get("completeness")), raw, digest,
+        ))
+        connection.commit()
+        return {"status": "RECORDED" if cursor.rowcount else "ALREADY_RECORDED", "feature_key": key}
     finally:
         connection.close()
 
