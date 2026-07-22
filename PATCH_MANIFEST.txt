@@ -5,6 +5,7 @@ PURPOSE
 - Production security and model-quality hardening patch.
 - Argon2id password verification through cryptography.
 - Fail-closed authentication and betting execution guard.
+- Login layout correction: VALUE badge clears the descriptive copy and the login card ends above the footer.
 - Server data, history, models and learning artifacts remain untouched.
 
 DEPLOYMENT SAFETY

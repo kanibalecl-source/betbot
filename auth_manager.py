@@ -149,12 +149,15 @@ def _login_css() -> None:
         .ka-metric span {{ display:block; color:#718198; font:800 9px/1 Inter,Arial,sans-serif; text-transform:uppercase; }}
         .ka-metric strong {{ display:block; margin-top:7px; font:850 20px/1 Inter,Arial,sans-serif; }}
         .ka-metric.one {{ left:1.5vw; top:38%; }}
-        .ka-metric.two {{ left:34%; top:8%; }}
+        .ka-metric.two {{ left:34%; top:23%; }}
         .ka-metric.three {{ right:3%; bottom:7%; }}
 
         div[data-testid="stForm"] {{
-          position:fixed!important; z-index:4!important; top:50%!important; right:6.2vw!important;
-          transform:translateY(-48%)!important; width:min(37vw,660px)!important;
+          position:fixed!important; z-index:4!important;
+          top:clamp(20px,3.2vh,34px)!important; right:6.2vw!important;
+          bottom:calc(max(8vh,62px) + 18px)!important;
+          height:auto!important; min-height:0!important; max-height:none!important;
+          transform:none!important; width:min(37vw,660px)!important;
           box-sizing:border-box!important; margin:0!important;
           padding:clamp(34px,4.2vh,50px) clamp(34px,3.2vw,54px) clamp(30px,3.7vh,44px)!important;
           border:1px solid var(--login-line)!important; border-radius:20px!important;
@@ -255,7 +258,10 @@ def _login_css() -> None:
           .ka-login-brand {{ top:2.6vh; transform:scale(.82); transform-origin:left top; }}
           .ka-login-system {{ top:3.7vh; }}
           .ka-login-story {{ top:17vh; transform:scale(.88); transform-origin:left top; }}
-          div[data-testid="stForm"] {{ transform:translateY(-49%) scale(.88)!important; transform-origin:right center!important; }}
+          div[data-testid="stForm"] {{
+            top:20px!important; bottom:calc(max(8vh,62px) + 14px)!important;
+            transform:scale(.88)!important; transform-origin:right top!important;
+          }}
         }}
         @media (max-width:1100px) {{
           .ka-login-story {{ width:43vw; }}
@@ -272,7 +278,8 @@ def _login_css() -> None:
           .ka-login-system .lang::after {{ margin-left:8px; }}
           div[data-testid="stForm"] {{
             position:absolute!important; left:16px!important; right:16px!important; top:138px!important;
-            width:auto!important; transform:none!important; padding:28px 22px!important; border-radius:16px!important;
+            bottom:auto!important; height:auto!important; width:auto!important;
+            transform:none!important; padding:28px 22px!important; border-radius:16px!important;
           }}
           .ka-login-card-head h1 {{ font-size:32px!important; }}
           .ka-login-footer {{ left:18px; right:18px; height:58px; font-size:9px; }}
