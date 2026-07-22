@@ -1656,6 +1656,12 @@ def _odds_from_pick(pick: dict, default: float = 2.0) -> float:
     return max(1.01, as_float(first_existing(pick, ["superbet_odds", "kurs_superbet", "kurs_buk", "odds"], default), default))
 
 
+def _toggle_live_ai_insight() -> None:
+    """Persistently toggle the expanded live AI analysis between reruns."""
+    current = bool(st.session_state.get("live_ai_insight_visible", False))
+    st.session_state["live_ai_insight_visible"] = not current
+
+
 def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
     page_banner("Panel na żywo", "NA ŻYWO", "Szybka tabela operacyjna z typem zakładu, kursem, wartością i ryzykiem.")
     title("PANEL DECYZYJNY")
@@ -1679,9 +1685,14 @@ def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
         st.markdown(ai_insight_card(picks), unsafe_allow_html=True)
         details_visible = bool(st.session_state.get("live_ai_insight_visible", False))
         details_label = "Ukryj analizę" if details_visible else "Zobacz analizę"
-        if st.button(details_label, key="live_ai_insight_toggle", use_container_width=True, type="primary"):
-            st.session_state.live_ai_insight_visible = not details_visible
-            details_visible = not details_visible
+        st.button(
+            details_label,
+            key="live_ai_insight_toggle",
+            use_container_width=True,
+            type="primary",
+            on_click=_toggle_live_ai_insight,
+        )
+        details_visible = bool(st.session_state.get("live_ai_insight_visible", False))
     if details_visible:
         if picks is not None and not picks.empty:
             st.markdown(render_ai_detail_card(picks.iloc[0]), unsafe_allow_html=True)
