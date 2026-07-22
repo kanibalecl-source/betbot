@@ -13,6 +13,8 @@
 - aktywny model i jego prawdopodobieństwa nie są zmieniane,
 - nowe cechy mają `shadow_only=true` i nie są czytane przez `bot.py`,
 - brak automatycznej promocji Challengera,
+- Guardian ocenia wyłącznie rekordy z identyfikatorem snapshotu nowego pipeline;
+  wtórne tabele AI i historia sprzed v5 nie zaniżają pokrycia,
 - raporty są plikami pochodnymi w `/data/quality_retraining`,
 - migracje SQLite są wyłącznie addytywne (`CREATE TABLE IF NOT EXISTS`),
 - paczka wdrożeniowa nie może zawierać katalogu `data`, CSV, SQLite, modeli ani historii.

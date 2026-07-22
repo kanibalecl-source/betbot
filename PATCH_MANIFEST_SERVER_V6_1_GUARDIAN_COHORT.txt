@@ -1,0 +1,18 @@
+KANIBAL DATA QUALITY GUARDIAN V6.1 - KOREKTA KOHORTY
+
+PLIKI:
+- quality_data_guardian.py
+- .env.example
+- WDROZENIE_DATA_QUALITY_GUARDIAN_V6.md
+
+ZMIANA:
+- ledger, settlement i closing coverage sa liczone tylko dla rekordow nowego
+  pipeline z prediction_snapshot_id,
+- tabele pochodne AI i historia sprzed v5 nie generuja falszywych alarmow,
+- pojedynczy chwilowy blad API jest raportowany w events_24h, ale alarm jest
+  podnoszony dopiero po przekroczeniu konfigurowalnego progu 5/24h.
+
+BRAK ZMIAN:
+- model, prawdopodobienstwa i selekcja typow,
+- historia i pliki danych,
+- Champion-Challenger i zasada recznej promocji.

@@ -135,23 +135,29 @@ def run_guardian(data_dir: str | Path | None = None) -> Dict[str, Any]:
         ledger_count = evidence.execute("SELECT count(*) FROM prediction_ledger").fetchone()[0]
         first_ledger = evidence.execute("SELECT min(recorded_at) FROM prediction_ledger").fetchone()[0]
         eligible_rows = history.execute(
-            "SELECT prediction_snapshot_id FROM picks_history WHERE created_at >= ?",
-            (str(first_ledger or "9999-12-31"),),
+            "SELECT prediction_snapshot_id FROM picks_history "
+            "WHERE prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''",
         ).fetchall()
         ledger_ids = {str(row[0]) for row in evidence.execute("SELECT snapshot_id FROM prediction_ledger").fetchall()}
         eligible = len(eligible_rows)
         matched_ledger = sum(1 for row in eligible_rows if str(row[0] or "") in ledger_ids)
         due = history.execute(
-            "SELECT count(*) FROM picks_history WHERE match_date < ?",
+            "SELECT count(*) FROM picks_history WHERE match_date < ? "
+            "AND prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''",
             ((now - timedelta(hours=4)).isoformat(),),
         ).fetchone()[0]
         settled = history.execute(
-            "SELECT count(*) FROM picks_history WHERE match_date < ? AND status='CLOSED'",
+            "SELECT count(*) FROM picks_history WHERE match_date < ? AND status='CLOSED' "
+            "AND prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''",
             ((now - timedelta(hours=4)).isoformat(),),
         ).fetchone()[0]
-        closed = history.execute("SELECT count(*) FROM picks_history WHERE status='CLOSED'").fetchone()[0]
+        closed = history.execute(
+            "SELECT count(*) FROM picks_history WHERE status='CLOSED' "
+            "AND prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''"
+        ).fetchone()[0]
         closed_with_closing = history.execute(
-            "SELECT count(*) FROM picks_history WHERE status='CLOSED' AND closing_odds > 1"
+            "SELECT count(*) FROM picks_history WHERE status='CLOSED' AND closing_odds > 1 "
+            "AND prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''"
         ).fetchone()[0]
         feature_rows = evidence.execute("SELECT completeness FROM shadow_feature_ledger").fetchall()
         odds_stages = {
@@ -174,6 +180,7 @@ def run_guardian(data_dir: str | Path | None = None) -> Dict[str, Any]:
             "ledger_coverage": float(os.getenv("BETBOT_GUARDIAN_MIN_LEDGER_COVERAGE", "0.99")),
             "settlement_coverage": float(os.getenv("BETBOT_GUARDIAN_MIN_SETTLEMENT_COVERAGE", "0.95")),
             "closing_coverage": float(os.getenv("BETBOT_QUALITY_MIN_CLOSING_COVERAGE", "0.80")),
+            "maximum_api_errors_24h": int(os.getenv("BETBOT_GUARDIAN_MAX_API_ERRORS_24H", "5")),
         }
         alerts = []
         for name, value in (("ledger_coverage", ledger_coverage),
@@ -182,9 +189,14 @@ def run_guardian(data_dir: str | Path | None = None) -> Dict[str, Any]:
             if (eligible if name == "ledger_coverage" else due if name == "settlement_coverage" else closed) and value < thresholds[name]:
                 alerts.append({"severity": "WARNING", "code": name.upper(),
                                "value": value, "required": thresholds[name]})
-        if event_counts.get("settlement_error", 0) or event_counts.get("closing_odds_error", 0):
+        api_errors = (
+            event_counts.get("settlement_error", 0)
+            + event_counts.get("closing_odds_error", 0)
+            + event_counts.get("scheduled_odds_error", 0)
+        )
+        if api_errors > thresholds["maximum_api_errors_24h"]:
             alerts.append({"severity": "WARNING", "code": "API_OR_SETTLEMENT_ERRORS_24H",
-                           "count": event_counts.get("settlement_error", 0) + event_counts.get("closing_odds_error", 0)})
+                           "count": api_errors, "allowed": thresholds["maximum_api_errors_24h"]})
         report = {
             "generated_at": now.isoformat(),
             "status": "HEALTHY" if not alerts else "ATTENTION",
