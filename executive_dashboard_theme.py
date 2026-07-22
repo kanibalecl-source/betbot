@@ -141,6 +141,11 @@ def inject_executive_theme() -> None:
     st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
+def _select_navigation(item: str) -> None:
+    """Set the active page before Streamlit redraws the navigation."""
+    st.session_state.executive_navigation = item
+
+
 def render_navigation(base_dir: Path) -> str:
     logo = _image_uri(base_dir / "kanibal_logo.png")
     image = f'<img src="{logo}" alt="KANIBAL">' if logo else ""
@@ -156,13 +161,14 @@ def render_navigation(base_dir: Path) -> str:
             st.session_state.executive_navigation = "Przedmeczowe"
         for item in NAV_ITEMS:
             active = st.session_state.executive_navigation == item
-            if st.button(
+            st.button(
                 NAV_LABELS[item],
                 key=f"executive_nav_{item}",
                 use_container_width=True,
                 type="primary" if active else "secondary",
-            ):
-                st.session_state.executive_navigation = item
+                on_click=_select_navigation,
+                args=(item,),
+            )
         selected = st.session_state.executive_navigation
         st.markdown(
             '<div class="ui-side-footer"><div class="ui-online">System online</div></div>',
