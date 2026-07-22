@@ -285,7 +285,8 @@ def assess_quality(
     if isinstance(segment_models, Mapping):
         league = str(raw.get("league") or raw.get("liga") or "")
         selected = (
-            segment_models.get(f"market::{market}")
+            segment_models.get(f"market_league::{market}::{league}")
+            or segment_models.get(f"market::{market}")
             or segment_models.get(f"league::{league}")
         )
         if isinstance(selected, Mapping):

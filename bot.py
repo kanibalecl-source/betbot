@@ -683,6 +683,12 @@ def run_bot(mode="main"):
     )
 
     engines = build_stage_engines()
+    try:
+        from quality_selection_gate import load_policy as load_quality_policy
+        quality_selection_policy = load_quality_policy()
+    except Exception as quality_policy_exc:
+        print(f"[QUALITY SELECTION POLICY ERROR] {quality_policy_exc}")
+        quality_selection_policy = {}
 
     stage_a = StageAValueLayer()
     stage_b = StageBModelLayer()
@@ -710,6 +716,7 @@ def run_bot(mode="main"):
         "edge_ev": 0,
         "risk_skip": 0,
         "stage_filter_rejected": 0,
+        "quality_gate_rejected": 0,
     }
 
     if not matches:
@@ -903,6 +910,34 @@ def run_bot(mode="main"):
                 skip_stats["stage_filter_rejected"] += 1
                 continue
 
+            try:
+                from quality_selection_gate import evaluate_recommendation
+                quality_gate = evaluate_recommendation(
+                    {
+                        "market": market,
+                        "league": match.get("league", ""),
+                        "odds": book_odds,
+                        "edge": edge,
+                        "odds_observed_at": margin_detail.observed_at,
+                        "home_xg": home_xg,
+                        "away_xg": away_xg,
+                        "current_probability": final_prob,
+                        "xg_probability": probability_data.get("xg_probability"),
+                    },
+                    quality_selection_policy,
+                )
+            except Exception as quality_gate_exc:
+                quality_gate = {
+                    "accepted": True,
+                    "status": "ERROR_FAIL_OPEN",
+                    "enforced": False,
+                    "reasons": [str(quality_gate_exc)],
+                    "probability_modified": False,
+                }
+            if not quality_gate.get("accepted", True):
+                skip_stats["quality_gate_rejected"] += 1
+                continue
+
             ai_risk = stage_risk(
                 engines,
                 confidence_percent,
@@ -1063,6 +1098,14 @@ def run_bot(mode="main"):
 
                 "filter_status": "ACCEPTED",
                 "filter_reason": filter_decision.get("reason", "ACCEPTED"),
+                "quality_gate_status": quality_gate.get("status", "NO_POLICY"),
+                "quality_gate_enforced": bool(quality_gate.get("enforced", False)),
+                "quality_gate_reasons": json.dumps(
+                    quality_gate.get("reasons", []), ensure_ascii=False
+                ),
+                "quality_data_completeness": quality_gate.get("data_completeness"),
+                "quality_model_disagreement": quality_gate.get("model_disagreement"),
+                "quality_probability_modified": False,
 
                 "marza_sum": round(margin_sum, 4),
                 "marza_%": round((margin_sum - 1) * 100, 2),

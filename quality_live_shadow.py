@@ -304,7 +304,7 @@ def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
             "automatic_promotion": False,
         }
 
-    def metrics(field: str) -> dict[str, float]:
+    def metrics(field: str) -> dict[str, Any]:
         probabilities = [float(row[field]) for row in rows]
         targets = [int(row["target"]) for row in rows]
         brier = sum((p - y) ** 2 for p, y in zip(probabilities, targets)) / len(rows)
@@ -312,14 +312,87 @@ def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
             y * math.log(max(1e-8, p)) + (1-y) * math.log(max(1e-8, 1-p))
             for p, y in zip(probabilities, targets)
         ) / len(rows)
-        return {"brier_score": round(brier, 8), "log_loss": round(loss, 8)}
+        profits = []
+        clv_values = []
+        equity = peak = drawdown = 0.0
+        for row, probability, target in zip(rows, probabilities, targets):
+            odds = _float(row["odds_taken"])
+            if odds is None or odds <= 1.0 or probability * odds - 1.0 < 0.02:
+                continue
+            profit = odds - 1.0 if target else -1.0
+            profits.append(profit)
+            equity += profit
+            peak = max(peak, equity)
+            drawdown = max(drawdown, peak - equity)
+            closing = _float(row["closing_odds"])
+            if closing is not None and closing > 1.0:
+                clv_values.append(odds / closing - 1.0)
+        return {
+            "brier_score": round(brier, 8),
+            "log_loss": round(loss, 8),
+            "bets": len(profits),
+            "yield": round(sum(profits) / max(1, len(profits)), 6),
+            "max_drawdown_units": round(drawdown, 6),
+            "clv_samples": len(clv_values),
+            "mean_clv": round(sum(clv_values) / max(1, len(clv_values)), 6),
+        }
+
+    def slice_stability() -> dict[str, Any]:
+        details = {}
+        eligible = stable = 0
+        minimum_slice = max(20, len(rows) // 100)
+        for field in ("market", "league"):
+            values = sorted({str(row[field] or "UNKNOWN") for row in rows})
+            for value in values:
+                group = [row for row in rows if str(row[field] or "UNKNOWN") == value]
+                if len(group) < minimum_slice:
+                    continue
+                eligible += 1
+                champion_brier = sum(float(row["champion_brier"]) for row in group) / len(group)
+                challenger_brier = sum(float(row["challenger_brier"]) for row in group) / len(group)
+                improvement = champion_brier - challenger_brier
+                non_degrading = improvement >= -0.002
+                stable += int(non_degrading)
+                details[f"{field}::{value}"] = {
+                    "samples": len(group),
+                    "brier_improvement": round(improvement, 8),
+                    "non_degrading": non_degrading,
+                }
+        return {
+            "eligible_slices": eligible,
+            "non_degrading_slices": stable,
+            "non_degrading_ratio": round(stable / max(1, eligible), 6),
+            "details": details,
+        }
 
     champion = metrics("champion_probability")
     challenger = metrics("challenger_probability")
     brier_gain = champion["brier_score"] - challenger["brier_score"]
     log_gain = champion["log_loss"] - challenger["log_loss"]
     minimum = int(os.getenv("BETBOT_LIVE_SHADOW_MIN_SAMPLES", "300"))
-    positive = len(rows) >= minimum and brier_gain > 0.0002 and log_gain > 0.0002
+    slices = slice_stability()
+    gates = {
+        "enough_future_samples": len(rows) >= minimum,
+        "brier_improvement": brier_gain > 0.0002,
+        "log_loss_improvement": log_gain > 0.0002,
+        "drawdown_not_materially_degraded": (
+            challenger["max_drawdown_units"]
+            <= champion["max_drawdown_units"] * 1.10 + 2.0
+        ),
+        "yield_not_materially_degraded": (
+            min(challenger["bets"], champion["bets"]) < 30
+            or challenger["yield"] >= champion["yield"] - 0.01
+        ),
+        "clv_not_materially_degraded": (
+            min(challenger["clv_samples"], champion["clv_samples"]) < 30
+            or challenger["mean_clv"] >= champion["mean_clv"] - 0.005
+        ),
+        "slice_stability": (
+            slices["eligible_slices"] == 0
+            or slices["non_degrading_ratio"] >= 0.60
+        ),
+    }
+    positive = all(gates.values())
     return {
         "status": "POSITIVE_LIVE_SHADOW_MANUAL_APPROVAL" if positive else "COLLECTING_OR_REVIEW",
         "settled_samples": len(rows),
@@ -330,6 +403,8 @@ def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
         "challenger": challenger,
         "brier_improvement": round(brier_gain, 8),
         "log_loss_improvement": round(log_gain, 8),
+        "slice_stability": slices,
+        "gates": gates,
         "automatic_promotion": False,
         "manual_approval_required": True,
     }

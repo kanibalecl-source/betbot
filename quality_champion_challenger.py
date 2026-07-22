@@ -80,6 +80,20 @@ def train_candidate_state(
             if len(subset) < max(30, int(min_segment_samples)):
                 continue
             eligible.append((len(subset), field, value, subset))
+    combinations = sorted({
+        (str(row.get("market", "") or ""), str(row.get("league", "") or ""))
+        for row in source_rows
+    })
+    for market, league in combinations:
+        if not market or not league or "UNKNOWN" in {market, league}:
+            continue
+        subset = [
+            row for row in source_rows
+            if str(row.get("market", "") or "") == market
+            and str(row.get("league", "") or "") == league
+        ]
+        if len(subset) >= max(30, int(min_segment_samples)):
+            eligible.append((len(subset), "market_league", f"{market}::{league}", subset))
     for _, field, value, subset in sorted(eligible, reverse=True)[:max(0, int(max_segments))]:
         trained = train_time_safe_state(subset)
         if trained.get("status") == "TRAINED_TIME_SAFE":
@@ -103,7 +117,11 @@ def _state_predict(
         return float(values[0])
     segments = state.get("segment_models", {})
     if isinstance(segments, Mapping):
-        selected = segments.get(f"market::{market}") or segments.get(f"league::{league}")
+        selected = (
+            segments.get(f"market_league::{market}::{league}")
+            or segments.get(f"market::{market}")
+            or segments.get(f"league::{league}")
+        )
         if isinstance(selected, Mapping):
             state = selected
     configured = state.get("stacking_weights", {})

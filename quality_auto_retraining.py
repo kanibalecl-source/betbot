@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from build_quality_training_from_history import build
+from diagnostic_advantage_report import write_report
 from quality_champion_challenger import train_candidate_state, walk_forward_validate
 from quality_upgrade_engine import BetaCalibrator, train_time_safe_state
 from storage_paths import get_data_dir
@@ -208,6 +209,13 @@ class ControlledQualityRetrainer:
                 return {"status": "SKIPPED_NOT_DUE", **control}
             metadata = build(self.data_dir, self.dataset_path, replace_derived=True)
             rows = _training_rows(self.dataset_path)
+            diagnostic = write_report(
+                self.dataset_path,
+                self.work_dir,
+                minimum_segment_samples=int(
+                    os.getenv("BETBOT_QUALITY_DIAGNOSTIC_MIN_SEGMENT_SAMPLES", "50")
+                ),
+            )
             active = _read_json(self.active_path)
             baseline_rows = int(
                 control.get("last_trained_rows")
@@ -225,6 +233,7 @@ class ControlledQualityRetrainer:
                     "new_rows": new_rows,
                     "required_new_rows": self.min_new_rows,
                     "source_hashes_unchanged": metadata.get("source_hashes_unchanged"),
+                    "diagnostic_report": diagnostic,
                 }
                 _atomic_json(self.control_path, {
                     **control,
@@ -262,6 +271,7 @@ class ControlledQualityRetrainer:
                 "dataset_rows": len(rows),
                 "new_rows": new_rows,
                 "validation": validation,
+                "diagnostic_report": diagnostic,
                 "candidate_path": str(version_path),
                 "active_model_was_not_modified": True,
             }
@@ -272,6 +282,7 @@ class ControlledQualityRetrainer:
                 "created_at": now,
                 "candidate": str(version_path),
                 "validation": validation,
+                "diagnostic_report": diagnostic,
                 "active_model_modified": False,
             }
             _atomic_json(self.control_path, {

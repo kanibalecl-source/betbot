@@ -234,6 +234,17 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
             if closing_odds is not None and closing_odds > 1.0
             else ""
         ),
+        "home_xg": round(home_xg, 8),
+        "away_xg": round(away_xg, 8),
+        "data_quality": _num(_first(row, ("data_quality", "quality_score")), ""),
+        "lineup_available": _first(row, ("lineup_available", "lineups_available")) or "",
+        "injuries_available": _first(row, ("injuries_available", "injury_data_available")) or "",
+        "home_rest_days": _num(_first(row, ("home_rest_days", "rest_days_home")), ""),
+        "away_rest_days": _num(_first(row, ("away_rest_days", "rest_days_away")), ""),
+        "home_form_home": _num(_first(row, ("home_form_home", "home_home_form")), ""),
+        "away_form_away": _num(_first(row, ("away_form_away", "away_away_form")), ""),
+        "coach_change": _first(row, ("coach_change", "manager_change")) or "",
+        "odds_observed_at": _first(row, ("odds_observed_at", "observed_at")) or "",
         "target": target,
     }
 
@@ -334,7 +345,9 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
         "timestamp", "source", "record_id", "fixture_id", "market", "league",
         "current_probability", "dixon_coles_probability",
         "market_probability", "market_probability_method", "target",
-        "odds", "closing_odds",
+        "odds", "closing_odds", "home_xg", "away_xg", "data_quality",
+        "lineup_available", "injuries_available", "home_rest_days", "away_rest_days",
+        "home_form_home", "away_form_away", "coach_change", "odds_observed_at",
     ]
     with temporary.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)

@@ -1861,6 +1861,52 @@ def _render_quality_governance() -> None:
                 st.error(f"Promocja odrzucona: {result.get('status')}")
 
 
+def _render_advantage_diagnostic() -> None:
+    report_path = DATA_DIR / "quality_retraining" / "diagnostic_advantage_report.json"
+    policy_path = DATA_DIR / "quality_retraining" / "quality_selection_policy.json"
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except Exception:
+        st.info("Raport diagnostyczny przewagi powstanie po następnym kontrolowanym retreningu.")
+        return
+    global_metrics = report.get("global", {})
+    integrity = report.get("integrity", {})
+    with st.expander("RAPORT DIAGNOSTYCZNY PRZEWAGI", expanded=True):
+        metrics([
+            ("Próba", str(global_metrics.get("samples", 0)), "rozliczone rekordy"),
+            ("Yield", f"{as_float(global_metrics.get('yield'), 0) * 100:+.2f}%", "stawka płaska"),
+            ("CLV", f"{as_float(global_metrics.get('mean_clv'), 0) * 100:+.2f}%", f"próba: {global_metrics.get('clv_samples', 0)}"),
+            ("Brier", f"{as_float(global_metrics.get('brier_score'), 0):.4f}", "niżej = lepiej"),
+        ])
+        status_text = "GOTOWA" if policy.get("enforcement_ready") else "ZBIERANIE DANYCH"
+        st.caption(
+            f"Integralność: {integrity.get('status', 'BRAK')} · Polityka selekcji: {status_text} · "
+            "Raport jest pochodny i nie modyfikuje historii ani aktywnego modelu."
+        )
+        rows = []
+        for field, label in (("market", "Rynek"), ("league", "Liga"), ("odds_bucket", "Kurs")):
+            for item in report.get("segments", {}).get(field, [])[:8]:
+                rows.append([
+                    label,
+                    html.escape(str(item.get("name", "-"))),
+                    str(item.get("samples", 0)),
+                    f"{as_float(item.get('yield'), 0) * 100:+.1f}%",
+                    f"{as_float(item.get('mean_clv'), 0) * 100:+.1f}%",
+                    html.escape(str(item.get("status", "MONITOR"))),
+                ])
+        if rows:
+            st.markdown(
+                '<div class="ka-table-scroll quality-gates-table">'
+                + html_table(["Segment", "Nazwa", "Próba", "Yield", "CLV", "Decyzja"], rows)
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+        missing_features = report.get("feature_coverage", {}).get("recommended_next_features", [])
+        if missing_features:
+            st.caption("Najważniejsze braki danych: " + ", ".join(map(str, missing_features[:8])))
+
+
 def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALITYKA") -> None:
     page_banner("Centrum decyzji", "ANALITYKA", "Centrum nauki bota: ligi, rynki, ryzyko, źródła, baza cech i wnioski z historii.")
     src = _result_source(results, picks)
@@ -1913,6 +1959,7 @@ def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALIT
             unsafe_allow_html=True,
         )
     _render_quality_governance()
+    _render_advantage_diagnostic()
 
 
 def render_history(results: pd.DataFrame) -> None:
