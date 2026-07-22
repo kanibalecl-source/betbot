@@ -72,7 +72,10 @@ def require_persistent_storage_on_server() -> None:
     if _is_server() and strict and not persistent_storage_configured():
         raise RuntimeError(
             "Persistent server storage is not configured. Attach Railway Volume "
-            "and set PERSISTENT_DATA_DIR=/data. Startup stopped to protect history."
+            "and set PERSISTENT_DATA_DIR=/data. Startup stopped to protect history. "
+            f"DATA_DIR={DATA_DIR}; resolved={DATA_DIR.resolve()}; "
+            f"app_data={(BASE_DIR / 'data').resolve()}; "
+            f"PERSISTENT_DATA_DIR={os.getenv('PERSISTENT_DATA_DIR', '')}."
         )
 
 
