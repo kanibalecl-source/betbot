@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent
 def _is_writable_dir(path: Path) -> bool:
     try:
         path.mkdir(parents=True, exist_ok=True)
-        probe = path / ".write_probe"
+        probe = path / f".write_probe_{os.getpid()}"
         probe.write_text("ok", encoding="utf-8")
         probe.unlink(missing_ok=True)
         return True
