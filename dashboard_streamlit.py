@@ -1664,7 +1664,6 @@ def _toggle_live_ai_insight() -> None:
 
 def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
     page_banner("Panel na żywo", "NA ŻYWO", "Szybka tabela operacyjna z typem zakładu, kursem, wartością i ryzykiem.")
-    title("PANEL DECYZYJNY")
     avg_conf = as_float(numeric_series(live, "confidence").mean(), as_float(numeric_series(picks, "confidence").mean(), 0))
     avg_odds = as_float(numeric_series(live, "odds").mean(), as_float(numeric_series(picks, "kurs_buk").mean(), 0))
     edge_values = real_values(live if live is not None and not live.empty else picks, ["value", "ev", "edge"])
@@ -1709,7 +1708,6 @@ def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
 
 
 def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:
-    title("TYPY PRZEDMECZOWE")
     low_picks = normalize_picks(low_picks) if low_picks is not None and not low_picks.empty else pd.DataFrame()
     risk_picks = normalize_picks(risk_picks) if risk_picks is not None and not risk_picks.empty else pd.DataFrame()
     metrics([
@@ -1777,7 +1775,6 @@ def render_ai(picks: pd.DataFrame, results: pd.DataFrame, low_picks: pd.DataFram
     risk_picks = risk_picks if risk_picks is not None else pd.DataFrame()
     all_ai = pd.concat([df for df in [picks, low_picks, risk_picks] if df is not None and not df.empty], ignore_index=True, sort=False) if any(df is not None and not df.empty for df in [picks, low_picks, risk_picks]) else pd.DataFrame()
     page_banner("Typy AI", "AI", "Trzy niezależne tabele AI: główna, niskie ryzyko i podwyższone ryzyko.")
-    title("CENTRUM AI")
     avg_ai = as_float(numeric_series(all_ai, 'ai_pick_score').mean(), as_float(numeric_series(all_ai, 'confidence').mean(), 0))
     perfect = int((numeric_series(all_ai, "confidence") >= 85).sum()) if not all_ai.empty else 0
     edge_values = real_values(all_ai, ["ev", "edge", "value"])
@@ -1859,7 +1856,6 @@ def _render_quality_governance() -> None:
 
 def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALITYKA") -> None:
     page_banner("Centrum decyzji", "ANALITYKA", "Centrum nauki bota: ligi, rynki, ryzyko, źródła, baza cech i wnioski z historii.")
-    title("CENTRUM ANALITYKI")
     src = _result_source(results, picks)
     win = _win_mask(src)
     winrate = (float(win.mean()) * 100) if len(win) else 0.0
@@ -1914,7 +1910,6 @@ def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALIT
 
 def render_history(results: pd.DataFrame) -> None:
     page_banner("Historia wyników", "HISTORIA", "Profesjonalna historia wyników, pomagająca podejmować decyzje i uczyć się na danych.")
-    title("HISTORIA WYNIKÓW")
     wins = "0"
     if not results.empty and "result" in results.columns:
         wins = str((results["result"].astype(str).str.lower().str.contains("win|wygr|won|1", regex=True)).sum())
@@ -1970,7 +1965,6 @@ def render_history(results: pd.DataFrame) -> None:
 
 def render_ranking(picks: pd.DataFrame, results: pd.DataFrame) -> None:
     page_banner("Ranking", "RANKING", "Ranking lig, typów zakładów i połączeń liga + rynek, aktualizowany z historią.")
-    title("RANKING SKUTECZNOŚCI")
     src = _result_source(results, picks)
     league_count = src["league"].nunique() if not src.empty and "league" in src.columns else (src["liga"].nunique() if not src.empty and "liga" in src.columns else 0)
     roi_series = numeric_series(src, "roi")
@@ -2000,15 +1994,6 @@ def render_ranking(picks: pd.DataFrame, results: pd.DataFrame) -> None:
 
 def render_gpt_professional(prematch_picks: pd.DataFrame, low_picks: pd.DataFrame, risk_picks: pd.DataFrame, live: pd.DataFrame, results: pd.DataFrame) -> None:
     page_banner("Czat GPT", "CZAT GPT", "Profesjonalny ekran rozmowy z GPT podzielony na Prematch, Low i Risk.")
-    title("ASYSTENT GPT")
-    total_context = sum(len(df) for df in [prematch_picks, low_picks, risk_picks] if df is not None)
-    model_name = os.getenv("GPT_ANALYSIS_MODEL", os.getenv("OPENAI_MODEL", "gpt-5.2-chat-latest")).replace("-chat-latest", "")
-    st.markdown(
-        f'<div class="ka-panel"><h3>MODEL ONLINE <span class="green" style="float:right">{html.escape(model_name)}</span></h3>'
-        f'<p class="ka-sub">Asystent korzysta z {total_context} aktualnych typów. Prompt systemowy pozostaje ukryty, a analiza nie zmienia logiki typowania.</p></div>',
-        unsafe_allow_html=True,
-    )
-
     datasets = [
         ("prematch", "Prematch", prematch_picks if prematch_picks is not None else pd.DataFrame(), PICK_CANDIDATES),
         ("low", "Low", low_picks if low_picks is not None else pd.DataFrame(), LOW_PICK_CANDIDATES),
@@ -2229,7 +2214,6 @@ def _render_manual_profile(mode_key: str, mode_label: str, picks_source: pd.Data
 
 def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame | None = None, risk_source: pd.DataFrame | None = None) -> None:
     page_banner("Moje zakłady", "MOJE ZAKŁADY", "Zakłady pojedyncze i multi w trzech profilach: Standard, Niskie ryzyko i Duże ryzyko.")
-    title("MOJE ZAKŁADY")
 
     required = [add_manual_bet, add_ako_coupon, manual_bets_dataframe, manual_summary, grouped_manual_stats]
     if not all(required):

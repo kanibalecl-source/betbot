@@ -335,7 +335,7 @@ def render_gpt_tab(base_dir=None, profile_name: str = "Prematch", key_prefix: st
         for idx, candidate in enumerate(candidates[:limit]):
             analysis = lookup.get(_key(candidate))
             _render_row(candidate, analysis, idx, selected_key == _key(candidate), base_dir, key_prefix, source_files, limit)
-        st.markdown('<p class="gpt-footnote">Prompt GPT uruchamia się tylko po kliknięciu przycisku Analizuj GPT przy wybranym meczu.</p></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
     with right:
         _render_details(selected)
 
