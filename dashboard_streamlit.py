@@ -1819,11 +1819,16 @@ def _render_quality_governance() -> None:
         ])
         gates = validation.get("gates", {})
         if gates:
-            gate_frame = pd.DataFrame([
-                {"Bramka": name, "Status": "PASS" if passed else "FAIL"}
+            gate_rows = [
+                [html.escape(str(name)), "PASS" if passed else "FAIL"]
                 for name, passed in gates.items()
-            ])
-            st.dataframe(gate_frame, use_container_width=True, hide_index=True)
+            ]
+            st.markdown(
+                '<div class="ka-table-scroll quality-gates-table">'
+                + html_table(["Bramka", "Status"], gate_rows)
+                + "</div>",
+                unsafe_allow_html=True,
+            )
         st.caption(
             "Promocja nigdy nie jest automatyczna. Wymagany jest pozytywny walk-forward, "
             "pozytywny live shadow oraz dokładne przepisanie identyfikatora kandydata."
