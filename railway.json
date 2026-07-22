@@ -1,7 +1,7 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "deploy": {
-    "startCommand": "sh -c 'until grep -qs \" /data \" /proc/mounts; do sleep 1; done; exec python -u app_launcher.py'",
+    "startCommand": "sh -c 'until grep -qs \" /data \" /proc/mounts; do sleep 1; done; python -c \"import storage_paths as s; print(\\"DATA_DIR=\\", s.DATA_DIR); print(\\"DATA_RESOLVED=\\", s.DATA_DIR.resolve()); print(\\"APP_DATA_RESOLVED=\\", (s.BASE_DIR / \\"data\\").resolve()); print(\\"CONFIG=\\", s.persistent_storage_configured())\"; exec python -u app_launcher.py'",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
