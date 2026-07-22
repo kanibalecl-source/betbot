@@ -1,6 +1,14 @@
 {
   "$schema": "https://railway.app/railway.schema.json",
   "deploy": {
+    "startCommand": "sh -c 'until grep -qs \" /data \" /proc/mounts; do sleep 1; done; export BETBOT_QUALITY_RETRAIN_ENABLED=1; exec python -u app_launcher_quality.py'",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 11
+  }
+}
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "deploy": {
     "startCommand": "sh -c 'until grep -qs \" /data \" /proc/mounts; do sleep 1; done; exec python -u app_launcher.py'",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 11
