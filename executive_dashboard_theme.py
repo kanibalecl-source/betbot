@@ -65,6 +65,7 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 [data-testid="stSidebar"]{width:264px!important;min-width:264px!important;background:linear-gradient(180deg,#06172f 0%,#082342 100%)!important;border-right:1px solid rgba(255,255,255,.08)!important}
 [data-testid="stSidebar"]>div:first-child{width:264px!important;padding:0!important}
 [data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:0!important}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:0!important}
 .ui-side-brand{height:142px;padding:28px 24px 20px;border-bottom:1px solid rgba(255,255,255,.08);box-sizing:border-box}
 .ui-side-logo{display:flex;align-items:center;gap:12px}.ui-side-logo img{width:54px;height:54px;object-fit:contain}
 .ui-side-word strong{display:block;color:#fff;font-size:20px;letter-spacing:.045em;line-height:1}.ui-side-word span{display:block;color:#b8c7da;font-size:8px;font-weight:800;letter-spacing:.28em;margin-top:7px}
