@@ -1879,9 +1879,15 @@ def _render_advantage_diagnostic() -> None:
             ("CLV", f"{as_float(global_metrics.get('mean_clv'), 0) * 100:+.2f}%", f"próba: {global_metrics.get('clv_samples', 0)}"),
             ("Brier", f"{as_float(global_metrics.get('brier_score'), 0):.4f}", "niżej = lepiej"),
         ])
+        closing_coverage = (
+            as_float(global_metrics.get("clv_samples"), 0)
+            / max(1.0, as_float(global_metrics.get("priced_samples"), 0))
+            * 100.0
+        )
         status_text = "GOTOWA" if policy.get("enforcement_ready") else "ZBIERANIE DANYCH"
         st.caption(
             f"Integralność: {integrity.get('status', 'BRAK')} · Polityka selekcji: {status_text} · "
+            f"Pokrycie closing odds: {closing_coverage:.1f}% · "
             "Raport jest pochodny i nie modyfikuje historii ani aktywnego modelu."
         )
         rows = []
@@ -1905,6 +1911,12 @@ def _render_advantage_diagnostic() -> None:
         missing_features = report.get("feature_coverage", {}).get("recommended_next_features", [])
         if missing_features:
             st.caption("Najważniejsze braki danych: " + ", ".join(map(str, missing_features[:8])))
+        quarantines = report.get("recent_quarantines", [])
+        if quarantines:
+            st.warning(
+                "Automatyczna kwarantanna aktywna dla: "
+                + ", ".join(str(item.get("segment")) for item in quarantines[:8])
+            )
 
 
 def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALITYKA") -> None:

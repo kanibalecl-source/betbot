@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 
 from agi_storage import sync_picks_from_csv
-from result_updater_unified import settle_stored_picks
+from result_updater_unified import capture_closing_odds_for_open_picks, settle_stored_picks
 
 try:
     from betbot.storage.append_only_history import append_event
@@ -15,8 +15,9 @@ except Exception:
 
 def run_once() -> dict:
     sync = sync_picks_from_csv()
+    closing = capture_closing_odds_for_open_picks()
     settle = settle_stored_picks()
-    result = {"sync": sync, "settle": settle}
+    result = {"sync": sync, "closing_odds": closing, "settle": settle}
     append_event("persistence_cycles", result, source="persistence_runtime.py")
     return result
 

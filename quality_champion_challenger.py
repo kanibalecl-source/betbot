@@ -188,9 +188,12 @@ def _bet_metrics(
         "coverage": round(len(profits) / max(1, len(targets)), 6),
         "profit_units": round(sum(profits), 6),
         "yield": round(sum(profits) / max(1, len(profits)), 6),
+        "yield_ci95": _paired_ci(profits),
         "max_drawdown_units": round(drawdown, 6),
         "clv_samples": len(clv),
         "mean_clv": round(sum(clv) / max(1, len(clv)), 6),
+        "clv_ci95": _paired_ci(clv),
+        "closing_odds_coverage": round(len(clv) / max(1, len(profits)), 6),
     }
 
 
@@ -426,6 +429,28 @@ def walk_forward_validate(
     clv_ok = True
     if min(challenger_metrics.get("clv_samples", 0), champion_metrics.get("clv_samples", 0)) >= 30:
         clv_ok = challenger_metrics["mean_clv"] >= champion_metrics["mean_clv"] - 0.005
+    minimum_clv_samples = max(50, int(os.getenv("BETBOT_QUALITY_MIN_CLV_SAMPLES", "100")))
+    positive_clv_confidence = (
+        challenger_metrics.get("clv_samples", 0) >= minimum_clv_samples
+        and challenger_metrics.get("clv_ci95", {}).get("lower", -1.0) > 0.0
+    )
+    closing_coverage_ok = (
+        challenger_metrics.get("closing_odds_coverage", 0.0)
+        >= float(os.getenv("BETBOT_QUALITY_MIN_CLOSING_COVERAGE", "0.80"))
+    )
+    fold_directions = [
+        (
+            fold.get("champion", {}).get("brier_score", 1.0)
+            - fold.get("challenger", {}).get("brier_score", 1.0)
+        )
+        for fold in folds
+        if fold.get("test_samples", 0) > 0
+    ]
+    non_degrading_folds = sum(value >= -0.002 for value in fold_directions)
+    fold_stability_ratio = non_degrading_folds / max(1, len(fold_directions))
+    fold_stability_ok = (
+        len(fold_directions) >= min_folds and fold_stability_ratio >= 0.60
+    )
     slices_ok = (
         market_slices["non_degrading_ratio"] >= 0.60
         and source_slices["non_degrading_ratio"] >= 0.60
@@ -441,6 +466,9 @@ def walk_forward_validate(
         "drawdown_within_limit": risk_ok,
         "yield_not_materially_degraded": yield_ok,
         "clv_not_materially_degraded": clv_ok,
+        "positive_clv_confidence": positive_clv_confidence,
+        "closing_odds_coverage": closing_coverage_ok,
+        "fold_stability": fold_stability_ok,
         "slice_stability": slices_ok,
         "no_critical_probability_drift": drift.get("status") != "DRIFT_ALERT",
         "beats_raw_current_model": (
@@ -467,6 +495,8 @@ def walk_forward_validate(
         "required_log_loss_improvement": min_log_loss_improvement,
         "minimum_test_samples": min_test_samples,
         "minimum_folds": min_folds,
+        "minimum_clv_samples": minimum_clv_samples,
+        "fold_stability_ratio": round(fold_stability_ratio, 6),
         "market_slices": market_slices,
         "source_slices": source_slices,
         "league_slices": league_slices,

@@ -82,6 +82,19 @@ try:
 except Exception:
     CLVEngine = None
 
+try:
+    from prediction_quality_pipeline import (
+        build_feature_snapshot,
+        prediction_snapshot_id,
+        record_prediction_snapshot,
+        select_portfolio,
+    )
+except Exception:
+    build_feature_snapshot = None
+    record_prediction_snapshot = None
+    prediction_snapshot_id = None
+    select_portfolio = None
+
 
 BASE_DIR = Path(__file__).parent
 try:
@@ -910,6 +923,19 @@ def run_bot(mode="main"):
                 skip_stats["stage_filter_rejected"] += 1
                 continue
 
+            feature_snapshot = (
+                build_feature_snapshot(
+                    match,
+                    data,
+                    home_xg=home_xg,
+                    away_xg=away_xg,
+                    probability=final_prob,
+                    league=match.get("league", ""),
+                )
+                if build_feature_snapshot
+                else {"feature_completeness": 1.0, "missing_features_json": "[]"}
+            )
+
             try:
                 from quality_selection_gate import evaluate_recommendation
                 quality_gate = evaluate_recommendation(
@@ -923,6 +949,9 @@ def run_bot(mode="main"):
                         "away_xg": away_xg,
                         "current_probability": final_prob,
                         "xg_probability": probability_data.get("xg_probability"),
+                        "feature_completeness": feature_snapshot.get("feature_completeness"),
+                        "lineup_available": feature_snapshot.get("lineup_available"),
+                        "injuries_available": feature_snapshot.get("injuries_available"),
                     },
                     quality_selection_policy,
                 )
@@ -1025,6 +1054,7 @@ def run_bot(mode="main"):
 
             league_full = f"{match['league']} / {match.get('country', '')}"
             strategy_version = os.getenv("BETBOT_STRATEGY_VERSION", "strict-v1")
+            model_version = os.getenv("BETBOT_MODEL_VERSION", "champion-current")
             pick_id = make_pick_id(match, market, book_odds, bookmaker, strategy_version)
 
             rows.append({
@@ -1042,6 +1072,7 @@ def run_bot(mode="main"):
                 "data": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
                 "decision_at": datetime.now(timezone.utc).isoformat(),
                 "strategy_version": strategy_version,
+                "model_version": model_version,
                 "liga": league_full,
                 "league": match.get("league", ""),
                 "country": match.get("country", ""),
@@ -1083,6 +1114,7 @@ def run_bot(mode="main"):
 
                 "home_xg": round(home_xg, 3),
                 "away_xg": round(away_xg, 3),
+                **feature_snapshot,
 
                 "tempo_score": tempo_score,
                 "tempo_level": tempo_level,
@@ -1105,6 +1137,9 @@ def run_bot(mode="main"):
                 ),
                 "quality_data_completeness": quality_gate.get("data_completeness"),
                 "quality_model_disagreement": quality_gate.get("model_disagreement"),
+                "quality_required_edge": quality_gate.get("required_edge"),
+                "quality_observed_edge": quality_gate.get("observed_edge"),
+                "quality_adaptive_threshold": quality_gate.get("adaptive_threshold_applied", False),
                 "quality_probability_modified": False,
 
                 "marza_sum": round(margin_sum, 4),
@@ -1160,8 +1195,33 @@ def run_bot(mode="main"):
         )
         df = df.drop(columns=["_risk_sort"])
 
+        portfolio_stats = {"same_fixture": 0, "correlated_team_day": 0, "daily_limit": 0}
+        if select_portfolio:
+            selected_rows, portfolio_stats = select_portfolio(df.to_dict("records"))
+            df = pd.DataFrame(selected_rows)
+            append_event(
+                "portfolio_selection",
+                {"mode": mode, "accepted": len(selected_rows), **portfolio_stats},
+                source="bot.py",
+            )
+
+        if df.empty:
+            preserve_existing_file_when_empty()
+            append_event(
+                "prematch_empty_selection",
+                {"mode": mode, "reason": "portfolio_abstention", **portfolio_stats},
+                source="bot.py",
+            )
+            print(f"PORTFOLIO SKIP STATS: {portfolio_stats}")
+            print("GOTOWE: 0 typow po selekcji portfelowej")
+            return
+
         df["bot_mode"] = mode
         df["bot_label"] = mode_settings["label"]
+        if prediction_snapshot_id:
+            df["prediction_snapshot_id"] = [
+                prediction_snapshot_id(item) for item in df.to_dict("records")
+            ]
         if os.getenv("BETBOT_QUALITY_SHADOW", "0").strip().lower() in {"1", "true", "yes", "on"}:
             try:
                 from quality_live_shadow import record_live_shadow
@@ -1178,6 +1238,12 @@ def run_bot(mode="main"):
             except Exception as shadow_exc:
                 print(f"[QUALITY LIVE SHADOW ERROR] {shadow_exc}")
         df.to_csv(ALL_FILE, index=False)
+        if record_prediction_snapshot:
+            for frozen_pick in df.to_dict("records"):
+                try:
+                    record_prediction_snapshot(frozen_pick)
+                except Exception as ledger_exc:
+                    print(f"[PREDICTION LEDGER ERROR] {ledger_exc}")
         append_records(f"prematch_{mode}_picks", df.to_dict("records"), source="bot.py")
         append_event("prematch_cycle", {"mode": mode, "picks": int(len(df)), "file": str(ALL_FILE)}, source="bot.py")
 

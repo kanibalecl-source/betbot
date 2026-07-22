@@ -40,7 +40,7 @@ def _probability(value: Any) -> float | None:
 
 
 def _target(value: Any) -> int | None:
-    normalized = str(value or "").strip().upper()
+    normalized = str("" if value is None else value).strip().upper()
     if normalized in {"1", "TRUE", "WIN", "WON"}:
         return 1
     if normalized in {"0", "FALSE", "LOSS", "LOST", "LOSE"}:
@@ -306,6 +306,43 @@ def segment_report(rows: Sequence[Mapping[str, Any]], field: str, minimum: int) 
     return sorted(output, key=lambda item: (-int(item.get("samples", 0)), item["name"]))
 
 
+def recent_quarantine_report(
+    rows: Sequence[Mapping[str, Any]], minimum: int
+) -> list[dict[str, Any]]:
+    """Detect recent segment deterioration without rewriting older evidence."""
+    normalized = sorted(
+        _normalized_rows(rows),
+        key=lambda row: (row.get("_time") or datetime.min.replace(tzinfo=timezone.utc), row["_position"]),
+    )
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in normalized:
+        groups[f"market::{row['_market']}"] .append(row)
+        groups[f"league::{row['_league']}"] .append(row)
+        groups[f"market_league::{row['_market']}::{row['_league']}"] .append(row)
+        groups[f"odds_bucket::{_odds_bucket(row)}"] .append(row)
+    output: list[dict[str, Any]] = []
+    window = max(minimum, int(os.getenv("BETBOT_QUALITY_QUARANTINE_WINDOW", "100")))
+    for name, group in groups.items():
+        recent = group[-window:]
+        if len(recent) < minimum:
+            continue
+        metrics = performance_metrics(recent)
+        yield_ci = metrics.get("yield_ci95", {})
+        clv_ci = metrics.get("clv_ci95", {})
+        negative_yield = metrics.get("priced_samples", 0) >= minimum and yield_ci.get("upper", 0.0) < 0.0
+        negative_clv = metrics.get("clv_samples", 0) >= minimum and clv_ci.get("upper", 0.0) < 0.0
+        if negative_yield or negative_clv:
+            output.append({
+                "segment": name,
+                "status": "QUARANTINE",
+                "reason": "recent_negative_yield" if negative_yield else "recent_negative_clv",
+                "window_samples": len(recent),
+                "yield": metrics.get("yield"),
+                "mean_clv": metrics.get("mean_clv"),
+            })
+    return sorted(output, key=lambda item: item["segment"])
+
+
 def feature_coverage(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     fields = (
         "home_xg", "away_xg", "data_quality", "lineup_available",
@@ -328,20 +365,46 @@ def feature_coverage(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def build_selection_policy(report: Mapping[str, Any], minimum: int) -> dict[str, Any]:
+    base_edge = float(os.getenv("BETBOT_QUALITY_BASE_MIN_EDGE", "0.02"))
     segments: dict[str, Any] = {}
     for field in ("market", "league", "market_league", "odds_bucket"):
         for item in report.get("segments", {}).get(field, []):
+            status = item["status"]
+            edge_adjustment = {
+                "VERIFIED_ADVANTAGE": -0.003,
+                "MONITOR": 0.005,
+                "COLLECT_MORE_DATA": 0.010,
+                "BLOCK": 0.030,
+            }.get(status, 0.010)
+            mean_clv = float(item.get("mean_clv", 0.0) or 0.0)
+            if mean_clv < 0.0:
+                edge_adjustment += min(0.02, abs(mean_clv))
             segments[f"{field}::{item['name']}"] = {
                 "status": item["status"],
                 "samples": item["samples"],
                 "yield": item.get("yield", 0.0),
                 "mean_clv": item.get("mean_clv", 0.0),
                 "brier_score": item.get("brier_score"),
+                "recommended_min_edge": round(
+                    max(0.015, min(0.10, base_edge + edge_adjustment)), 6
+                ),
             }
+    for quarantine in report.get("recent_quarantines", []):
+        name = str(quarantine.get("segment") or "")
+        if not name:
+            continue
+        existing = dict(segments.get(name, {}))
+        segments[name] = {
+            **existing,
+            "status": "QUARANTINE",
+            "quarantine_reason": quarantine.get("reason"),
+            "recent_window_samples": quarantine.get("window_samples"),
+            "recommended_min_edge": 0.10,
+        }
     global_samples = int(report.get("global", {}).get("samples", 0))
     integrity_ok = report.get("integrity", {}).get("status") != "FAIL"
     return {
-        "version": 1,
+        "version": 2,
         "created_at": report.get("created_at"),
         "mode": "evidence_based_abstention",
         "enforcement_ready": global_samples >= max(300, minimum * 3) and integrity_ok,
@@ -349,7 +412,8 @@ def build_selection_policy(report: Mapping[str, Any], minimum: int) -> dict[str,
         "minimum_data_quality": 0.65,
         "maximum_model_disagreement": 0.15,
         "maximum_odds_age_seconds": int(os.getenv("BETBOT_MAX_ODDS_AGE_SECONDS", "300")),
-        "base_minimum_edge": float(os.getenv("BETBOT_QUALITY_BASE_MIN_EDGE", "0.02")),
+        "base_minimum_edge": base_edge,
+        "adaptive_edge_thresholds": True,
         "unknown_segment_action": "REVIEW",
         "blocked_segment_action": "REJECT",
         "segments": segments,
@@ -377,6 +441,7 @@ def generate_report(
             "odds_bucket": segment_report(rows, "odds_bucket", minimum_segment_samples),
         },
         "feature_coverage": feature_coverage(rows),
+        "recent_quarantines": recent_quarantine_report(rows, minimum_segment_samples),
         "interpretation": {
             "roi_is_not_proof_without_confidence_interval": True,
             "clv_is_primary_early_advantage_signal": True,

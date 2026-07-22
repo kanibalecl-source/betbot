@@ -91,7 +91,12 @@ def evaluate_recommendation(
         observation.get("home_xg"), observation.get("away_xg"), odds,
         observation.get("current_probability"), market, league,
     )
-    completeness = sum(value not in (None, "", "UNKNOWN") for value in required) / len(required)
+    observed_completeness = _number(observation.get("feature_completeness"))
+    completeness = (
+        max(0.0, min(1.0, observed_completeness))
+        if observed_completeness is not None
+        else sum(value not in (None, "", "UNKNOWN") for value in required) / len(required)
+    )
     disagreement = pstdev(probabilities) if len(probabilities) > 1 else 0.0
     maximum_age = int(policy.get("maximum_odds_age_seconds", 300))
     age_seconds = None
@@ -105,6 +110,28 @@ def evaluate_recommendation(
         "league": segments.get(f"league::{league}"),
         "odds_bucket": segments.get(f"odds_bucket::{_odds_bucket(odds)}"),
     }
+    base_minimum_edge = float(policy.get("base_minimum_edge", 0.02))
+    odds_adjustment = 0.0
+    if odds is not None:
+        if odds < 1.50:
+            odds_adjustment = 0.005
+        elif odds >= 3.50:
+            odds_adjustment = 0.020
+        elif odds >= 2.50:
+            odds_adjustment = 0.010
+    evidence_thresholds = [
+        _number(segment.get("recommended_min_edge"))
+        for segment in evidence.values()
+        if isinstance(segment, Mapping)
+    ]
+    required_edge = max(
+        [base_minimum_edge + odds_adjustment]
+        + [value for value in evidence_thresholds if value is not None]
+    )
+    if completeness < 0.85:
+        required_edge += min(0.02, (0.85 - completeness) * 0.05)
+    required_edge = max(0.015, min(0.12, required_edge))
+
     reasons: list[str] = []
     if completeness < float(policy.get("minimum_data_quality", 0.65)):
         reasons.append("insufficient_data_completeness")
@@ -114,17 +141,21 @@ def evaluate_recommendation(
         reasons.append("stale_odds")
     if disagreement > float(policy.get("maximum_model_disagreement", 0.15)):
         reasons.append("excessive_model_disagreement")
-    if edge is None or edge < float(policy.get("base_minimum_edge", 0.02)):
+    if edge is None or edge < required_edge:
         reasons.append("edge_below_quality_threshold")
     for field, segment in evidence.items():
         if isinstance(segment, Mapping) and segment.get("status") == "BLOCK":
             reasons.append(f"historically_negative_{field}_segment")
+        if isinstance(segment, Mapping) and segment.get("status") == "QUARANTINE":
+            reasons.append(f"recently_degraded_{field}_segment")
     hard_reasons = {
         "insufficient_data_completeness", "stale_odds",
         "excessive_model_disagreement", "edge_below_quality_threshold",
         "historically_negative_market_segment", "historically_negative_league_segment",
         "historically_negative_market_league_segment",
         "historically_negative_odds_bucket_segment",
+        "recently_degraded_market_segment", "recently_degraded_league_segment",
+        "recently_degraded_market_league_segment", "recently_degraded_odds_bucket_segment",
     }
     rejected = enforced and any(reason in hard_reasons for reason in reasons)
     return {
@@ -133,6 +164,9 @@ def evaluate_recommendation(
         "enforced": enforced,
         "reasons": reasons or ["quality_checks_passed"],
         "data_completeness": round(completeness, 4),
+        "required_edge": round(required_edge, 6),
+        "observed_edge": round(edge, 6) if edge is not None else None,
+        "adaptive_threshold_applied": True,
         "model_disagreement": round(disagreement, 6),
         "odds_age_seconds": round(age_seconds, 2) if age_seconds is not None else None,
         "segment_evidence": evidence,

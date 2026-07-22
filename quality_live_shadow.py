@@ -8,6 +8,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from statistics import NormalDist
 from typing import Any, Mapping
 
 from quality_upgrade_engine import assess_quality
@@ -40,6 +41,20 @@ def _float(value: Any) -> float | None:
         return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
+
+
+def _mean_ci(values: list[float], confidence: float = 0.95) -> dict[str, float]:
+    if not values:
+        return {"mean": 0.0, "lower": 0.0, "upper": 0.0, "confidence": confidence}
+    mean = sum(values) / len(values)
+    margin = 0.0
+    if len(values) > 1:
+        variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+        margin = NormalDist().inv_cdf(0.5 + confidence / 2.0) * math.sqrt(variance / len(values))
+    return {
+        "mean": round(mean, 8), "lower": round(mean - margin, 8),
+        "upper": round(mean + margin, 8), "confidence": confidence,
+    }
 
 
 def _database(data_dir: str | Path | None = None) -> Path:
@@ -332,9 +347,12 @@ def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
             "log_loss": round(loss, 8),
             "bets": len(profits),
             "yield": round(sum(profits) / max(1, len(profits)), 6),
+            "yield_ci95": _mean_ci(profits),
             "max_drawdown_units": round(drawdown, 6),
             "clv_samples": len(clv_values),
             "mean_clv": round(sum(clv_values) / max(1, len(clv_values)), 6),
+            "clv_ci95": _mean_ci(clv_values),
+            "closing_odds_coverage": round(len(clv_values) / max(1, len(profits)), 6),
         }
 
     def slice_stability() -> dict[str, Any]:
@@ -370,6 +388,7 @@ def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
     brier_gain = champion["brier_score"] - challenger["brier_score"]
     log_gain = champion["log_loss"] - challenger["log_loss"]
     minimum = int(os.getenv("BETBOT_LIVE_SHADOW_MIN_SAMPLES", "300"))
+    minimum_clv = max(50, int(os.getenv("BETBOT_QUALITY_MIN_CLV_SAMPLES", "100")))
     slices = slice_stability()
     gates = {
         "enough_future_samples": len(rows) >= minimum,
@@ -387,6 +406,14 @@ def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
             min(challenger["clv_samples"], champion["clv_samples"]) < 30
             or challenger["mean_clv"] >= champion["mean_clv"] - 0.005
         ),
+        "positive_clv_confidence": (
+            challenger["clv_samples"] >= minimum_clv
+            and challenger.get("clv_ci95", {}).get("lower", -1.0) > 0.0
+        ),
+        "closing_odds_coverage": (
+            challenger.get("closing_odds_coverage", 0.0)
+            >= float(os.getenv("BETBOT_QUALITY_MIN_CLOSING_COVERAGE", "0.80"))
+        ),
         "slice_stability": (
             slices["eligible_slices"] == 0
             or slices["non_degrading_ratio"] >= 0.60
@@ -399,6 +426,7 @@ def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
         "pending_samples": int(pending),
         "candidate_id": candidate_id,
         "minimum_samples": minimum,
+        "minimum_clv_samples": minimum_clv,
         "champion": champion,
         "challenger": challenger,
         "brier_improvement": round(brier_gain, 8),

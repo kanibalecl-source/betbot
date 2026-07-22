@@ -32,6 +32,21 @@ PICK_FILES = [
 HISTORY_EXPORT = DATA_DIR / "results_history.csv"
 GPT_EXPORT = DATA_DIR / "gpt_analysis_report.json"
 
+PICK_HISTORY_EXTRA_COLUMNS = {
+    "odds_event_id": "TEXT",
+    "odds_api_market": "TEXT",
+    "closing_outcome_name": "TEXT",
+    "odds_observed_at": "TEXT",
+    "closing_odds": "REAL",
+    "closing_odds_recorded_at": "TEXT",
+    "clv": "REAL",
+    "settled_at": "TEXT",
+    "feature_completeness": "REAL",
+    "strategy_version": "TEXT",
+    "model_version": "TEXT",
+    "prediction_snapshot_id": "TEXT",
+}
+
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -39,10 +54,8 @@ def now_iso() -> str:
 
 def conn() -> sqlite3.Connection:
     DATA_DIR.mkdir(exist_ok=True)
-    c = sqlite3.connect(DB_FILE, timeout=30)
+    c = sqlite3.connect(DB_FILE)
     c.row_factory = sqlite3.Row
-    c.execute("PRAGMA busy_timeout=30000")
-    c.execute("PRAGMA journal_mode=WAL")
     return c
 
 
@@ -68,19 +81,20 @@ def init_storage() -> None:
         edge REAL,
         ev REAL,
         probability REAL,
-        stake REAL DEFAULT 0,
+        stake REAL DEFAULT 1,
         status TEXT DEFAULT 'OPEN',
         result TEXT DEFAULT 'PENDING',
         profit REAL DEFAULT 0,
         roi REAL DEFAULT 0,
-        home_goals INTEGER,
-        away_goals INTEGER,
-        result_score TEXT,
-        settlement_source TEXT,
-        settled_at TEXT,
         raw_json TEXT
     )
     """)
+    existing_columns = {
+        str(row[1]) for row in c.execute("PRAGMA table_info(picks_history)").fetchall()
+    }
+    for name, sql_type in PICK_HISTORY_EXTRA_COLUMNS.items():
+        if name not in existing_columns:
+            c.execute(f"ALTER TABLE picks_history ADD COLUMN {name} {sql_type}")
     c.execute("""
     CREATE TABLE IF NOT EXISTS gpt_analyses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,17 +121,6 @@ def init_storage() -> None:
         payload_json TEXT
     )
     """)
-    c.commit()
-    existing = {row[1] for row in c.execute("PRAGMA table_info(picks_history)").fetchall()}
-    for column, ddl in {
-        "home_goals": "INTEGER",
-        "away_goals": "INTEGER",
-        "result_score": "TEXT",
-        "settlement_source": "TEXT",
-        "settled_at": "TEXT",
-    }.items():
-        if column not in existing:
-            c.execute(f"ALTER TABLE picks_history ADD COLUMN {column} {ddl}")
     c.commit()
     c.close()
 
@@ -192,7 +195,15 @@ def normalize_pick(row: Dict[str, Any], source: str) -> Optional[Dict[str, Any]]
         "edge": _float(_first(row, ["edge", "value"]), 0.0),
         "ev": _float(_first(row, ["ev", "value"]), 0.0),
         "probability": _float(_first(row, ["prawd_final", "probability", "prob"]), 0.0),
-        "stake": _float(_first(row, ["stake", "stawka_pln"]), 0.0),
+        "stake": _float(_first(row, ["stake", "stawka_pln"]), 1.0),
+        "odds_event_id": _first(row, ["odds_event_id"]),
+        "odds_api_market": _first(row, ["odds_api_market"]),
+        "closing_outcome_name": _first(row, ["closing_outcome_name"]),
+        "odds_observed_at": _first(row, ["odds_observed_at"]),
+        "feature_completeness": _float(_first(row, ["feature_completeness", "quality_data_completeness"]), 0.0),
+        "strategy_version": _first(row, ["strategy_version"]),
+        "model_version": _first(row, ["model_version"]),
+        "prediction_snapshot_id": _first(row, ["prediction_snapshot_id"]),
         "raw_json": json.dumps(row, ensure_ascii=False),
     }
 
@@ -211,26 +222,36 @@ def sync_picks_from_csv() -> Dict[str, int]:
             pick = normalize_pick(raw, source)
             if not pick:
                 continue
-            exists = c.execute("SELECT id,status FROM picks_history WHERE pick_key=?", (pick["pick_key"],)).fetchone()
+            exists = c.execute("SELECT id FROM picks_history WHERE pick_key=?", (pick["pick_key"],)).fetchone()
             if exists:
-                # A settled record is historical evidence and is immutable.
-                # A later CSV generation must never rewrite its odds/features.
-                if str(exists["status"] or "").upper() != "CLOSED":
-                    c.execute("""
-                        UPDATE picks_history SET updated_at=?, confidence=?, edge=?, ev=?, odds=?, raw_json=?
-                        WHERE pick_key=? AND UPPER(COALESCE(status,''))!='CLOSED'
-                    """, (now_iso(), pick["confidence"], pick["edge"], pick["ev"], pick["odds"], pick["raw_json"], pick["pick_key"]))
-                    updated += 1
+                c.execute("""
+                    UPDATE picks_history SET updated_at=?, confidence=?, edge=?, ev=?, odds=?,
+                    odds_event_id=?, odds_api_market=?, closing_outcome_name=?, odds_observed_at=?,
+                    feature_completeness=?, strategy_version=?, model_version=?,
+                    prediction_snapshot_id=?, raw_json=? WHERE pick_key=?
+                """, (
+                    now_iso(), pick["confidence"], pick["edge"], pick["ev"], pick["odds"],
+                    pick["odds_event_id"], pick["odds_api_market"], pick["closing_outcome_name"],
+                    pick["odds_observed_at"], pick["feature_completeness"], pick["strategy_version"],
+                    pick["model_version"], pick["prediction_snapshot_id"], pick["raw_json"], pick["pick_key"]
+                ))
+                updated += 1
             else:
                 c.execute("""
                     INSERT INTO picks_history (
                         pick_key, created_at, updated_at, source, fixture_id, league, match_name, home_team, away_team,
-                        match_date, market, bet_name, odds, confidence, edge, ev, probability, stake, raw_json
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        match_date, market, bet_name, odds, confidence, edge, ev, probability, stake,
+                        odds_event_id, odds_api_market, closing_outcome_name, odds_observed_at,
+                        feature_completeness, strategy_version, model_version, prediction_snapshot_id,
+                        raw_json
+                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     pick["pick_key"], pick["created_at"], pick["updated_at"], pick["source"], pick["fixture_id"], pick["league"],
                     pick["match_name"], pick["home_team"], pick["away_team"], pick["match_date"], pick["market"], pick["bet_name"],
-                    pick["odds"], pick["confidence"], pick["edge"], pick["ev"], pick["probability"], pick["stake"], pick["raw_json"]
+                    pick["odds"], pick["confidence"], pick["edge"], pick["ev"], pick["probability"], pick["stake"],
+                    pick["odds_event_id"], pick["odds_api_market"], pick["closing_outcome_name"],
+                    pick["odds_observed_at"], pick["feature_completeness"], pick["strategy_version"],
+                    pick["model_version"], pick["prediction_snapshot_id"], pick["raw_json"]
                 ))
                 inserted += 1
     c.commit()
@@ -270,9 +291,7 @@ def load_history_dataframe() -> pd.DataFrame:
     init_storage()
     c = conn()
     try:
-        # Never truncate the canonical export after the history grows beyond a
-        # dashboard-oriented display limit.
-        df = pd.read_sql_query("SELECT * FROM picks_history ORDER BY created_at DESC", c)
+        df = pd.read_sql_query("SELECT * FROM picks_history ORDER BY created_at DESC LIMIT 5000", c)
     finally:
         c.close()
     if df.empty:

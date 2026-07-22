@@ -76,10 +76,8 @@ def _first(row: Mapping[str, Any], names: Iterable[str]) -> Any:
 
 
 def _target(row: Mapping[str, Any]) -> int | None:
-    value = str(
-        _first(row, ("target", "won", "result", "outcome", "bet_result", "status"))
-        or ""
-    ).strip().upper()
+    raw_value = _first(row, ("target", "won", "result", "outcome", "bet_result", "status"))
+    value = str("" if raw_value is None else raw_value).strip().upper()
     if value in {"1", "TRUE", "WON", "WIN", "W", "GREEN", "CLOSED_WON"}:
         return 1
     if value in {"0", "FALSE", "LOST", "LOSS", "LOSE", "L", "RED", "CLOSED_LOST"}:
@@ -236,7 +234,9 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
         ),
         "home_xg": round(home_xg, 8),
         "away_xg": round(away_xg, 8),
-        "data_quality": _num(_first(row, ("data_quality", "quality_score")), ""),
+        "data_quality": _num(
+            _first(row, ("feature_completeness", "quality_data_completeness", "quality_score")), ""
+        ),
         "lineup_available": _first(row, ("lineup_available", "lineups_available")) or "",
         "injuries_available": _first(row, ("injuries_available", "injury_data_available")) or "",
         "home_rest_days": _num(_first(row, ("home_rest_days", "rest_days_home")), ""),
@@ -245,6 +245,9 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
         "away_form_away": _num(_first(row, ("away_form_away", "away_away_form")), ""),
         "coach_change": _first(row, ("coach_change", "manager_change")) or "",
         "odds_observed_at": _first(row, ("odds_observed_at", "observed_at")) or "",
+        "strategy_version": _first(row, ("strategy_version",)) or "",
+        "model_version": _first(row, ("model_version",)) or "",
+        "prediction_snapshot_id": _first(row, ("prediction_snapshot_id", "snapshot_id")) or "",
         "target": target,
     }
 
@@ -348,6 +351,7 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
         "odds", "closing_odds", "home_xg", "away_xg", "data_quality",
         "lineup_available", "injuries_available", "home_rest_days", "away_rest_days",
         "home_form_home", "away_form_away", "coach_change", "odds_observed_at",
+        "strategy_version", "model_version", "prediction_snapshot_id",
     ]
     with temporary.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
