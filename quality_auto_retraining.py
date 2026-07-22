@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from build_quality_training_from_history import build
-from quality_champion_challenger import walk_forward_validate
+from quality_champion_challenger import train_candidate_state, walk_forward_validate
 from quality_upgrade_engine import BetaCalibrator, train_time_safe_state
 from storage_paths import get_data_dir
 
@@ -236,7 +236,13 @@ class ControlledQualityRetrainer:
                 _append_event(self.events_path, result)
                 return result
 
-            candidate = train_time_safe_state(rows)
+            candidate = train_candidate_state(
+                rows,
+                min_segment_samples=int(
+                    os.getenv("BETBOT_QUALITY_SEGMENT_MIN_SAMPLES", "500")
+                ),
+                max_segments=int(os.getenv("BETBOT_QUALITY_MAX_SEGMENTS", "12")),
+            )
             if candidate.get("status") != "TRAINED_TIME_SAFE":
                 result = {"status": "TRAINING_REJECTED", "checked_at": now, "training": candidate}
                 _append_event(self.events_path, result)

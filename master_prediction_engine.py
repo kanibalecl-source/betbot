@@ -326,6 +326,8 @@ class MasterPredictionEngine:
                             ),
                         },
                     )
+                    from quality_live_shadow import record_live_shadow
+                    record_live_shadow(match, output)
                 except Exception:
                     # Shadow quality diagnostics may never interrupt the bot.
                     pass

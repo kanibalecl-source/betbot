@@ -197,6 +197,7 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
     league = str(
         _first(row, ("league", "liga", "competition", "tournament")) or "UNKNOWN"
     )
+    fixture_id = str(_first(row, ("fixture_id", "event_id", "match_id", "id")) or "")
     timestamp = str(
         _first(
             row,
@@ -222,6 +223,7 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
         "record_id": fingerprint,
         "market": market,
         "league": league,
+        "fixture_id": fixture_id,
         "current_probability": round(current, 8),
         "dixon_coles_probability": round(dixon, 8),
         "market_probability": round(market_probability, 8),
@@ -329,7 +331,7 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
     fields = [
-        "timestamp", "source", "record_id", "market", "league",
+        "timestamp", "source", "record_id", "fixture_id", "market", "league",
         "current_probability", "dixon_coles_probability",
         "market_probability", "market_probability_method", "target",
         "odds", "closing_odds",

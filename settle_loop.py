@@ -29,6 +29,12 @@ def main():
             if settle_all_manual:
                 manual_updated = settle_all_manual()
                 print(f"Rozliczono manualne: {manual_updated}")
+            try:
+                from quality_live_shadow import reconcile_live_shadow
+                shadow_updated = reconcile_live_shadow()
+                print(f"Rozliczono shadow: {shadow_updated}")
+            except Exception as shadow_exc:
+                print(f"[SHADOW SETTLEMENT ERROR] {shadow_exc}")
         except Exception as exc:
             print(f"[BŁĄD SETTLE LOOP] {exc}")
 

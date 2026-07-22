@@ -36,6 +36,12 @@ def main() -> None:
     )
     while True:
         try:
+            from storage_safety_monitor import check_storage_health
+            storage = check_storage_health()
+            print("STORAGE SAFETY " + json.dumps(storage, ensure_ascii=False), flush=True)
+            from external_backup_export import run_external_backup_if_due
+            external = run_external_backup_if_due()
+            print("EXTERNAL BACKUP " + json.dumps(external, ensure_ascii=False), flush=True)
             result = retrainer.run()
             print(
                 f"[{datetime.now(timezone.utc).isoformat()}] QUALITY RETRAINING "

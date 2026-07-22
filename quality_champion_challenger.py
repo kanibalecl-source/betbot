@@ -7,11 +7,16 @@ only on the chronologically later test window.
 from __future__ import annotations
 
 import math
+import os
 from collections import defaultdict
 from statistics import NormalDist
 from typing import Any, Iterable, Mapping, Sequence
 
-from quality_upgrade_engine import BetaCalibrator, train_time_safe_state
+from quality_upgrade_engine import (
+    BetaCalibrator,
+    probability_drift_report,
+    train_time_safe_state,
+)
 
 MODEL_NAMES = ("current", "dixon_coles", "market")
 
@@ -43,6 +48,7 @@ def _clean_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
             continue
         clean.append({
             "position": position,
+            "fixture_id": str(row.get("fixture_id", "") or ""),
             "timestamp": str(row.get("timestamp", "")),
             "market": str(row.get("market", "UNKNOWN") or "UNKNOWN"),
             "league": str(row.get("league", "UNKNOWN") or "UNKNOWN"),
@@ -55,9 +61,51 @@ def _clean_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return clean
 
 
-def _state_predict(values: Sequence[float], state: Mapping[str, Any] | None) -> float:
+def train_candidate_state(
+    rows: Iterable[Mapping[str, Any]],
+    min_segment_samples: int = 500,
+    max_segments: int = 12,
+) -> dict[str, Any]:
+    """Train global state plus sufficiently large market/league segments."""
+    source_rows = list(rows)
+    state = train_time_safe_state(source_rows)
+    if state.get("status") != "TRAINED_TIME_SAFE":
+        return state
+    segments: dict[str, Any] = {}
+    eligible: list[tuple[int, str, str, list[Mapping[str, Any]]]] = []
+    for field in ("market", "league"):
+        values = sorted({str(row.get(field, "") or "") for row in source_rows} - {"", "UNKNOWN"})
+        for value in values:
+            subset = [row for row in source_rows if str(row.get(field, "") or "") == value]
+            if len(subset) < max(30, int(min_segment_samples)):
+                continue
+            eligible.append((len(subset), field, value, subset))
+    for _, field, value, subset in sorted(eligible, reverse=True)[:max(0, int(max_segments))]:
+        trained = train_time_safe_state(subset)
+        if trained.get("status") == "TRAINED_TIME_SAFE":
+            segments[f"{field}::{value}"] = trained
+    return {
+        **state,
+        "segment_models": segments,
+        "segment_minimum_samples": max(30, int(min_segment_samples)),
+        "segment_maximum_count": max(0, int(max_segments)),
+        "segment_fallback": "global",
+    }
+
+
+def _state_predict(
+    values: Sequence[float],
+    state: Mapping[str, Any] | None,
+    market: str = "",
+    league: str = "",
+) -> float:
     if not state:
         return float(values[0])
+    segments = state.get("segment_models", {})
+    if isinstance(segments, Mapping):
+        selected = segments.get(f"market::{market}") or segments.get(f"league::{league}")
+        if isinstance(selected, Mapping):
+            state = selected
     configured = state.get("stacking_weights", {})
     configured = configured if isinstance(configured, Mapping) else {}
     defaults = (0.45, 0.35, 0.20)
@@ -227,10 +275,13 @@ def walk_forward_validate(
     def advance_timestamp_boundary(index: int) -> int:
         if index <= 0 or index >= sample_count:
             return index
-        timestamp = clean[index - 1]["timestamp"]
-        if not timestamp:
+        previous = clean[index - 1]
+        group = previous["fixture_id"] or previous["timestamp"]
+        if not group:
             return index
-        while index < sample_count and clean[index]["timestamp"] == timestamp:
+        while index < sample_count and (
+            clean[index]["fixture_id"] or clean[index]["timestamp"]
+        ) == group:
             index += 1
         return index
 
@@ -245,6 +296,9 @@ def walk_forward_validate(
         training_rows = [
             {
                 "timestamp": item["timestamp"],
+                "fixture_id": item["fixture_id"],
+                "market": item["market"],
+                "league": item["league"],
                 "current_probability": item["values"][0],
                 "dixon_coles_probability": item["values"][1],
                 "market_probability": item["values"][2],
@@ -252,13 +306,20 @@ def walk_forward_validate(
             }
             for item in clean[:test_start]
         ]
-        challenger = train_time_safe_state(training_rows)
+        challenger = train_candidate_state(
+            training_rows,
+            min_segment_samples=int(os.getenv("BETBOT_QUALITY_SEGMENT_MIN_SAMPLES", "500")),
+        )
         if challenger.get("status") != "TRAINED_TIME_SAFE":
             break
         fold_records: list[dict[str, Any]] = []
         for item in clean[test_start:test_end]:
-            challenger_probability = _state_predict(item["values"], challenger)
-            champion_probability = _state_predict(item["values"], champion)
+            challenger_probability = _state_predict(
+                item["values"], challenger, item["market"], item["league"]
+            )
+            champion_probability = _state_predict(
+                item["values"], champion, item["market"], item["league"]
+            )
             current_probability = item["values"][0]
             record = {
                 **item,
@@ -328,6 +389,10 @@ def walk_forward_validate(
     market_slices = _slice_report(evaluation, "market", max(20, len(evaluation) // 100))
     source_slices = _slice_report(evaluation, "source", max(20, len(evaluation) // 100))
     league_slices = _slice_report(evaluation, "league", max(20, len(evaluation) // 100))
+    drift = probability_drift_report(
+        [item["values"][0] for item in clean[:initial_train]],
+        [item["values"][0] for item in evaluation],
+    )
     enough = len(evaluation) >= min(min_test_samples, max(30, sample_count // 4)) and len(folds) >= min_folds
     calibration_ok = (
         challenger_metrics.get("calibration_error", 1.0)
@@ -359,6 +424,7 @@ def walk_forward_validate(
         "yield_not_materially_degraded": yield_ok,
         "clv_not_materially_degraded": clv_ok,
         "slice_stability": slices_ok,
+        "no_critical_probability_drift": drift.get("status") != "DRIFT_ALERT",
         "beats_raw_current_model": (
             challenger_metrics["brier_score"] <= current_metrics["brier_score"]
             and challenger_metrics["log_loss"] <= current_metrics["log_loss"]
@@ -386,6 +452,7 @@ def walk_forward_validate(
         "market_slices": market_slices,
         "source_slices": source_slices,
         "league_slices": league_slices,
+        "probability_drift": drift,
         "gates": gates,
         "fold_details": folds,
         "final_candidate_not_scored_on_training_history": True,
