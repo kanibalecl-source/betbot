@@ -490,21 +490,20 @@ def ai_insight_card(picks: pd.DataFrame) -> str:
     else:
         match, market, odds, confidence, edge = "Oczekiwanie na rekomendację", "-", "-", 0, "-"
     return f'''
-    <div class="ka-viz">
-      <div class="ka-viz-title">AI INSIGHT <span class="green" style="float:right;font-size:9px">1 REKOMENDACJA</span></div>
-      <div style="border:1px solid var(--ka-line-soft);border-radius:6px;padding:12px;background:#0a1214">
-        <div style="color:#89968f;font-size:9px;letter-spacing:.08em">REKOMENDACJA NR 1</div>
-        <div style="color:var(--ka-lime);font-size:16px;font-weight:900;margin:5px 0">{html.escape(str(match))}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0">
+    <div class="ka-viz ai-insight-card">
+      <div class="ka-viz-title">AI INSIGHT <span class="ai-insight-count">1 REKOMENDACJA</span></div>
+      <div class="ai-insight-summary">
+        <div class="ai-insight-eyebrow">REKOMENDACJA NR 1</div>
+        <div class="ai-insight-match">{html.escape(str(match))}</div>
+        <div class="ai-insight-facts">
           <div><small>RYNEK</small><b>{html.escape(str(market))}</b></div>
           <div><small>KURS</small><b>{html.escape(str(odds))}</b></div>
           <div><small>VALUE</small><b class="green">{html.escape(str(edge))}</b></div>
         </div>
-        <div style="display:flex;align-items:center;gap:14px;margin:13px 0">
-          <div style="width:68px;height:68px;border-radius:50%;display:grid;place-items:center;border:7px solid var(--ka-lime);color:var(--ka-lime);font-size:19px;font-weight:950">{confidence:.0f}%</div>
-          <div style="color:#aab5af;font-size:10px;line-height:1.55">Model porównał formę, rynek i przewagę kursową. Rekomendacja spełnia aktywny profil ryzyka.</div>
+        <div class="ai-insight-confidence-row">
+          <div class="ai-insight-confidence">{confidence:.0f}%</div>
+          <div class="ai-insight-copy">Model porównał formę, rynek i przewagę kursową. Rekomendacja spełnia aktywny profil ryzyka.</div>
         </div>
-        <div style="height:36px;border-radius:6px;background:linear-gradient(180deg,#95ea2c,#67b617);display:grid;place-items:center;color:#071006;font-size:10px;font-weight:950;letter-spacing:.06em">ZOBACZ ANALIZĘ</div>
       </div>
     </div>'''
 
@@ -1678,6 +1677,16 @@ def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
         st.markdown(f'<div class="ka-panel"><h3>NAJLEPSZE TYPY</h3><div class="ka-table-scroll">{table}</div></div>', unsafe_allow_html=True)
     with insight:
         st.markdown(ai_insight_card(picks), unsafe_allow_html=True)
+        details_visible = bool(st.session_state.get("live_ai_insight_visible", False))
+        details_label = "Ukryj analizę" if details_visible else "Zobacz analizę"
+        if st.button(details_label, key="live_ai_insight_toggle", use_container_width=True, type="primary"):
+            st.session_state.live_ai_insight_visible = not details_visible
+            details_visible = not details_visible
+    if details_visible:
+        if picks is not None and not picks.empty:
+            st.markdown(render_ai_detail_card(picks.iloc[0]), unsafe_allow_html=True)
+        else:
+            st.info("Szczegółowa analiza pojawi się po otrzymaniu pierwszej rekomendacji.")
     chart_col, risk_col = st.columns([1.45, 1])
     with chart_col:
         st.markdown(sleek_line_chart("TREND PEWNOŚCI — LIVE", pick_confidence_values(live if not live.empty else picks), f"{avg_conf:.0f}%", "Ostatnie sygnały modelu"), unsafe_allow_html=True)
