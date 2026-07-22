@@ -32,6 +32,8 @@ DEFAULT_BACKUP_REUSE_HOURS = 0
 DEFAULT_BACKUP_KEEP = 5
 DEFAULT_BACKUP_EMERGENCY_REUSE_HOURS = 24
 MIN_FREE_RESERVE_BYTES = 64 * 1024 * 1024
+LOW_SPACE_MIN_FREE_RESERVE_BYTES = 48 * 1024 * 1024
+LOW_SPACE_BACKUP_KEEP = 2
 
 
 def _server_mode() -> bool:
@@ -266,6 +268,7 @@ def prepare_server_data_backup(
     free_bytes = shutil.disk_usage(data_path).free
     reserve_bytes = max(MIN_FREE_RESERVE_BYTES, expected_bytes // 20)
     required_bytes = expected_bytes + reserve_bytes
+    low_space_backup = False
     if latest is not None and free_bytes < required_bytes:
         emergency_hours = _int_env(
             BACKUP_EMERGENCY_REUSE_HOURS_ENV,
@@ -297,11 +300,19 @@ def prepare_server_data_backup(
                 "free_bytes": free_bytes,
                 "required_bytes": required_bytes,
             }
-        raise RuntimeError(
-            "Insufficient space for a deployment-specific backup and no identical "
-            "fresh snapshot can be reused; startup blocked "
-            f"(required={required_bytes}, free={free_bytes})."
-        )
+        constrained_required_bytes = expected_bytes + LOW_SPACE_MIN_FREE_RESERVE_BYTES
+        if free_bytes >= constrained_required_bytes:
+            # A complete backup still fits, but the normal 5% reserve does not.
+            # Continue only with a fixed safety margin. Old backups are pruned
+            # strictly after the new manifest has been written successfully.
+            low_space_backup = True
+        else:
+            raise RuntimeError(
+                "Insufficient space for a deployment-specific backup and no identical "
+                "fresh snapshot can be reused; startup blocked "
+                f"(required={required_bytes}, constrained_required="
+                f"{constrained_required_bytes}, free={free_bytes})."
+            )
 
     destination_root.mkdir(parents=True, exist_ok=False)
     manifest: dict[str, Any] = {
@@ -336,10 +347,22 @@ def prepare_server_data_backup(
         backup_root,
         _int_env(BACKUP_KEEP_ENV, DEFAULT_BACKUP_KEEP, minimum=1),
     )
+    if low_space_backup:
+        # The new snapshot is complete and verified at this point, so reducing
+        # retention cannot leave the service without a usable full backup.
+        removed.extend(
+            name
+            for name in _prune_complete_backups(
+                backup_root,
+                LOW_SPACE_BACKUP_KEEP,
+            )
+            if name not in removed
+        )
     return {
         "status": "BACKUP_CREATED",
         "deployment": key,
         "files": len(manifest["files"]),
         "backup": str(destination_root),
         "pruned_backups": removed,
+        "low_space_backup": low_space_backup,
     }
