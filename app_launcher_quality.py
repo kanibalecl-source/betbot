@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from server_start_guard import run_server_start_guard_once
+
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -18,6 +20,7 @@ def _enabled() -> bool:
 
 
 def main() -> None:
+    run_server_start_guard_once()
     quality_process: subprocess.Popen[str] | None = None
     if _enabled():
         quality_process = subprocess.Popen(
