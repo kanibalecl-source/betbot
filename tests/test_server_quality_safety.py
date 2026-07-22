@@ -189,6 +189,74 @@ class ServerQualitySafetyTests(unittest.TestCase):
             self.assertFalse((backups / "first").exists())
             self.assertTrue((backups / "second" / "manifest.json").exists())
 
+    def test_guard_reuses_only_identical_fresh_backup_when_space_is_low(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            code = root / "code"
+            volume = root / "volume"
+            code.mkdir()
+            volume.mkdir()
+            history = volume / "results_history.csv"
+            self._history(history, rows=4)
+            first = prepare_server_data_backup(
+                volume,
+                base_dir=code,
+                deployment_key="first",
+                force_server=True,
+            )
+            self.assertEqual(first["status"], "BACKUP_CREATED")
+            with patch.dict(
+                "os.environ",
+                {
+                    "BETBOT_SERVER_BACKUP_REUSE_HOURS": "0",
+                    "BETBOT_SERVER_BACKUP_EMERGENCY_REUSE_HOURS": "24",
+                },
+            ), patch("server_data_guard.shutil.disk_usage") as usage:
+                usage.return_value.free = 1
+                second = prepare_server_data_backup(
+                    volume,
+                    base_dir=code,
+                    deployment_key="second",
+                    force_server=True,
+                )
+            self.assertEqual(second["status"], "IDENTICAL_BACKUP_REUSED_LOW_SPACE")
+            reference = volume / "server_backups" / "deployments" / "second" / "manifest.json"
+            payload = json.loads(reference.read_text(encoding="utf-8"))
+            self.assertEqual(payload["kind"], "reference")
+            self.assertEqual(payload["reused_backup"], "first")
+
+    def test_guard_blocks_low_space_reuse_when_source_changed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            code = root / "code"
+            volume = root / "volume"
+            code.mkdir()
+            volume.mkdir()
+            history = volume / "results_history.csv"
+            self._history(history, rows=4)
+            prepare_server_data_backup(
+                volume,
+                base_dir=code,
+                deployment_key="first",
+                force_server=True,
+            )
+            history.write_text(history.read_text(encoding="utf-8") + "changed\n", encoding="utf-8")
+            with patch.dict(
+                "os.environ",
+                {
+                    "BETBOT_SERVER_BACKUP_REUSE_HOURS": "0",
+                    "BETBOT_SERVER_BACKUP_EMERGENCY_REUSE_HOURS": "24",
+                },
+            ), patch("server_data_guard.shutil.disk_usage") as usage:
+                usage.return_value.free = 1
+                with self.assertRaises(RuntimeError):
+                    prepare_server_data_backup(
+                        volume,
+                        base_dir=code,
+                        deployment_key="second",
+                        force_server=True,
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
