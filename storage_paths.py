@@ -41,50 +41,45 @@ def get_data_dir() -> Path:
 DATA_DIR = get_data_dir()
 
 
+def _is_server() -> bool:
+    return any(
+        os.getenv(name, "").strip()
+        for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "KANIBAL_SERVER_MODE")
+    )
+
+
 def persistent_storage_configured() -> bool:
-    """Return True only when data lives outside the deploy directory."""
+    """Return True only when server data is outside the deploy directory."""
     railway_mount = os.getenv("RAILWAY_VOLUME_MOUNT_PATH", "").strip()
     try:
-        confirmed_railway_volume = bool(railway_mount) and DATA_DIR.resolve() == Path(railway_mount).resolve()
+        confirmed_mount = bool(railway_mount) and DATA_DIR.resolve() == Path(railway_mount).resolve()
     except Exception:
-        confirmed_railway_volume = False
+        confirmed_mount = False
     configured_external = any(
         os.getenv(name, "").strip()
         for name in ("KANIBAL_DATA_DIR", "PERSISTENT_DATA_DIR")
     )
     outside_deploy = DATA_DIR.resolve() != (BASE_DIR / "data").resolve()
-    # Railway commonly mounts a Volume at /data without exposing its mount path
-    # as an application variable. get_data_dir() has already verified that this
-    # directory exists and is writable, so accept that standard mount directly.
     standard_volume = str(DATA_DIR).replace("\\", "/").rstrip("/") == "/data"
-    # /app/data is also safe when Railway itself confirms that exact mount via
-    # its automatically provided RAILWAY_VOLUME_MOUNT_PATH variable.
-    return confirmed_railway_volume or (outside_deploy and (configured_external or standard_volume))
+    return confirmed_mount or standard_volume or (outside_deploy and configured_external)
 
 
 def require_persistent_storage_on_server() -> None:
-    """Fail closed on a server that has no mounted persistent data directory."""
-    is_server = any(
-        os.getenv(name, "").strip()
-        for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "KANIBAL_SERVER_MODE")
-    )
+    """Fail closed instead of starting against ephemeral server storage."""
     strict = os.getenv("KANIBAL_REQUIRE_PERSISTENT_STORAGE", "1").strip().lower() not in {
         "0", "false", "no", "off"
     }
-    if is_server and strict and not persistent_storage_configured():
+    if _is_server() and strict and not persistent_storage_configured():
         raise RuntimeError(
-            "Brak trwałego katalogu danych. Podłącz Railway Volume i ustaw "
-            "PERSISTENT_DATA_DIR/RAILWAY_VOLUME_MOUNT_PATH; start został zatrzymany, "
-            "aby historia i nauka nie zniknęły po redeployu."
+            "Persistent server storage is not configured. Attach Railway Volume "
+            "and set PERSISTENT_DATA_DIR=/data. Startup stopped to protect history."
         )
 
 
 def migrate_local_data_once() -> None:
-    # A server deploy must never seed or merge its mounted Volume from files
-    # bundled with application code. Server history is authoritative.
-    if any(os.getenv(name, "").strip() for name in (
-        "RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID", "KANIBAL_SERVER_MODE"
-    )):
+    # The mounted server Volume is authoritative. A deployment must never seed
+    # or merge it from files bundled with application code.
+    if _is_server():
         return
     local_data = BASE_DIR / "data"
     target = DATA_DIR
