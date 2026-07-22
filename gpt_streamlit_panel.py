@@ -129,7 +129,7 @@ def _inject_gpt_css() -> None:
         .gpt-row b,.gpt-row .green,.gpt-row .yellow,.gpt-row .red{color:#111!important;}
         .muted-small{color:#111;font-size:12px;font-weight:700;}
         .gpt-footnote{color:#8f9a96;font-size:12px;font-weight:850;margin:12px 0 0;}
-        .gpt-action div[data-testid="stButton"] button{
+        div[class*="_analyze_"] div[data-testid="stButton"] button{
             min-height:34px!important;
             border-radius:7px!important;
             border:1px solid #cfd7e1!important;
@@ -140,7 +140,7 @@ def _inject_gpt_css() -> None:
             padding:5px 8px!important;
             width:100%!important;
         }
-        .gpt-action div[data-testid="stButton"] button:hover{
+        div[class*="_analyze_"] div[data-testid="stButton"] button:hover{
             background:#fff!important;
             border-color:#929eac!important;
             color:#111!important;
