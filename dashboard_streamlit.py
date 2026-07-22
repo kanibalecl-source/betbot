@@ -9,7 +9,11 @@ import pandas as pd
 import streamlit as st
 
 from country_flags import league_html, match_html
-from trading_desk_theme import inject_trading_desk_theme, render_appbar
+from executive_dashboard_theme import (
+    inject_executive_theme,
+    render_navigation,
+    render_workspace_bar,
+)
 
 try:
     from betbot.dashboard.data_service import read_csv_safe as modular_read_csv_safe
@@ -59,7 +63,7 @@ except Exception:
     manual_summary = None
     settle_all_manual = None
 
-st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="📊", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="KANIBAL ANALYTICS", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 
 BASE_DIR = Path(__file__).resolve().parent
 try:
@@ -77,7 +81,7 @@ RISK_PICK_CANDIDATES = [DATA_DIR / "auto_risk_picks.csv", BASE_DIR / "auto_risk_
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
-BANNER_FILE = BASE_DIR / "kanibal_banner_reference.png"
+BANNER_FILE = BASE_DIR / "kanibal_banner_pro.jpg"
 CONFIG_FILE = BASE_DIR / "config_strategy.json"
 
 DISPLAY_MARKETS = {
@@ -573,7 +577,7 @@ def css() -> None:
     # One authoritative theme replaces the historical stack of CSS patches below.
     # The legacy rules remain in the source for rollback/reference but are never
     # emitted, preventing specificity conflicts between old redesign stages.
-    inject_trading_desk_theme()
+    inject_executive_theme()
     return
     st.markdown('''
 <style>
@@ -1580,8 +1584,9 @@ def title(text: str) -> None:
 def page_banner(section: str, name: str, subtitle: str) -> None:
     image = b64_image(BANNER_FILE)
     if image:
+        mime = "image/jpeg" if BANNER_FILE.suffix.lower() in {".jpg", ".jpeg"} else "image/png"
         st.markdown(
-            f'''<div class="ka-page-banner ka-image-banner"><img src="data:image/png;base64,{image}" alt="KANIBAL ANALYTICS"></div>''',
+            f'''<div class="ka-page-banner ka-image-banner"><img src="data:{mime};base64,{image}" alt="KANIBAL ANALYTICS"></div>''',
             unsafe_allow_html=True,
         )
     else:
@@ -1681,7 +1686,6 @@ def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
 
 
 def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:
-    page_banner("Typy przedmeczowe", "PRZEDMECZOWE", "Trzy czytelne tabele: główna, niskie ryzyko i podwyższone ryzyko.")
     title("TYPY PRZEDMECZOWE")
     low_picks = normalize_picks(low_picks) if low_picks is not None and not low_picks.empty else pd.DataFrame()
     risk_picks = normalize_picks(risk_picks) if risk_picks is not None and not risk_picks.empty else pd.DataFrame()
@@ -1691,9 +1695,52 @@ def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, 
         ("Średnia pewność", pct(as_float(numeric_series(picks, "confidence").mean(), 0)), "model"),
         ("Profile ryzyka", "3", f"low {len(low_picks)} / risk {len(risk_picks)}"),
     ])
+    page_banner("Typy przedmeczowe", "PRZEDMECZOWE", "Trzy czytelne tabele: główna, niskie ryzyko i podwyższone ryzyko.")
+    filter_cols = st.columns([1.35, 1, 1, .8])
+    league_col = "league" if "league" in picks.columns else "liga" if "liga" in picks.columns else None
+    market_col = "market" if "market" in picks.columns else "typ" if "typ" in picks.columns else None
+    with filter_cols[0]:
+        league_options = ["Wszystkie"] + (
+            sorted(picks[league_col].dropna().astype(str).unique().tolist()) if league_col else []
+        )
+        selected_league = st.selectbox("Liga", league_options, key="prematch_league_filter")
+    with filter_cols[1]:
+        market_options = ["Wszystkie"] + (
+            sorted(picks[market_col].dropna().astype(str).unique().tolist()) if market_col else []
+        )
+        selected_market = st.selectbox("Rynek", market_options, key="prematch_market_filter")
+    with filter_cols[2]:
+        odds_range = st.selectbox("Kurs", ["Wszystkie", "1.00–1.75", "1.76–2.25", "2.26–3.50", "3.51+"], key="prematch_odds_filter")
+    def clear_prematch_filters() -> None:
+        st.session_state["prematch_league_filter"] = "Wszystkie"
+        st.session_state["prematch_market_filter"] = "Wszystkie"
+        st.session_state["prematch_odds_filter"] = "Wszystkie"
+    with filter_cols[3]:
+        st.markdown('<div style="height:25px"></div>', unsafe_allow_html=True)
+        st.button("Wyczyść", key="prematch_clear_filters", on_click=clear_prematch_filters)
+
+    def apply_prematch_filters(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame is None or frame.empty:
+            return pd.DataFrame()
+        filtered = frame.copy()
+        frame_league = "league" if "league" in filtered.columns else "liga" if "liga" in filtered.columns else None
+        frame_market = "market" if "market" in filtered.columns else "typ" if "typ" in filtered.columns else None
+        if selected_league != "Wszystkie" and frame_league:
+            filtered = filtered[filtered[frame_league].astype(str) == selected_league]
+        if selected_market != "Wszystkie" and frame_market:
+            filtered = filtered[filtered[frame_market].astype(str) == selected_market]
+        odds = numeric_series(filtered, "kurs_buk")
+        if odds.empty:
+            odds = numeric_series(filtered, "odds")
+        if odds_range == "1.00–1.75": filtered = filtered[(odds >= 1.0) & (odds <= 1.75)]
+        elif odds_range == "1.76–2.25": filtered = filtered[(odds > 1.75) & (odds <= 2.25)]
+        elif odds_range == "2.26–3.50": filtered = filtered[(odds > 2.25) & (odds <= 3.50)]
+        elif odds_range == "3.51+": filtered = filtered[odds > 3.50]
+        return filtered
+
     headers = ["Liga", "Mecz", "Rynek", "Kurs", "Pewność", "Przewaga", "Status"]
     prematch_tabs = st.tabs(["Główne", "Niskie ryzyko", "Podwyższone ryzyko"])
-    datasets = [(picks, "TYPY PRZEDMECZOWE", "Brak danych przedmeczowych."), (low_picks, "NISKIE RYZYKO", "Brak danych niskiego ryzyka - bot nie zapisał jeszcze auto_low_picks.csv."), (risk_picks, "PODWYŻSZONE RYZYKO", "Brak danych podwyższonego ryzyka - bot nie zapisał jeszcze auto_risk_picks.csv.")]
+    datasets = [(apply_prematch_filters(picks), "Najlepsze typy przedmeczowe", "Brak danych przedmeczowych."), (apply_prematch_filters(low_picks), "Niskie ryzyko", "Brak danych niskiego ryzyka - bot nie zapisał jeszcze auto_low_picks.csv."), (apply_prematch_filters(risk_picks), "Podwyższone ryzyko", "Brak danych podwyższonego ryzyka - bot nie zapisał jeszcze auto_risk_picks.csv.")]
     for tab, (df, label, empty_msg) in zip(prematch_tabs, datasets):
         with tab:
             subpage_banner("Prematch table", label, empty_msg)
@@ -2194,9 +2241,8 @@ def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame |
         with tab:
             _render_manual_profile(mode_key, mode_label, source_df, manual_df, ako_df)
 
-css()
 require_login()
-render_appbar(BASE_DIR)
+css()
 raw_picks = load_picks()
 picks = normalize_picks(raw_picks)
 low_picks = normalize_picks(load_pick_candidates(LOW_PICK_CANDIDATES))
@@ -2212,13 +2258,14 @@ ai_context = pd.concat(
     sort=False,
 ) if any(df is not None and not df.empty for df in [ai_picks, ai_low_picks, ai_risk_picks]) else pd.DataFrame()
 
-tabs = st.tabs(["NA ŻYWO", "PRZEDMECZOWE", "AI", "ANALITYKA", "HISTORIA", "MOJE ZAKŁADY", "RANKING", "CZAT GPT"])
-with tabs[0]: render_live(live, picks)
-with tabs[1]: render_prematch(picks, low_picks, risk_picks)
-with tabs[2]: render_ai(ai_picks, results, ai_low_picks, ai_risk_picks)
-with tabs[3]: render_analytics(picks, results, "ANALITYKA")
-with tabs[4]: render_history(results)
-with tabs[5]: render_manual_betting(raw_picks, low_picks, risk_picks)
-with tabs[6]: render_ranking(picks, results)
-with tabs[7]: render_gpt_professional(picks, low_picks, risk_picks, live, results)
+selected_page = render_navigation(BASE_DIR)
+render_workspace_bar(selected_page)
+if selected_page == "Na żywo": render_live(live, picks)
+elif selected_page == "Przedmeczowe": render_prematch(picks, low_picks, risk_picks)
+elif selected_page == "AI": render_ai(ai_picks, results, ai_low_picks, ai_risk_picks)
+elif selected_page == "Analityka": render_analytics(picks, results, "ANALITYKA")
+elif selected_page == "Historia": render_history(results)
+elif selected_page == "Moje zakłady": render_manual_betting(raw_picks, low_picks, risk_picks)
+elif selected_page == "Ranking": render_ranking(picks, results)
+elif selected_page == "Czat GPT": render_gpt_professional(picks, low_picks, risk_picks, live, results)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
