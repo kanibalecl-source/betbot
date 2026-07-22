@@ -24,7 +24,15 @@ def get_data_dir() -> Path:
     for env_name in ("KANIBAL_DATA_DIR", "PERSISTENT_DATA_DIR", "RAILWAY_VOLUME_MOUNT_PATH"):
         configured = os.getenv(env_name, "").strip()
         if configured:
-            candidates.append(Path(configured))
+            configured_path = Path(configured)
+            candidates.append(configured_path)
+            normalized = str(configured_path).replace("\\", "/").rstrip("/")
+            railway_runtime = any(
+                os.getenv(name, "").strip()
+                for name in ("RAILWAY_ENVIRONMENT", "RAILWAY_PROJECT_ID")
+            )
+            if railway_runtime and normalized == "/data":
+                return configured_path
     if Path("/data").exists():
         candidates.append(Path("/data"))
     candidates.append(BASE_DIR / "data")
@@ -72,10 +80,7 @@ def require_persistent_storage_on_server() -> None:
     if _is_server() and strict and not persistent_storage_configured():
         raise RuntimeError(
             "Persistent server storage is not configured. Attach Railway Volume "
-            "and set PERSISTENT_DATA_DIR=/data. Startup stopped to protect history. "
-            f"DATA_DIR={DATA_DIR}; resolved={DATA_DIR.resolve()}; "
-            f"app_data={(BASE_DIR / 'data').resolve()}; "
-            f"PERSISTENT_DATA_DIR={os.getenv('PERSISTENT_DATA_DIR', '')}."
+            "and set PERSISTENT_DATA_DIR=/data. Startup stopped to protect history."
         )
 
 
