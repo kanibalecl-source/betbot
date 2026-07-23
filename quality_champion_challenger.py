@@ -277,6 +277,7 @@ def walk_forward_validate(
     min_test_samples: int = 300,
     min_folds: int = 4,
     min_edge: float = 0.02,
+    training_window_fraction: float = 1.0,
 ) -> dict[str, Any]:
     """Compare fold-trained challengers with a frozen champion on future rows."""
     clean = sorted(
@@ -314,6 +315,8 @@ def walk_forward_validate(
     test_start = initial_train
     while test_start < sample_count:
         test_end = advance_timestamp_boundary(min(sample_count, test_start + test_size))
+        fraction = max(0.40, min(1.0, float(training_window_fraction)))
+        train_start = max(0, test_start - max(30, int(test_start * fraction)))
         training_rows = [
             {
                 "timestamp": item["timestamp"],
@@ -325,7 +328,7 @@ def walk_forward_validate(
                 "market_probability": item["values"][2],
                 "target": item["target"],
             }
-            for item in clean[:test_start]
+            for item in clean[train_start:test_start]
         ]
         challenger = train_candidate_state(
             training_rows,
@@ -367,7 +370,8 @@ def walk_forward_validate(
         closing_odds = [item["closing_odds"] for item in fold_records]
         folds.append({
             "fold": len(folds) + 1,
-            "train_samples": test_start,
+            "train_samples": len(training_rows),
+            "train_start_timestamp": training_rows[0]["timestamp"] if training_rows else "",
             "test_samples": len(fold_records),
             "test_start_timestamp": fold_records[0]["timestamp"] if fold_records else "",
             "test_end_timestamp": fold_records[-1]["timestamp"] if fold_records else "",
@@ -480,6 +484,7 @@ def walk_forward_validate(
     return {
         "status": "POSITIVE_VALIDATION_MANUAL_APPROVAL" if passed else "REJECTED_OR_REVIEW",
         "method": "expanding_window_walk_forward",
+        "training_window_fraction": max(0.40, min(1.0, float(training_window_fraction))),
         "chronological_order": True,
         "folds": len(folds),
         "evaluated_samples": len(evaluation),

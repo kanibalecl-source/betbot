@@ -140,6 +140,7 @@ def validate_candidate(
         min_test_samples=int(os.getenv("BETBOT_QUALITY_WF_MIN_TEST_SAMPLES", "300")),
         min_folds=int(os.getenv("BETBOT_QUALITY_WF_MIN_FOLDS", "4")),
         min_edge=float(os.getenv("BETBOT_QUALITY_WF_MIN_EDGE", "0.02")),
+        training_window_fraction=float(candidate.get("training_window_fraction", 1.0)),
     )
     return {
         **report,
@@ -200,6 +201,61 @@ class ControlledQualityRetrainer:
         except Exception:
             return True
 
+    def _candidate_factory(self, rows: list[dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Train bounded history-window variants and select by untouched holdout."""
+        raw = os.getenv("BETBOT_QUALITY_CANDIDATE_WINDOWS", "1.0,0.75,0.50")
+        fractions: list[float] = []
+        for token in raw.split(","):
+            try:
+                value = max(0.40, min(1.0, float(token.strip())))
+            except (TypeError, ValueError):
+                continue
+            if value not in fractions:
+                fractions.append(value)
+        if not fractions:
+            fractions = [1.0]
+        variants: list[dict[str, Any]] = []
+        for fraction in fractions[:5]:
+            start = max(0, len(rows) - max(30, int(len(rows) * fraction)))
+            subset = rows[start:]
+            trained = train_candidate_state(
+                subset,
+                min_segment_samples=int(os.getenv("BETBOT_QUALITY_SEGMENT_MIN_SAMPLES", "500")),
+                max_segments=int(os.getenv("BETBOT_QUALITY_MAX_SEGMENTS", "12")),
+            )
+            if trained.get("status") != "TRAINED_TIME_SAFE":
+                variants.append({
+                    "training_window_fraction": fraction,
+                    "training_rows": len(subset),
+                    "status": trained.get("status", "REJECTED"),
+                })
+                continue
+            trained = {
+                **trained,
+                "training_window_fraction": fraction,
+                "candidate_variant": f"history_window_{int(fraction * 100)}pct",
+            }
+            metrics = score_state(rows, trained)
+            variants.append({
+                "training_window_fraction": fraction,
+                "training_rows": len(subset),
+                "status": "TRAINED_TIME_SAFE",
+                "holdout_score": metrics,
+                "state": trained,
+            })
+        eligible = [item for item in variants if item.get("status") == "TRAINED_TIME_SAFE"]
+        if not eligible:
+            return {"status": "NO_ENOUGH_DATA", "samples": len(rows)}, variants
+        winner = min(
+            eligible,
+            key=lambda item: (
+                float(item.get("holdout_score", {}).get("brier_score", 1.0)),
+                float(item.get("holdout_score", {}).get("log_loss", 99.0)),
+                -float(item.get("training_window_fraction", 0.0)),
+            ),
+        )
+        return dict(winner["state"]), variants
+
     def run(self, *, force: bool = False) -> dict[str, Any]:
         if not self._acquire():
             return {"status": "SKIPPED_LOCKED"}
@@ -245,13 +301,7 @@ class ControlledQualityRetrainer:
                 _append_event(self.events_path, result)
                 return result
 
-            candidate = train_candidate_state(
-                rows,
-                min_segment_samples=int(
-                    os.getenv("BETBOT_QUALITY_SEGMENT_MIN_SAMPLES", "500")
-                ),
-                max_segments=int(os.getenv("BETBOT_QUALITY_MAX_SEGMENTS", "12")),
-            )
+            candidate, variants = self._candidate_factory(rows)
             if candidate.get("status") != "TRAINED_TIME_SAFE":
                 result = {"status": "TRAINING_REJECTED", "checked_at": now, "training": candidate}
                 _append_event(self.events_path, result)
@@ -271,6 +321,15 @@ class ControlledQualityRetrainer:
                 "dataset_rows": len(rows),
                 "new_rows": new_rows,
                 "validation": validation,
+                "candidate_factory": {
+                    "variant_count": len(variants),
+                    "selected": candidate.get("candidate_variant", ""),
+                    "variants": [
+                        {key: value for key, value in item.items() if key != "state"}
+                        for item in variants
+                    ],
+                    "selection_metric": "minimum_holdout_brier_then_log_loss",
+                },
                 "diagnostic_report": diagnostic,
                 "candidate_path": str(version_path),
                 "active_model_was_not_modified": True,

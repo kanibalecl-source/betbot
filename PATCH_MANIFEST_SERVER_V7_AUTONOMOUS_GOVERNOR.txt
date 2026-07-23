@@ -1,0 +1,27 @@
+KANIBAL AUTONOMOUS LEARNING GOVERNOR v7
+======================================
+
+Pliki kodu w paczce:
+- autonomous_learning_governor.py
+- autonomous_learning_governor_loop.py
+- quality_auto_retraining.py
+- quality_champion_challenger.py
+- quality_model_registry.py
+- app_launcher.py
+- .env.example
+
+Bezpieczeństwo danych:
+- paczka NIE zawiera katalogu data,
+- paczka NIE zawiera baz SQLite, CSV historii ani modeli produkcyjnych,
+- paczka NIE zawiera sekretów,
+- dane z Railway Volume /data pozostają źródłem prawdy,
+- aktywny model nie jest zmieniany podczas treningu,
+- promocja wymaga Guardian HEALTHY+READY, pozytywnego walk-forward,
+  pozytywnego live shadow, niezmienionego SHA-256 kandydata i canary 100%,
+- każda promocja tworzy kopię poprzedniego championa,
+- rollback jest atomowy i audytowany.
+
+Domyślna blokada:
+BETBOT_AUTONOMOUS_PROMOTION_ENABLED=0
+
+Do pełnej autonomii ustaw 1 dopiero po pierwszym poprawnym cyklu v7.
