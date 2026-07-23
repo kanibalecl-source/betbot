@@ -183,6 +183,28 @@ class VolleyballStorage:
                 CREATE TRIGGER IF NOT EXISTS protect_identity_quarantine_delete
                 BEFORE DELETE ON identity_quarantine
                 BEGIN SELECT RAISE(ABORT, 'volleyball identity quarantine is append-only'); END;
+                CREATE TABLE IF NOT EXISTS settlement_audit (
+                    audit_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    pick_key TEXT NOT NULL,
+                    game_id TEXT NOT NULL,
+                    stored_result TEXT NOT NULL,
+                    recalculated_result TEXT NOT NULL,
+                    audit_status TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    FOREIGN KEY(pick_key) REFERENCES shadow_picks(pick_key)
+                );
+                CREATE INDEX IF NOT EXISTS idx_settlement_audit_status
+                ON settlement_audit(audit_status, observed_at);
+                CREATE TRIGGER IF NOT EXISTS protect_settlement_audit_update
+                BEFORE UPDATE ON settlement_audit
+                BEGIN SELECT RAISE(ABORT, 'volleyball settlement audit is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_settlement_audit_delete
+                BEFORE DELETE ON settlement_audit
+                BEGIN SELECT RAISE(ABORT, 'volleyball settlement audit is append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -425,6 +447,12 @@ class VolleyballStorage:
             identities = connection.execute(
                 "SELECT COUNT(*) FROM game_identities"
             ).fetchone()[0]
+            settlement_audits = connection.execute(
+                "SELECT COUNT(*) FROM settlement_audit"
+            ).fetchone()[0]
+            settlement_mismatches = connection.execute(
+                "SELECT COUNT(*) FROM settlement_audit WHERE audit_status='MISMATCH'"
+            ).fetchone()[0]
         eligible = max(0, int(games) - int(finished))
         return {
             "games_total": int(games),
@@ -443,6 +471,8 @@ class VolleyballStorage:
             "identity_acceptance_rate": round(
                 int(identities) / (int(identities) + int(quarantined)), 6
             ) if int(identities) + int(quarantined) else 0.0,
+            "settlement_audits": int(settlement_audits),
+            "settlement_mismatches": int(settlement_mismatches),
         }
 
     def odds_refresh_due(self, game_id: str, refresh_hours: int) -> bool:
@@ -503,7 +533,28 @@ class VolleyballStorage:
                 "SELECT * FROM shadow_picks WHERE status='OPEN' ORDER BY created_at"
             ).fetchall()
 
-    def close_pick(self, pick_key: str, result: str, profit: float, game: VolleyballGame) -> None:
+    def closed_picks(self) -> list[sqlite3.Row]:
+        with self.connect() as connection:
+            return connection.execute(
+                "SELECT * FROM shadow_picks WHERE status='CLOSED' ORDER BY settled_at"
+            ).fetchall()
+
+    def open_pick_dates(self) -> list[str]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT substr(g.scheduled_at, 1, 10) AS game_date
+                FROM shadow_picks p
+                JOIN games g ON g.game_id=p.game_id
+                WHERE p.status='OPEN' AND length(g.scheduled_at)>=10
+                ORDER BY game_date
+                """
+            ).fetchall()
+        return [str(row["game_date"]) for row in rows if row["game_date"]]
+
+    def close_pick(
+        self, pick_key: str, result: str, profit: float, game: VolleyballGame
+    ) -> bool:
         payload = json.dumps(game.raw, ensure_ascii=False, sort_keys=True)
         payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
         evidence_key = hashlib.sha256(
@@ -511,13 +562,15 @@ class VolleyballStorage:
         ).hexdigest()
         settled_at = utc_now()
         with self.connect() as connection:
-            connection.execute(
+            cursor = connection.execute(
                 """
                 UPDATE shadow_picks SET status='CLOSED', result=?, profit=?, settled_at=?
                 WHERE pick_key=? AND status='OPEN'
                 """,
                 (result, profit, settled_at, pick_key),
             )
+            if cursor.rowcount != 1:
+                return False
             connection.execute(
                 """
                 INSERT OR IGNORE INTO settlement_evidence (
@@ -531,6 +584,39 @@ class VolleyballStorage:
                     settled_at,
                 ),
             )
+        return True
+
+    def record_settlement_audit(
+        self, pick: sqlite3.Row, game: VolleyballGame, recalculated_result: str
+    ) -> tuple[bool, str]:
+        stored_result = str(pick["result"])
+        audit_status = (
+            "CONSISTENT" if stored_result == recalculated_result else "MISMATCH"
+        )
+        payload = json.dumps(game.raw, ensure_ascii=False, sort_keys=True)
+        payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        audit_key = hashlib.sha256(
+            (
+                f"{pick['pick_key']}|{stored_result}|{recalculated_result}|"
+                f"{payload_hash}"
+            ).encode("utf-8")
+        ).hexdigest()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO settlement_audit (
+                    audit_key, pick_key, game_id, stored_result,
+                    recalculated_result, audit_status, provider,
+                    payload_sha256, payload_json, observed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    audit_key, pick["pick_key"], game.game_id, stored_result,
+                    recalculated_result, audit_status, "api-sports-volleyball",
+                    payload_hash, payload, utc_now(),
+                ),
+            )
+        return cursor.rowcount == 1, audit_status
 
     def state(self, key: str) -> str | None:
         with self.connect() as connection:

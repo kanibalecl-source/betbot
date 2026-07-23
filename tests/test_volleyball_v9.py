@@ -44,6 +44,23 @@ def game(*, game_id="1", status="FT", home_sets=3, away_sets=1):
     )
 
 
+def pick_payload(game_id="1", outcome="HOME"):
+    return {
+        "game_id": game_id,
+        "league_name": "Test League",
+        "match_name": "Home vs Away",
+        "market": "MATCH_WINNER",
+        "outcome": outcome,
+        "bookmaker": "Test Book",
+        "bookmaker_odds": 2.0,
+        "model_probability": 0.55,
+        "model_fair_odds": 1.8182,
+        "edge": 0.10,
+        "confidence": 60.0,
+        "model_version": "test-model",
+    }
+
+
 class VolleyballSettingsTests(unittest.TestCase):
     def test_default_does_not_start_volleyball(self):
         settings = load_settings({})
@@ -208,6 +225,59 @@ class VolleyballStorageTests(unittest.TestCase):
                     "SELECT COUNT(*) FROM game_identities WHERE game_id='legacy'"
                 ).fetchone()[0]
             self.assertEqual(count, 1)
+
+    def test_open_pick_dates_keep_old_matches_in_result_window(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            pending = game(
+                game_id="pending", status="NS", home_sets=None, away_sets=None
+            )
+            storage.upsert_games([pending])
+            storage.create_shadow_pick(pick_payload(game_id="pending"))
+            self.assertEqual(storage.open_pick_dates(), ["2026-07-20"])
+
+    def test_settlement_is_idempotent_and_audited_append_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            finished = game(game_id="settle")
+            storage.upsert_games([finished])
+            storage.create_shadow_pick(pick_payload(game_id="settle"))
+            pick = storage.open_picks()[0]
+            self.assertTrue(
+                storage.close_pick(pick["pick_key"], "WON", 1.0, finished)
+            )
+            self.assertFalse(
+                storage.close_pick(pick["pick_key"], "WON", 1.0, finished)
+            )
+            closed = storage.closed_picks()[0]
+            inserted, status = storage.record_settlement_audit(
+                closed, finished, "WON"
+            )
+            self.assertTrue(inserted)
+            self.assertEqual(status, "CONSISTENT")
+            inserted_again, _ = storage.record_settlement_audit(
+                closed, finished, "WON"
+            )
+            self.assertFalse(inserted_again)
+            inserted_mismatch, mismatch_status = storage.record_settlement_audit(
+                closed, finished, "LOST"
+            )
+            self.assertTrue(inserted_mismatch)
+            self.assertEqual(mismatch_status, "MISMATCH")
+            with storage.connect() as connection:
+                summary = connection.execute(
+                    """
+                    SELECT COUNT(*) AS total,
+                           SUM(CASE WHEN audit_status='MISMATCH' THEN 1 ELSE 0 END) AS bad
+                    FROM settlement_audit
+                    """
+                ).fetchone()
+                self.assertEqual(summary["total"], 2)
+                self.assertEqual(summary["bad"], 1)
+                with self.assertRaises(Exception):
+                    connection.execute("DELETE FROM settlement_audit")
 
 
 class _FakeResponse:

@@ -14,7 +14,7 @@ from .storage import VolleyballStorage
 
 
 MODEL_VERSION = "volleyball-elo-shadow-v1"
-RUNTIME_VERSION = "9.2"
+RUNTIME_VERSION = "9.3"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
@@ -42,11 +42,16 @@ def _best_quotes(quotes):
 
 def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, settings) -> dict:
     today = date.today()
-    days = [today, today + timedelta(days=1)]
+    days = [today - timedelta(days=1), today, today + timedelta(days=1)]
     if storage.state("initial_backfill_complete") != "1" and settings.backfill_days:
         days = [today - timedelta(days=offset) for offset in range(settings.backfill_days, -1, -1)] + [
             today + timedelta(days=1)
         ]
+    for raw_day in storage.open_pick_dates():
+        try:
+            days.append(date.fromisoformat(raw_day))
+        except ValueError:
+            continue
     requested_days = list(dict.fromkeys(days))
     games, days_succeeded, days_failed = _fetch_days(client, requested_days)
     if not games and days_failed:
@@ -121,8 +126,24 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         if result == "PENDING":
             continue
         profit = profit_for_result(result, float(pick["bookmaker_odds"]))
-        storage.close_pick(str(pick["pick_key"]), result, profit, game)
-        settled += 1
+        settled += int(
+            storage.close_pick(str(pick["pick_key"]), result, profit, game)
+        )
+
+    settlement_audited = 0
+    settlement_mismatches = 0
+    for pick in storage.closed_picks():
+        game = game_index.get(str(pick["game_id"]))
+        if game is None:
+            continue
+        recalculated = settle_match_winner(str(pick["outcome"]), game)
+        if recalculated in {"PENDING", "REVIEW"}:
+            continue
+        inserted, audit_status = storage.record_settlement_audit(
+            pick, game, recalculated
+        )
+        settlement_audited += int(inserted)
+        settlement_mismatches += int(inserted and audit_status == "MISMATCH")
 
     coverage = storage.coverage_summary()
     return {
@@ -133,6 +154,8 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "quotes_saved": quotes_saved,
         "picks_created": picks_created,
         "picks_settled": settled,
+        "settlement_audited": settlement_audited,
+        "settlement_mismatches": settlement_mismatches,
         "days_requested": len(requested_days),
         "days_succeeded": days_succeeded,
         "days_failed": days_failed,

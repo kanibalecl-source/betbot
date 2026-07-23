@@ -1,0 +1,50 @@
+BETBOT SERVER PATCH v9.3 - VOLLEYBALL SETTLEMENT & RECONCILIATION
+
+REQUIRES
+- Successfully deployed and verified v9.2.
+- Volleyball remains shadow-only.
+
+PURPOSE
+- Settle volleyball shadow picks automatically from provider results.
+- Keep unresolved historical picks inside the result-fetch window.
+- Detect provider/result changes without rewriting prior evidence.
+
+SAFETY CONTRACT
+- Football source, history, models and execution are unchanged.
+- Existing volleyball schema is migrated additively; no table or row is deleted.
+- Pick closure is idempotent and immutable settlement evidence is append-only.
+- A changed or contradictory result is recorded as a visible MISMATCH.
+- Training, model promotion and real execution remain disabled.
+
+CHANGES
+- Every cycle fetches yesterday, today and tomorrow.
+- Dates of all still-open picks are added automatically to the fetch window.
+- An OPEN pick can be closed only once.
+- Settlement evidence is written only after a successful first closure.
+- Closed picks are recalculated against current provider evidence.
+- CONSISTENT and MISMATCH observations are stored in an append-only audit.
+- Health output reports settlement audit and mismatch counts.
+
+FILES
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/config.py
+- volleyball_v9/domain.py
+- volleyball_v9/api_sports.py
+- volleyball_v9/identity.py
+- volleyball_v9/model.py
+- volleyball_v9/runtime.py
+- volleyball_v9/settlement.py
+- volleyball_v9/storage.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_3_VOLLEYBALL_SETTLEMENT_RECONCILIATION.txt
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+
+DEPLOYMENT GATE
+1. Confirm BACKUP_CREATED before process startup.
+2. Confirm HEARTBEAT v9.3 includes volleyball_shadow=True.
+3. Confirm VOLLEYBALL v9.3 SHADOW START with the existing safe variables.
+4. Confirm the first cycle is HEALTHY and football_data_modified=false.
+5. Confirm open picks remain visible until the provider publishes a final result.
+6. Inspect settlement_audited and settlement_mismatches.
+7. Do not proceed to v9.4 if mismatches are unexplained.
