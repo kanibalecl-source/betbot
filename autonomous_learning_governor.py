@@ -75,7 +75,7 @@ class AutonomousLearningGovernor:
         self.events_path = self.work / "autonomous_governor_events.jsonl"
         self.lock_path = self.work / "autonomous_governor.lock"
         self.candidate_path = self.work / "quality_shadow_state.candidate.latest.json"
-        self.guardian_path = self.root / "quality_monitoring" / "data_quality_guardian.json"
+        self.guardian_path = self.work / "data_quality_guardian.json"
         self.active_path = Path(
             os.getenv("BETBOT_QUALITY_STATE", self.root / "quality_shadow_state.json")
         ).resolve()

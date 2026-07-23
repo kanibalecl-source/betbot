@@ -1,0 +1,13 @@
+KANIBAL AUTONOMOUS LEARNING GOVERNOR v7.1 HOTFIX
+================================================
+
+Zmiana:
+- Governor odczytuje raport Guardian z rzeczywistej trwałej ścieżki:
+  /data/quality_retraining/data_quality_guardian.json
+
+Bezpieczeństwo:
+- brak zmian w historii, bazach i aktywnym modelu,
+- brak automatycznej promocji,
+- brak plików data w paczce,
+- brak sekretów,
+- zachowany tryb fail-closed.
