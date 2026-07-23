@@ -250,6 +250,72 @@ class VolleyballStorage:
                     FOREIGN KEY(pick_key) REFERENCES shadow_picks(pick_key),
                     FOREIGN KEY(feature_key) REFERENCES feature_snapshots(feature_key)
                 );
+                CREATE TABLE IF NOT EXISTS market_consensus_snapshots (
+                    consensus_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    game_id TEXT NOT NULL,
+                    market_schema TEXT NOT NULL,
+                    market TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    bookmaker_count INTEGER NOT NULL,
+                    home_probability REAL NOT NULL,
+                    away_probability REAL NOT NULL,
+                    home_fair_odds REAL NOT NULL,
+                    away_fair_odds REAL NOT NULL,
+                    best_home_odds REAL NOT NULL,
+                    best_away_odds REAL NOT NULL,
+                    average_overround REAL NOT NULL,
+                    probability_dispersion REAL NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    FOREIGN KEY(game_id) REFERENCES games(game_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_market_consensus_game_time
+                ON market_consensus_snapshots(game_id, market, observed_at);
+                CREATE TABLE IF NOT EXISTS closing_market_snapshots (
+                    closing_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    game_id TEXT NOT NULL,
+                    market TEXT NOT NULL,
+                    source_consensus_key TEXT NOT NULL,
+                    scheduled_at TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    lag_seconds INTEGER NOT NULL,
+                    bookmaker_count INTEGER NOT NULL,
+                    home_probability REAL NOT NULL,
+                    away_probability REAL NOT NULL,
+                    home_fair_odds REAL NOT NULL,
+                    away_fair_odds REAL NOT NULL,
+                    best_home_odds REAL NOT NULL,
+                    best_away_odds REAL NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    UNIQUE(game_id, market),
+                    FOREIGN KEY(game_id) REFERENCES games(game_id),
+                    FOREIGN KEY(source_consensus_key)
+                        REFERENCES market_consensus_snapshots(consensus_key)
+                );
+                CREATE TABLE IF NOT EXISTS pick_clv (
+                    pick_key TEXT PRIMARY KEY,
+                    closing_key TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    entry_odds REAL NOT NULL,
+                    closing_best_odds REAL NOT NULL,
+                    closing_fair_odds REAL NOT NULL,
+                    clv_price REAL NOT NULL,
+                    clv_fair REAL NOT NULL,
+                    recorded_at TEXT NOT NULL,
+                    FOREIGN KEY(pick_key) REFERENCES shadow_picks(pick_key),
+                    FOREIGN KEY(closing_key)
+                        REFERENCES closing_market_snapshots(closing_key)
+                );
+                CREATE TABLE IF NOT EXISTS pick_market_links (
+                    pick_key TEXT PRIMARY KEY,
+                    consensus_key TEXT NOT NULL,
+                    linked_at TEXT NOT NULL,
+                    FOREIGN KEY(pick_key) REFERENCES shadow_picks(pick_key),
+                    FOREIGN KEY(consensus_key)
+                        REFERENCES market_consensus_snapshots(consensus_key)
+                );
                 CREATE TRIGGER IF NOT EXISTS protect_feature_snapshots_update
                 BEFORE UPDATE ON feature_snapshots
                 BEGIN SELECT RAISE(ABORT, 'volleyball feature snapshot is append-only'); END;
@@ -268,6 +334,30 @@ class VolleyballStorage:
                 CREATE TRIGGER IF NOT EXISTS protect_pick_feature_links_delete
                 BEFORE DELETE ON pick_feature_links
                 BEGIN SELECT RAISE(ABORT, 'volleyball pick feature link is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_market_consensus_update
+                BEFORE UPDATE ON market_consensus_snapshots
+                BEGIN SELECT RAISE(ABORT, 'volleyball market consensus is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_market_consensus_delete
+                BEFORE DELETE ON market_consensus_snapshots
+                BEGIN SELECT RAISE(ABORT, 'volleyball market consensus is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_closing_market_update
+                BEFORE UPDATE ON closing_market_snapshots
+                BEGIN SELECT RAISE(ABORT, 'volleyball closing market is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_closing_market_delete
+                BEFORE DELETE ON closing_market_snapshots
+                BEGIN SELECT RAISE(ABORT, 'volleyball closing market is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_pick_clv_update
+                BEFORE UPDATE ON pick_clv
+                BEGIN SELECT RAISE(ABORT, 'volleyball pick CLV is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_pick_clv_delete
+                BEFORE DELETE ON pick_clv
+                BEGIN SELECT RAISE(ABORT, 'volleyball pick CLV is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_pick_market_links_update
+                BEFORE UPDATE ON pick_market_links
+                BEGIN SELECT RAISE(ABORT, 'volleyball pick market link is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_pick_market_links_delete
+                BEFORE DELETE ON pick_market_links
+                BEGIN SELECT RAISE(ABORT, 'volleyball pick market link is immutable'); END;
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -525,6 +615,28 @@ class VolleyballStorage:
             feature_linked_picks = connection.execute(
                 "SELECT COUNT(*) FROM pick_feature_links"
             ).fetchone()[0]
+            market_consensus = connection.execute(
+                "SELECT COUNT(*) FROM market_consensus_snapshots"
+            ).fetchone()[0]
+            multi_book_consensus = connection.execute(
+                """
+                SELECT COUNT(*) FROM market_consensus_snapshots
+                WHERE bookmaker_count>=2
+                """
+            ).fetchone()[0]
+            closing_markets = connection.execute(
+                "SELECT COUNT(*) FROM closing_market_snapshots"
+            ).fetchone()[0]
+            clv = connection.execute(
+                """
+                SELECT COUNT(*) AS samples, AVG(clv_price) AS average_price,
+                       AVG(clv_fair) AS average_fair
+                FROM pick_clv
+                """
+            ).fetchone()
+            market_linked_picks = connection.execute(
+                "SELECT COUNT(*) FROM pick_market_links"
+            ).fetchone()[0]
         eligible = max(0, int(games) - int(finished))
         return {
             "games_total": int(games),
@@ -553,6 +665,13 @@ class VolleyballStorage:
                 / (int(feature_snapshots) + int(feature_quarantined)),
                 6,
             ) if int(feature_snapshots) + int(feature_quarantined) else 0.0,
+            "market_consensus_snapshots": int(market_consensus),
+            "multi_book_consensus_snapshots": int(multi_book_consensus),
+            "closing_market_snapshots": int(closing_markets),
+            "clv_samples": int(clv["samples"] or 0),
+            "average_clv_price": round(float(clv["average_price"] or 0.0), 8),
+            "average_clv_fair": round(float(clv["average_fair"] or 0.0), 8),
+            "market_linked_picks": int(market_linked_picks),
         }
 
     def point_in_time_training_set(
@@ -728,7 +847,155 @@ class VolleyballStorage:
             )
         return cursor.rowcount == 1
 
-    def odds_refresh_due(self, game_id: str, refresh_hours: int) -> bool:
+    def record_market_consensus(self, payload: dict) -> tuple[bool, str]:
+        home_probability = float(payload["home_probability"])
+        away_probability = float(payload["away_probability"])
+        if not (
+            0.0 < home_probability < 1.0
+            and 0.0 < away_probability < 1.0
+            and abs(home_probability + away_probability - 1.0) <= 0.000001
+        ):
+            return False, ""
+        if int(payload["bookmaker_count"]) < 1:
+            return False, ""
+        if min(
+            float(payload["best_home_odds"]),
+            float(payload["best_away_odds"]),
+            float(payload["home_fair_odds"]),
+            float(payload["away_fair_odds"]),
+        ) <= 1.0:
+            return False, ""
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        payload_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+        raw_key = "|".join(
+            [
+                str(payload["game_id"]), str(payload["market"]),
+                str(payload["observed_at"]), str(payload["market_schema"]),
+                payload_hash,
+            ]
+        )
+        consensus_key = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO market_consensus_snapshots (
+                    consensus_key, game_id, market_schema, market, observed_at,
+                    bookmaker_count, home_probability, away_probability,
+                    home_fair_odds, away_fair_odds, best_home_odds,
+                    best_away_odds, average_overround,
+                    probability_dispersion, payload_sha256, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    consensus_key, payload["game_id"], payload["market_schema"],
+                    payload["market"], payload["observed_at"],
+                    payload["bookmaker_count"], home_probability,
+                    away_probability, payload["home_fair_odds"],
+                    payload["away_fair_odds"], payload["best_home_odds"],
+                    payload["best_away_odds"], payload["average_overround"],
+                    payload["probability_dispersion"], payload_hash, serialized,
+                ),
+            )
+        return cursor.rowcount == 1, consensus_key
+
+    def capture_closing_market(
+        self, game: VolleyballGame, market: str = "MATCH_WINNER"
+    ) -> sqlite3.Row | None:
+        with self.connect() as connection:
+            source = connection.execute(
+                """
+                SELECT * FROM market_consensus_snapshots
+                WHERE game_id=? AND market=? AND observed_at<?
+                ORDER BY observed_at DESC, consensus_key DESC
+                LIMIT 1
+                """,
+                (game.game_id, market, game.scheduled_at),
+            ).fetchone()
+            if source is None:
+                return None
+            lag_seconds = max(
+                0,
+                int(
+                    (
+                        parse_utc(game.scheduled_at)
+                        - parse_utc(str(source["observed_at"]))
+                    ).total_seconds()
+                ),
+            )
+            closing_key = hashlib.sha256(
+                (
+                    f"{game.game_id}|{market}|{source['consensus_key']}|"
+                    f"{game.scheduled_at}"
+                ).encode("utf-8")
+            ).hexdigest()
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO closing_market_snapshots (
+                    closing_key, game_id, market, source_consensus_key,
+                    scheduled_at, observed_at, lag_seconds, bookmaker_count,
+                    home_probability, away_probability, home_fair_odds,
+                    away_fair_odds, best_home_odds, best_away_odds, captured_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    closing_key, game.game_id, market,
+                    source["consensus_key"], game.scheduled_at,
+                    source["observed_at"], lag_seconds,
+                    source["bookmaker_count"], source["home_probability"],
+                    source["away_probability"], source["home_fair_odds"],
+                    source["away_fair_odds"], source["best_home_odds"],
+                    source["best_away_odds"], utc_now(),
+                ),
+            )
+            return connection.execute(
+                """
+                SELECT * FROM closing_market_snapshots
+                WHERE game_id=? AND market=?
+                """,
+                (game.game_id, market),
+            ).fetchone()
+
+    def record_pick_clv(
+        self, pick: sqlite3.Row, closing: sqlite3.Row
+    ) -> bool:
+        outcome = str(pick["outcome"]).upper()
+        if outcome == "HOME":
+            closing_best = float(closing["best_home_odds"])
+            closing_fair = float(closing["home_fair_odds"])
+        elif outcome == "AWAY":
+            closing_best = float(closing["best_away_odds"])
+            closing_fair = float(closing["away_fair_odds"])
+        else:
+            return False
+        entry_odds = float(pick["bookmaker_odds"])
+        if min(entry_odds, closing_best, closing_fair) <= 1.0:
+            return False
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO pick_clv (
+                    pick_key, closing_key, outcome, entry_odds,
+                    closing_best_odds, closing_fair_odds,
+                    clv_price, clv_fair, recorded_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    pick["pick_key"], closing["closing_key"], outcome,
+                    entry_odds, closing_best, closing_fair,
+                    round(entry_odds / closing_best - 1.0, 8),
+                    round(entry_odds / closing_fair - 1.0, 8),
+                    utc_now(),
+                ),
+            )
+        return cursor.rowcount == 1
+
+    def odds_refresh_due(
+        self,
+        game_id: str,
+        refresh_hours: int,
+        *,
+        scheduled_at: str | None = None,
+    ) -> bool:
         with self.connect() as connection:
             row = connection.execute(
                 """
@@ -745,8 +1012,15 @@ class VolleyballStorage:
             observed = datetime.fromisoformat(str(latest).replace("Z", "+00:00"))
             if observed.tzinfo is None:
                 observed = observed.replace(tzinfo=timezone.utc)
+            effective_hours = int(refresh_hours)
+            if scheduled_at:
+                starts_in = parse_utc(scheduled_at) - datetime.now(timezone.utc)
+                if timedelta(0) < starts_in <= timedelta(hours=6):
+                    effective_hours = 1
+                elif timedelta(0) < starts_in <= timedelta(hours=24):
+                    effective_hours = min(effective_hours, 3)
             return datetime.now(timezone.utc) - observed >= timedelta(
-                hours=refresh_hours
+                hours=effective_hours
             )
         except ValueError:
             return True
@@ -785,6 +1059,15 @@ class VolleyballStorage:
                     VALUES (?, ?, ?)
                     """,
                     (key, payload["feature_key"], utc_now()),
+                )
+            if cursor.rowcount == 1 and payload.get("market_consensus_key"):
+                connection.execute(
+                    """
+                    INSERT INTO pick_market_links (
+                        pick_key, consensus_key, linked_at
+                    ) VALUES (?, ?, ?)
+                    """,
+                    (key, payload["market_consensus_key"], utc_now()),
                 )
             return cursor.rowcount == 1
 

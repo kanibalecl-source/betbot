@@ -36,6 +36,7 @@ class VolleyballSettings:
     retry_attempts: int
     retry_backoff_seconds: float
     odds_refresh_hours: int
+    minimum_bookmakers: int
 
 
 def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
@@ -63,6 +64,9 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
         ),
         odds_refresh_hours=int(
             _float("BETBOT_VOLLEYBALL_ODDS_REFRESH_HOURS", 12, 1, 24)
+        ),
+        minimum_bookmakers=int(
+            _float("BETBOT_VOLLEYBALL_MIN_BOOKMAKERS", 2, 1, 20)
         ),
     )
     if settings.enabled and not settings.shadow_only:

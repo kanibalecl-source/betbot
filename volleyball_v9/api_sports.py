@@ -174,7 +174,7 @@ class ApiSportsVolleyballClient:
                             price = float(value.get("odd"))
                         except (TypeError, ValueError):
                             continue
-                        if price <= 1.0:
+                        if price <= 1.0 or price > 100.0:
                             continue
                         quotes.append(
                             OddsQuote(

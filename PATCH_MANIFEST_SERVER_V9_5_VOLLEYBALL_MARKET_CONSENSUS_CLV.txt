@@ -1,0 +1,66 @@
+BETBOT SERVER PATCH v9.5 - VOLLEYBALL MARKET CONSENSUS AND CLV
+
+REQUIRES
+- Successfully deployed and verified v9.4.
+- Volleyball remains shadow-only.
+- Existing API-Sports volleyball key and v9.x variables remain configured.
+
+PURPOSE
+- Replace dependence on a single bookmaker quote with a robust multi-book market
+  reference.
+- Remove bookmaker margin before calculating the market consensus probability.
+- Measure prediction quality against the last verified market snapshot before
+  match start (closing line value, CLV).
+
+SAFETY CONTRACT
+- Football source, history, models, databases and execution are unchanged.
+- Existing volleyball schema is migrated additively; no table or row is deleted.
+- Existing v9.0-v9.4 picks, features and settlement evidence are not rewritten.
+- Consensus snapshots, closing snapshots, pick links and CLV are immutable.
+- Training, model promotion and real execution remain disabled.
+
+CHANGES
+- HOME/AWAY quotes are paired per bookmaker and only complete valid pairs enter
+  the consensus.
+- Every pair is de-vigged independently; the consensus uses the robust median
+  probability across bookmakers.
+- Quotes above 100.0 and pairs with implausible overround are rejected.
+- New picks require at least two valid bookmakers by default.
+- The executable best quote is selected only from bookmakers admitted to the
+  validated consensus.
+- Odds refresh becomes more frequent as match start approaches.
+- Every new pick is linked to the exact market-consensus snapshot used at issue.
+- The closing snapshot is the latest consensus strictly before scheduled start;
+  post-start prices can never become the close.
+- CLV is recorded once per settled pick against both best closing price and
+  no-vig closing fair price.
+- Health output reports consensus, insufficient-book and CLV counters.
+
+OPTIONAL VARIABLE
+- BETBOT_VOLLEYBALL_MIN_BOOKMAKERS=2
+  Default is 2, so no Railway variable change is required.
+
+FILES
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/api_sports.py
+- volleyball_v9/config.py
+- volleyball_v9/market.py
+- volleyball_v9/storage.py
+- volleyball_v9/runtime.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_5_VOLLEYBALL_MARKET_CONSENSUS_CLV.txt
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+
+DEPLOYMENT GATE
+1. Confirm BACKUP_CREATED before process startup.
+2. Confirm HEARTBEAT v9.5 includes volleyball_shadow=True.
+3. Confirm VOLLEYBALL v9.5 SHADOW START.
+4. Confirm the first cycle is HEALTHY and football_data_modified=false.
+5. Confirm feature_leakage_rate remains 0.0.
+6. Confirm market_consensus_snapshots increases when two or more bookmakers
+   publish complete HOME/AWAY prices.
+7. clv_samples may remain zero until a v9.5 linked pick is settled; this is
+   expected and must not be bypassed.
+8. Do not proceed to v9.6 if closing-line timestamps are not strictly before
+   scheduled match time or unexplained market gaps remain.

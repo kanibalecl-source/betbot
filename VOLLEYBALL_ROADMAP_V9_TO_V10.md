@@ -10,7 +10,7 @@ backed up before startup, and deployed only after the previous gate passes.
 | v9.2 | Canonical team/league identities, deduplication and quarantine | identity conflicts below threshold |
 | v9.3 | Complete autonomous settlement and reconciliation | settlement accuracy audited on reviewed sample |
 | v9.4 | Point-in-time feature store with leakage guards | feature timestamps strictly precede match start |
-| v9.5 | Multiple bookmaker snapshots, no-vig consensus and CLV | sufficient closing-line coverage |
+| v9.5 | Multiple bookmaker snapshots, no-vig consensus and immutable CLV (implemented) | sufficient closing-line coverage |
 | v9.6 | Candidate training pipeline and reproducible model registry | minimum settled sample and reproducible artifact |
 | v9.7 | Walk-forward Champion-Challenger validation | positive out-of-sample Brier/log-loss and calibration |
 | v9.8 | Segment stability, drift detection and automatic rollback | no weak league/market slice breaches |

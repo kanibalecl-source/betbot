@@ -13,12 +13,17 @@ from .features import (
     FeatureLeakageError,
     build_point_in_time_features,
 )
+from .market import (
+    MARKET_SCHEMA_VERSION,
+    build_no_vig_consensus,
+    eligible_match_winner_quotes,
+)
 from .settlement import profit_for_result, settle_match_winner
 from .storage import VolleyballStorage
 
 
 MODEL_VERSION = "volleyball-elo-shadow-v1"
-RUNTIME_VERSION = "9.4"
+RUNTIME_VERSION = "9.5"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
@@ -70,10 +75,16 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
     odds_failed = 0
     features_saved = 0
     features_quarantined = 0
+    market_consensus_saved = 0
+    market_insufficient_books = 0
     for game in games:
         if game.finished or game.status.upper() not in {"NS", "NOT_STARTED", "TBD"}:
             continue
-        if not storage.odds_refresh_due(game.game_id, settings.odds_refresh_hours):
+        if not storage.odds_refresh_due(
+            game.game_id,
+            settings.odds_refresh_hours,
+            scheduled_at=game.scheduled_at,
+        ):
             continue
         odds_attempted += 1
         try:
@@ -82,6 +93,20 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             odds_failed += 1
             continue
         quotes_saved += storage.save_odds(quotes)
+        consensus = build_no_vig_consensus(quotes)
+        if consensus is None:
+            market_insufficient_books += 1
+            continue
+        consensus_inserted, consensus_key = storage.record_market_consensus(
+            consensus.payload()
+        )
+        market_consensus_saved += int(consensus_inserted)
+        if not consensus_key:
+            market_insufficient_books += 1
+            continue
+        if consensus.bookmaker_count < settings.minimum_bookmakers:
+            market_insufficient_books += 1
+            continue
         feature_observed_at = utc_now()
         training_games, source_metadata = storage.point_in_time_training_set(
             game, feature_observed_at
@@ -112,7 +137,9 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             features_quarantined += 1
             continue
         prediction = bundle.prediction
-        for outcome, quote in _best_quotes(quotes).items():
+        for outcome, quote in _best_quotes(
+            eligible_match_winner_quotes(quotes)
+        ).items():
             probability = (
                 prediction.home_probability if outcome == "HOME"
                 else prediction.away_probability
@@ -142,6 +169,26 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
                 "model_version": MODEL_VERSION,
                 "feature_key": feature_key,
                 "feature_schema": FEATURE_SCHEMA_VERSION,
+                "market_schema": MARKET_SCHEMA_VERSION,
+                "market_consensus_key": consensus_key,
+                "market_bookmaker_count": consensus.bookmaker_count,
+                "market_probability": (
+                    consensus.home_probability if outcome == "HOME"
+                    else consensus.away_probability
+                ),
+                "market_fair_odds": (
+                    consensus.home_fair_odds if outcome == "HOME"
+                    else consensus.away_fair_odds
+                ),
+                "market_probability_edge": round(
+                    probability
+                    - (
+                        consensus.home_probability if outcome == "HOME"
+                        else consensus.away_probability
+                    ),
+                    8,
+                ),
+                "market_probability_dispersion": consensus.probability_dispersion,
                 "home_rating": prediction.home_rating,
                 "away_rating": prediction.away_rating,
                 "home_matches": prediction.home_matches,
@@ -167,6 +214,7 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
 
     settlement_audited = 0
     settlement_mismatches = 0
+    clv_recorded = 0
     for pick in storage.closed_picks():
         game = game_index.get(str(pick["game_id"]))
         if game is None:
@@ -179,6 +227,9 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         )
         settlement_audited += int(inserted)
         settlement_mismatches += int(inserted and audit_status == "MISMATCH")
+        closing = storage.capture_closing_market(game)
+        if closing is not None:
+            clv_recorded += int(storage.record_pick_clv(pick, closing))
 
     coverage = storage.coverage_summary()
     return {
@@ -198,6 +249,9 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "odds_failed": odds_failed,
         "features_saved": features_saved,
         "features_quarantined": features_quarantined,
+        "market_consensus_saved": market_consensus_saved,
+        "market_insufficient_books": market_insufficient_books,
+        "clv_recorded": clv_recorded,
         "coverage": coverage,
         "real_execution_allowed": False,
         "football_data_modified": False,

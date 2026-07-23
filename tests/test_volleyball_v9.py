@@ -18,12 +18,16 @@ except ModuleNotFoundError:
     sys.modules["requests"] = requests_stub
 from volleyball_v9.api_sports import ApiSportsVolleyballClient
 from volleyball_v9.config import load_volleyball_settings
-from volleyball_v9.domain import VolleyballGame
+from volleyball_v9.domain import OddsQuote, VolleyballGame
 from volleyball_v9.features import (
     FeatureLeakageError,
     build_point_in_time_features,
 )
 from volleyball_v9.identity import normalize_name, stable_key
+from volleyball_v9.market import (
+    build_no_vig_consensus,
+    eligible_match_winner_quotes,
+)
 from volleyball_v9.model import VolleyballEloModel
 from volleyball_v9.settlement import settle_match_winner
 from volleyball_v9.storage import VolleyballStorage
@@ -72,6 +76,25 @@ def pick_payload(game_id="1", outcome="HOME"):
     }
 
 
+def quote(
+    bookmaker_id,
+    outcome,
+    odds,
+    *,
+    game_id="market",
+    observed_at="2026-12-05T12:00:00+00:00",
+):
+    return OddsQuote(
+        game_id=game_id,
+        bookmaker_id=str(bookmaker_id),
+        bookmaker=f"Book {bookmaker_id}",
+        market="MATCH_WINNER",
+        outcome=outcome,
+        odds=odds,
+        observed_at=observed_at,
+    )
+
+
 class VolleyballSettingsTests(unittest.TestCase):
     def test_default_does_not_start_volleyball(self):
         settings = load_settings({})
@@ -98,6 +121,12 @@ class VolleyballSettingsTests(unittest.TestCase):
                 }
             )
 
+    def test_v95_requires_two_bookmakers_by_default(self):
+        self.assertEqual(
+            load_volleyball_settings(require_key=False).minimum_bookmakers,
+            2,
+        )
+
 
 class VolleyballDomainTests(unittest.TestCase):
     def test_settlement_uses_sets_and_handles_void(self):
@@ -114,6 +143,30 @@ class VolleyballDomainTests(unittest.TestCase):
         prediction = model.predict("home", "away")
         self.assertGreater(prediction.home_probability, 0.5)
         self.assertGreater(prediction.home_rating, prediction.away_rating)
+
+    def test_no_vig_consensus_uses_only_complete_valid_bookmaker_pairs(self):
+        quotes = [
+            quote("one", "HOME", 1.80),
+            quote("one", "AWAY", 2.20),
+            quote("two", "HOME", 1.90),
+            quote("two", "AWAY", 2.00),
+            quote("incomplete", "HOME", 99.0),
+            quote("invalid", "HOME", 1.01),
+            quote("invalid", "AWAY", 1.01),
+        ]
+        eligible = eligible_match_winner_quotes(quotes)
+        self.assertEqual({item.bookmaker_id for item in eligible}, {"one", "two"})
+        consensus = build_no_vig_consensus(quotes)
+        self.assertIsNotNone(consensus)
+        self.assertEqual(consensus.bookmaker_count, 2)
+        self.assertAlmostEqual(
+            consensus.home_probability + consensus.away_probability,
+            1.0,
+            places=7,
+        )
+        self.assertEqual(consensus.best_home_odds, 1.90)
+        self.assertEqual(consensus.best_away_odds, 2.20)
+        self.assertGreaterEqual(consensus.probability_dispersion, 0.0)
 
 
 class VolleyballStorageTests(unittest.TestCase):
@@ -423,6 +476,182 @@ class VolleyballStorageTests(unittest.TestCase):
             self.assertEqual(coverage["feature_snapshots"], 0)
             self.assertEqual(coverage["feature_quarantined"], 1)
             self.assertEqual(coverage["feature_leakage_rate"], 1.0)
+
+    def test_market_consensus_closing_line_and_clv_are_immutable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            target = game(
+                game_id="clv-target",
+                status="NS",
+                home_sets=None,
+                away_sets=None,
+                scheduled_at="2026-12-10T18:00:00+00:00",
+            )
+            storage.upsert_games([target])
+
+            early = build_no_vig_consensus(
+                [
+                    quote(
+                        "one", "HOME", 2.00, game_id=target.game_id,
+                        observed_at="2026-12-05T12:00:00+00:00",
+                    ),
+                    quote(
+                        "one", "AWAY", 1.90, game_id=target.game_id,
+                        observed_at="2026-12-05T12:00:00+00:00",
+                    ),
+                    quote(
+                        "two", "HOME", 1.95, game_id=target.game_id,
+                        observed_at="2026-12-05T12:00:00+00:00",
+                    ),
+                    quote(
+                        "two", "AWAY", 1.95, game_id=target.game_id,
+                        observed_at="2026-12-05T12:00:00+00:00",
+                    ),
+                ]
+            )
+            closing_source = build_no_vig_consensus(
+                [
+                    quote(
+                        "one", "HOME", 1.80, game_id=target.game_id,
+                        observed_at="2026-12-10T17:00:00+00:00",
+                    ),
+                    quote(
+                        "one", "AWAY", 2.15, game_id=target.game_id,
+                        observed_at="2026-12-10T17:00:00+00:00",
+                    ),
+                    quote(
+                        "two", "HOME", 1.85, game_id=target.game_id,
+                        observed_at="2026-12-10T17:00:00+00:00",
+                    ),
+                    quote(
+                        "two", "AWAY", 2.10, game_id=target.game_id,
+                        observed_at="2026-12-10T17:00:00+00:00",
+                    ),
+                ]
+            )
+            after_start = build_no_vig_consensus(
+                [
+                    quote(
+                        "one", "HOME", 1.50, game_id=target.game_id,
+                        observed_at="2026-12-10T19:00:00+00:00",
+                    ),
+                    quote(
+                        "one", "AWAY", 2.80, game_id=target.game_id,
+                        observed_at="2026-12-10T19:00:00+00:00",
+                    ),
+                ]
+            )
+            self.assertIsNotNone(early)
+            self.assertIsNotNone(closing_source)
+            self.assertIsNotNone(after_start)
+            _, early_key = storage.record_market_consensus(early.payload())
+            _, closing_key = storage.record_market_consensus(
+                closing_source.payload()
+            )
+            storage.record_market_consensus(after_start.payload())
+
+            payload = pick_payload(game_id=target.game_id)
+            payload["market_consensus_key"] = early_key
+            payload["bookmaker_odds"] = 2.0
+            self.assertTrue(storage.create_shadow_pick(payload))
+            with storage.connect() as connection:
+                link = connection.execute(
+                    "SELECT * FROM pick_market_links"
+                ).fetchone()
+                self.assertEqual(link["consensus_key"], early_key)
+
+            finished = game(
+                game_id=target.game_id,
+                scheduled_at=target.scheduled_at,
+            )
+            storage.upsert_games([finished])
+            opened = storage.open_picks()[0]
+            self.assertTrue(
+                storage.close_pick(opened["pick_key"], "WON", 1.0, finished)
+            )
+            closed = storage.closed_picks()[0]
+            closing = storage.capture_closing_market(finished)
+            self.assertIsNotNone(closing)
+            self.assertEqual(closing["source_consensus_key"], closing_key)
+            self.assertEqual(
+                closing["observed_at"], "2026-12-10T17:00:00+00:00"
+            )
+            self.assertTrue(storage.record_pick_clv(closed, closing))
+            self.assertFalse(storage.record_pick_clv(closed, closing))
+            coverage = storage.coverage_summary()
+            self.assertEqual(coverage["closing_market_snapshots"], 1)
+            self.assertEqual(coverage["clv_samples"], 1)
+            self.assertEqual(coverage["market_linked_picks"], 1)
+            with storage.connect() as connection:
+                clv = connection.execute("SELECT * FROM pick_clv").fetchone()
+                self.assertAlmostEqual(
+                    clv["clv_price"],
+                    2.0 / closing["best_home_odds"] - 1.0,
+                    places=7,
+                )
+                with self.assertRaises(Exception):
+                    connection.execute(
+                        "UPDATE closing_market_snapshots SET lag_seconds=0"
+                    )
+                with self.assertRaises(Exception):
+                    connection.execute("DELETE FROM pick_clv")
+
+    def test_v95_migration_preserves_existing_v94_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            existing = game(
+                game_id="v94-existing",
+                status="NS",
+                home_sets=None,
+                away_sets=None,
+            )
+            storage.upsert_games([existing])
+            storage.create_shadow_pick(pick_payload(game_id=existing.game_id))
+            with storage.connect() as connection:
+                connection.execute("DROP TABLE pick_market_links")
+                connection.execute("DROP TABLE pick_clv")
+                connection.execute("DROP TABLE closing_market_snapshots")
+                connection.execute("DROP TABLE market_consensus_snapshots")
+            storage.initialize()
+            with storage.connect() as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM games WHERE game_id='v94-existing'"
+                    ).fetchone()[0],
+                    1,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM shadow_picks "
+                        "WHERE game_id='v94-existing'"
+                    ).fetchone()[0],
+                    1,
+                )
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        """
+                        SELECT name FROM sqlite_master
+                        WHERE type='table' AND name IN (
+                            'market_consensus_snapshots',
+                            'closing_market_snapshots',
+                            'pick_clv',
+                            'pick_market_links'
+                        )
+                        """
+                    ).fetchall()
+                }
+                self.assertEqual(
+                    tables,
+                    {
+                        "market_consensus_snapshots",
+                        "closing_market_snapshots",
+                        "pick_clv",
+                        "pick_market_links",
+                    },
+                )
 
     def test_v94_migration_preserves_existing_v93_rows(self):
         with tempfile.TemporaryDirectory() as temporary:
