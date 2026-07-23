@@ -19,16 +19,27 @@ except ModuleNotFoundError:
 from volleyball_v9.api_sports import ApiSportsVolleyballClient
 from volleyball_v9.config import load_volleyball_settings
 from volleyball_v9.domain import VolleyballGame
+from volleyball_v9.features import (
+    FeatureLeakageError,
+    build_point_in_time_features,
+)
 from volleyball_v9.identity import normalize_name, stable_key
 from volleyball_v9.model import VolleyballEloModel
 from volleyball_v9.settlement import settle_match_winner
 from volleyball_v9.storage import VolleyballStorage
 
 
-def game(*, game_id="1", status="FT", home_sets=3, away_sets=1):
+def game(
+    *,
+    game_id="1",
+    status="FT",
+    home_sets=3,
+    away_sets=1,
+    scheduled_at="2026-07-20T18:00:00+00:00",
+):
     return VolleyballGame(
         game_id=game_id,
-        scheduled_at="2026-07-20T18:00:00+00:00",
+        scheduled_at=scheduled_at,
         status=status,
         league_id="10",
         league_name="Test League",
@@ -278,6 +289,183 @@ class VolleyballStorageTests(unittest.TestCase):
                 self.assertEqual(summary["bad"], 1)
                 with self.assertRaises(Exception):
                     connection.execute("DELETE FROM settlement_audit")
+
+    def test_point_in_time_training_excludes_future_results(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            past = game(
+                game_id="past",
+                scheduled_at="2026-12-01T18:00:00+00:00",
+            )
+            future_result = game(
+                game_id="future-result",
+                scheduled_at="2026-12-06T18:00:00+00:00",
+            )
+            target = game(
+                game_id="target",
+                status="NS",
+                home_sets=None,
+                away_sets=None,
+                scheduled_at="2026-12-10T18:00:00+00:00",
+            )
+            storage.upsert_games([past, future_result, target])
+            training, metadata = storage.point_in_time_training_set(
+                target, "2026-12-05T12:00:00+00:00"
+            )
+            self.assertEqual([item.game_id for item in training], ["past"])
+            self.assertEqual(metadata["source_games"], 1)
+            self.assertLess(
+                metadata["source_max_scheduled_at"],
+                "2026-12-05T12:00:00+00:00",
+            )
+
+    def test_feature_snapshot_is_point_in_time_and_append_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            past = game(
+                game_id="feature-past",
+                scheduled_at="2026-12-01T18:00:00+00:00",
+            )
+            target = game(
+                game_id="feature-target",
+                status="NS",
+                home_sets=None,
+                away_sets=None,
+                scheduled_at="2026-12-10T18:00:00+00:00",
+            )
+            storage.upsert_games([past, target])
+            observed_at = "2026-12-05T12:00:00+00:00"
+            training, metadata = storage.point_in_time_training_set(
+                target, observed_at
+            )
+            bundle = build_point_in_time_features(
+                target,
+                training,
+                observed_at=observed_at,
+                model_version="test-pit-model",
+                source_metadata=metadata,
+            )
+            inserted, feature_key, status = storage.record_feature_snapshot(
+                bundle.payload
+            )
+            self.assertTrue(inserted)
+            self.assertEqual(status, "PASS")
+            self.assertTrue(feature_key)
+            inserted_again, same_key, _ = storage.record_feature_snapshot(
+                bundle.payload
+            )
+            self.assertFalse(inserted_again)
+            self.assertEqual(same_key, feature_key)
+            linked_pick = pick_payload(game_id=target.game_id)
+            linked_pick["feature_key"] = feature_key
+            linked_pick["feature_schema"] = bundle.payload["feature_schema"]
+            self.assertTrue(storage.create_shadow_pick(linked_pick))
+            with storage.connect() as connection:
+                row = connection.execute(
+                    "SELECT * FROM feature_snapshots WHERE feature_key=?",
+                    (feature_key,),
+                ).fetchone()
+                self.assertLess(row["source_max_scheduled_at"], row["feature_cutoff_at"])
+                self.assertLessEqual(row["source_max_observed_at"], row["observed_at"])
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM pick_feature_links WHERE feature_key=?",
+                        (feature_key,),
+                    ).fetchone()[0],
+                    1,
+                )
+                with self.assertRaises(Exception):
+                    connection.execute(
+                        "UPDATE feature_snapshots SET confidence=99 WHERE feature_key=?",
+                        (feature_key,),
+                    )
+
+    def test_feature_leakage_is_blocked_and_quarantined(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            target = game(
+                game_id="leak-target",
+                status="NS",
+                home_sets=None,
+                away_sets=None,
+                scheduled_at="2026-12-10T18:00:00+00:00",
+            )
+            storage.upsert_games([target])
+            with self.assertRaises(FeatureLeakageError):
+                build_point_in_time_features(
+                    target,
+                    [],
+                    observed_at="2026-12-10T18:00:00+00:00",
+                    model_version="test-pit-model",
+                    source_metadata={"source_games": 0},
+                )
+            valid = build_point_in_time_features(
+                target,
+                [],
+                observed_at="2026-12-05T12:00:00+00:00",
+                model_version="test-pit-model",
+                source_metadata={"source_games": 0},
+            ).payload
+            invalid = {
+                **valid,
+                "source_games": 1,
+                "source_max_scheduled_at": "2026-12-06T12:00:00+00:00",
+                "source_max_observed_at": "2026-12-06T12:00:00+00:00",
+            }
+            inserted, feature_key, status = storage.record_feature_snapshot(invalid)
+            self.assertFalse(inserted)
+            self.assertFalse(feature_key)
+            self.assertEqual(status, "BLOCKED")
+            coverage = storage.coverage_summary()
+            self.assertEqual(coverage["feature_snapshots"], 0)
+            self.assertEqual(coverage["feature_quarantined"], 1)
+            self.assertEqual(coverage["feature_leakage_rate"], 1.0)
+
+    def test_v94_migration_preserves_existing_v93_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            existing = game(
+                game_id="v93-existing",
+                status="NS",
+                home_sets=None,
+                away_sets=None,
+            )
+            storage.upsert_games([existing])
+            storage.create_shadow_pick(pick_payload(game_id=existing.game_id))
+            with storage.connect() as connection:
+                connection.execute("DROP TABLE pick_feature_links")
+                connection.execute("DROP TABLE feature_quarantine")
+                connection.execute("DROP TABLE feature_snapshots")
+            storage.initialize()
+            with storage.connect() as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM games WHERE game_id='v93-existing'"
+                    ).fetchone()[0],
+                    1,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM shadow_picks WHERE game_id='v93-existing'"
+                    ).fetchone()[0],
+                    1,
+                )
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        """
+                        SELECT name FROM sqlite_master
+                        WHERE type='table' AND name LIKE 'feature_%'
+                        """
+                    ).fetchall()
+                }
+                self.assertEqual(
+                    tables, {"feature_snapshots", "feature_quarantine"}
+                )
 
 
 class _FakeResponse:

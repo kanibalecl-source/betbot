@@ -11,6 +11,7 @@ from typing import Iterator, Iterable
 from storage_paths import DATA_DIR
 
 from .domain import OddsQuote, VolleyballGame, utc_now
+from .features import parse_utc
 from .identity import PROVIDER, identity_for, normalize_name, validate_game
 
 
@@ -205,6 +206,68 @@ class VolleyballStorage:
                 CREATE TRIGGER IF NOT EXISTS protect_settlement_audit_delete
                 BEFORE DELETE ON settlement_audit
                 BEGIN SELECT RAISE(ABORT, 'volleyball settlement audit is append-only'); END;
+                CREATE TABLE IF NOT EXISTS feature_snapshots (
+                    feature_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    game_id TEXT NOT NULL,
+                    feature_schema TEXT NOT NULL,
+                    model_version TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    feature_cutoff_at TEXT NOT NULL,
+                    scheduled_at TEXT NOT NULL,
+                    home_team_id TEXT NOT NULL,
+                    away_team_id TEXT NOT NULL,
+                    home_rating REAL NOT NULL,
+                    away_rating REAL NOT NULL,
+                    home_matches INTEGER NOT NULL,
+                    away_matches INTEGER NOT NULL,
+                    home_probability REAL NOT NULL,
+                    away_probability REAL NOT NULL,
+                    confidence REAL NOT NULL,
+                    source_games INTEGER NOT NULL,
+                    source_max_scheduled_at TEXT,
+                    source_max_observed_at TEXT,
+                    leakage_status TEXT NOT NULL CHECK(leakage_status='PASS'),
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    FOREIGN KEY(game_id) REFERENCES games(game_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_feature_snapshots_game_time
+                ON feature_snapshots(game_id, observed_at);
+                CREATE TABLE IF NOT EXISTS feature_quarantine (
+                    quarantine_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    game_id TEXT,
+                    reason TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    observed_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS pick_feature_links (
+                    pick_key TEXT PRIMARY KEY,
+                    feature_key TEXT NOT NULL,
+                    linked_at TEXT NOT NULL,
+                    FOREIGN KEY(pick_key) REFERENCES shadow_picks(pick_key),
+                    FOREIGN KEY(feature_key) REFERENCES feature_snapshots(feature_key)
+                );
+                CREATE TRIGGER IF NOT EXISTS protect_feature_snapshots_update
+                BEFORE UPDATE ON feature_snapshots
+                BEGIN SELECT RAISE(ABORT, 'volleyball feature snapshot is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_feature_snapshots_delete
+                BEFORE DELETE ON feature_snapshots
+                BEGIN SELECT RAISE(ABORT, 'volleyball feature snapshot is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_feature_quarantine_update
+                BEFORE UPDATE ON feature_quarantine
+                BEGIN SELECT RAISE(ABORT, 'volleyball feature quarantine is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_feature_quarantine_delete
+                BEFORE DELETE ON feature_quarantine
+                BEGIN SELECT RAISE(ABORT, 'volleyball feature quarantine is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_pick_feature_links_update
+                BEFORE UPDATE ON pick_feature_links
+                BEGIN SELECT RAISE(ABORT, 'volleyball pick feature link is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_pick_feature_links_delete
+                BEFORE DELETE ON pick_feature_links
+                BEGIN SELECT RAISE(ABORT, 'volleyball pick feature link is immutable'); END;
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -453,6 +516,15 @@ class VolleyballStorage:
             settlement_mismatches = connection.execute(
                 "SELECT COUNT(*) FROM settlement_audit WHERE audit_status='MISMATCH'"
             ).fetchone()[0]
+            feature_snapshots = connection.execute(
+                "SELECT COUNT(*) FROM feature_snapshots"
+            ).fetchone()[0]
+            feature_quarantined = connection.execute(
+                "SELECT COUNT(*) FROM feature_quarantine"
+            ).fetchone()[0]
+            feature_linked_picks = connection.execute(
+                "SELECT COUNT(*) FROM pick_feature_links"
+            ).fetchone()[0]
         eligible = max(0, int(games) - int(finished))
         return {
             "games_total": int(games),
@@ -473,7 +545,188 @@ class VolleyballStorage:
             ) if int(identities) + int(quarantined) else 0.0,
             "settlement_audits": int(settlement_audits),
             "settlement_mismatches": int(settlement_mismatches),
+            "feature_snapshots": int(feature_snapshots),
+            "feature_quarantined": int(feature_quarantined),
+            "feature_linked_picks": int(feature_linked_picks),
+            "feature_leakage_rate": round(
+                int(feature_quarantined)
+                / (int(feature_snapshots) + int(feature_quarantined)),
+                6,
+            ) if int(feature_snapshots) + int(feature_quarantined) else 0.0,
         }
+
+    def point_in_time_training_set(
+        self, target: VolleyballGame, observed_at: str
+    ) -> tuple[list[VolleyballGame], dict]:
+        observed = parse_utc(observed_at)
+        scheduled = parse_utc(target.scheduled_at)
+        if observed >= scheduled:
+            return [], {
+                "source_games": 0,
+                "source_max_scheduled_at": None,
+                "source_max_observed_at": None,
+                "rejection_reason": "feature_observed_at_not_before_match",
+            }
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM games
+                WHERE home_sets IS NOT NULL AND away_sets IS NOT NULL
+                ORDER BY scheduled_at, game_id
+                """
+            ).fetchall()
+        eligible: list[VolleyballGame] = []
+        source_scheduled: list[str] = []
+        source_observed: list[str] = []
+        for row in rows:
+            try:
+                game_time = parse_utc(str(row["scheduled_at"]))
+                source_time = parse_utc(str(row["updated_at"]))
+            except ValueError:
+                continue
+            if game_time >= observed or source_time > observed:
+                continue
+            eligible.append(
+                VolleyballGame(
+                    game_id=row["game_id"], scheduled_at=row["scheduled_at"],
+                    status=row["status"], league_id=row["league_id"] or "",
+                    league_name=row["league_name"] or "UNKNOWN",
+                    country=row["country"] or "", season=row["season"] or "",
+                    home_team_id=row["home_team_id"], home_team=row["home_team"],
+                    away_team_id=row["away_team_id"], away_team=row["away_team"],
+                    home_sets=row["home_sets"], away_sets=row["away_sets"],
+                    raw=json.loads(row["raw_json"]),
+                )
+            )
+            source_scheduled.append(str(row["scheduled_at"]))
+            source_observed.append(str(row["updated_at"]))
+        return eligible, {
+            "source_games": len(eligible),
+            "source_max_scheduled_at": max(source_scheduled) if source_scheduled else None,
+            "source_max_observed_at": max(source_observed) if source_observed else None,
+            "rejection_reason": None,
+        }
+
+    @staticmethod
+    def _feature_leakage_reasons(payload: dict) -> list[str]:
+        reasons: list[str] = []
+        try:
+            observed = parse_utc(str(payload["observed_at"]))
+            cutoff = parse_utc(str(payload["feature_cutoff_at"]))
+            scheduled = parse_utc(str(payload["scheduled_at"]))
+        except (KeyError, TypeError, ValueError):
+            return ["invalid_feature_timestamps"]
+        if observed >= scheduled:
+            reasons.append("feature_observed_at_not_before_match")
+        if cutoff > observed:
+            reasons.append("feature_cutoff_after_observation")
+        if cutoff >= scheduled:
+            reasons.append("feature_cutoff_not_before_match")
+        source_games = int(payload.get("source_games", 0) or 0)
+        source_scheduled = payload.get("source_max_scheduled_at")
+        source_observed = payload.get("source_max_observed_at")
+        if source_games:
+            if not source_scheduled or not source_observed:
+                reasons.append("missing_source_provenance")
+            else:
+                try:
+                    if parse_utc(str(source_scheduled)) >= cutoff:
+                        reasons.append("source_game_not_before_feature_cutoff")
+                    if parse_utc(str(source_observed)) > observed:
+                        reasons.append("source_observed_after_feature")
+                except ValueError:
+                    reasons.append("invalid_source_timestamps")
+        probability = float(payload.get("home_probability", -1))
+        away_probability = float(payload.get("away_probability", -1))
+        if not (0.0 < probability < 1.0 and 0.0 < away_probability < 1.0):
+            reasons.append("invalid_probability")
+        if abs((probability + away_probability) - 1.0) > 0.000001:
+            reasons.append("probabilities_not_normalized")
+        return sorted(set(reasons))
+
+    def record_feature_snapshot(self, payload: dict) -> tuple[bool, str, str]:
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        payload_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+        reasons = self._feature_leakage_reasons(payload)
+        if reasons:
+            reason = ",".join(reasons)
+            self.record_feature_rejection(
+                game_id=str(payload.get("game_id") or ""),
+                observed_at=str(payload.get("observed_at") or utc_now()),
+                reason=reason,
+                details=payload,
+            )
+            return False, "", "BLOCKED"
+        raw_key = "|".join(
+            [
+                str(payload["game_id"]), str(payload["feature_schema"]),
+                str(payload["model_version"]), str(payload["observed_at"]),
+                payload_hash,
+            ]
+        )
+        feature_key = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO feature_snapshots (
+                    feature_key, game_id, feature_schema, model_version,
+                    observed_at, feature_cutoff_at, scheduled_at,
+                    home_team_id, away_team_id, home_rating, away_rating,
+                    home_matches, away_matches, home_probability,
+                    away_probability, confidence, source_games,
+                    source_max_scheduled_at, source_max_observed_at,
+                    leakage_status, payload_sha256, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    feature_key, payload["game_id"], payload["feature_schema"],
+                    payload["model_version"], payload["observed_at"],
+                    payload["feature_cutoff_at"], payload["scheduled_at"],
+                    payload["home_team_id"], payload["away_team_id"],
+                    payload["home_rating"], payload["away_rating"],
+                    payload["home_matches"], payload["away_matches"],
+                    payload["home_probability"], payload["away_probability"],
+                    payload["confidence"], payload["source_games"],
+                    payload.get("source_max_scheduled_at"),
+                    payload.get("source_max_observed_at"), "PASS",
+                    payload_hash, serialized,
+                ),
+            )
+        return cursor.rowcount == 1, feature_key, "PASS"
+
+    def record_feature_rejection(
+        self,
+        *,
+        game_id: str,
+        observed_at: str,
+        reason: str,
+        details: dict | None = None,
+    ) -> bool:
+        payload = {
+            "game_id": game_id,
+            "feature_observed_at": observed_at,
+            "reason": reason,
+            "details": details or {},
+        }
+        serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        payload_hash = hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+        quarantine_key = hashlib.sha256(
+            f"{game_id}|{reason}|{payload_hash}".encode("utf-8")
+        ).hexdigest()
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO feature_quarantine (
+                    quarantine_key, game_id, reason, payload_sha256,
+                    payload_json, observed_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    quarantine_key, game_id or None, reason, payload_hash,
+                    serialized, utc_now(),
+                ),
+            )
+        return cursor.rowcount == 1
 
     def odds_refresh_due(self, game_id: str, refresh_hours: int) -> bool:
         with self.connect() as connection:
@@ -525,6 +778,14 @@ class VolleyballStorage:
                     json.dumps(payload, ensure_ascii=False, sort_keys=True),
                 ),
             )
+            if cursor.rowcount == 1 and payload.get("feature_key"):
+                connection.execute(
+                    """
+                    INSERT INTO pick_feature_links (pick_key, feature_key, linked_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (key, payload["feature_key"], utc_now()),
+                )
             return cursor.rowcount == 1
 
     def open_picks(self) -> list[sqlite3.Row]:

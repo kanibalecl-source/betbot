@@ -1,0 +1,48 @@
+BETBOT SERVER PATCH v9.4 - VOLLEYBALL POINT-IN-TIME FEATURE STORE
+
+REQUIRES
+- Successfully deployed and verified v9.3.
+- Volleyball remains shadow-only.
+
+PURPOSE
+- Make every volleyball prediction reproducible from an immutable feature snapshot.
+- Ensure the model uses only information available before prediction time.
+- Block and preserve evidence of every detected future-data leakage attempt.
+
+SAFETY CONTRACT
+- Football source, history, models and execution are unchanged.
+- Existing volleyball schema is migrated additively; no table or row is deleted.
+- Existing v9.0-v9.3 picks and evidence are not rewritten.
+- Feature snapshots, quarantine records and pick links are append-only.
+- Training, model promotion and real execution remain disabled.
+
+CHANGES
+- Point-in-time training set is rebuilt separately for each target match.
+- Finished source games must be scheduled before the feature observation time.
+- Source rows must have been observed no later than the feature observation time.
+- Feature observation and cutoff must be strictly before target match start.
+- Probabilities are validated and must be normalized.
+- Every accepted snapshot stores ratings, sample sizes, probabilities, confidence,
+  cutoff, model version and complete source-time provenance.
+- Every new v9.4 pick is linked immutably to its exact feature snapshot.
+- Invalid snapshots are blocked and written to append-only feature quarantine.
+- Health output reports snapshot, linked-pick, quarantine and leakage-rate counts.
+
+FILES
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/features.py
+- volleyball_v9/storage.py
+- volleyball_v9/runtime.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_4_VOLLEYBALL_POINT_IN_TIME_FEATURES.txt
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+
+DEPLOYMENT GATE
+1. Confirm BACKUP_CREATED before process startup.
+2. Confirm HEARTBEAT v9.4 includes volleyball_shadow=True.
+3. Confirm VOLLEYBALL v9.4 SHADOW START with the existing safe variables.
+4. Confirm the first cycle is HEALTHY and football_data_modified=false.
+5. Confirm feature_leakage_rate is 0.0 under normal operation.
+6. Confirm new picks have feature links whenever odds create an eligible pick.
+7. Do not proceed to v9.5 if feature quarantine contains an unexplained entry.

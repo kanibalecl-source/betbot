@@ -8,13 +8,17 @@ from . import SCHEMA_VERSION
 from .api_sports import ApiSportsVolleyballClient, VolleyballProviderError
 from .config import load_volleyball_settings
 from .domain import VolleyballGame, utc_now
-from .model import VolleyballEloModel
+from .features import (
+    FEATURE_SCHEMA_VERSION,
+    FeatureLeakageError,
+    build_point_in_time_features,
+)
 from .settlement import profit_for_result, settle_match_winner
 from .storage import VolleyballStorage
 
 
 MODEL_VERSION = "volleyball-elo-shadow-v1"
-RUNTIME_VERSION = "9.3"
+RUNTIME_VERSION = "9.4"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
@@ -60,12 +64,12 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
     if settings.backfill_days and days_failed == 0:
         storage.set_state("initial_backfill_complete", "1")
 
-    model = VolleyballEloModel()
-    model.fit(storage.load_games(finished_only=True))
     picks_created = 0
     quotes_saved = 0
     odds_attempted = 0
     odds_failed = 0
+    features_saved = 0
+    features_quarantined = 0
     for game in games:
         if game.finished or game.status.upper() not in {"NS", "NOT_STARTED", "TBD"}:
             continue
@@ -78,7 +82,36 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             odds_failed += 1
             continue
         quotes_saved += storage.save_odds(quotes)
-        prediction = model.predict(game.home_team_id, game.away_team_id)
+        feature_observed_at = utc_now()
+        training_games, source_metadata = storage.point_in_time_training_set(
+            game, feature_observed_at
+        )
+        try:
+            bundle = build_point_in_time_features(
+                game,
+                training_games,
+                observed_at=feature_observed_at,
+                model_version=MODEL_VERSION,
+                source_metadata=source_metadata,
+            )
+        except FeatureLeakageError as exc:
+            features_quarantined += int(
+                storage.record_feature_rejection(
+                    game_id=game.game_id,
+                    observed_at=feature_observed_at,
+                    reason=str(exc),
+                    details=source_metadata,
+                )
+            )
+            continue
+        inserted, feature_key, feature_status = storage.record_feature_snapshot(
+            bundle.payload
+        )
+        features_saved += int(inserted)
+        if feature_status != "PASS":
+            features_quarantined += 1
+            continue
+        prediction = bundle.prediction
         for outcome, quote in _best_quotes(quotes).items():
             probability = (
                 prediction.home_probability if outcome == "HOME"
@@ -107,6 +140,8 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
                 "edge": round(edge, 8),
                 "confidence": prediction.confidence,
                 "model_version": MODEL_VERSION,
+                "feature_key": feature_key,
+                "feature_schema": FEATURE_SCHEMA_VERSION,
                 "home_rating": prediction.home_rating,
                 "away_rating": prediction.away_rating,
                 "home_matches": prediction.home_matches,
@@ -161,6 +196,8 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "days_failed": days_failed,
         "odds_attempted": odds_attempted,
         "odds_failed": odds_failed,
+        "features_saved": features_saved,
+        "features_quarantined": features_quarantined,
         "coverage": coverage,
         "real_execution_allowed": False,
         "football_data_modified": False,
