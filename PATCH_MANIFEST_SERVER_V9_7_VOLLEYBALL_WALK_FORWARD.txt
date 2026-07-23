@@ -1,0 +1,86 @@
+BETBOT SERVER PATCH v9.7 - VOLLEYBALL WALK-FORWARD CHAMPION-CHALLENGER
+
+REQUIRES
+- Successfully deployed and verified v9.6.
+- Volleyball remains shadow-only.
+- The isolated volleyball SQLite database is on the persistent Railway volume.
+
+PURPOSE
+- Validate every reproducible volleyball candidate on later, unseen matches.
+- Compare the challenger with the fixed current Elo champion.
+- Measure out-of-sample Brier score, log loss and calibration.
+- Store every validation as immutable evidence for v9.8 stability controls.
+
+SAFETY CONTRACT
+- Football source, history, models, databases and execution are unchanged.
+- Existing volleyball schema is migrated additively; no table or row is deleted.
+- A validation never changes the active model.
+- Automatic promotion and real execution remain disabled.
+- A positive result still requires manual approval.
+- With fewer than 100 eligible games, v9.7 remains in the expected
+  WAITING_REPRODUCIBLE_CANDIDATE state.
+
+VALIDATION CONTRACT
+- Expanding-window chronological folds.
+- Default minimum: 40 earlier training games, 20 later test games, 3 folds.
+- Matches sharing a timestamp are never split across train and test.
+- Every probability is emitted before that match result updates either model.
+- Candidate and champion are scored on exactly the same observations.
+- Paired deterministic bootstrap confidence intervals are calculated for
+  Brier and log-loss improvement.
+- Positive validation requires:
+  * enough out-of-sample folds,
+  * strict chronological separation,
+  * positive lower 95% CI for Brier improvement,
+  * positive lower 95% CI for log-loss improvement,
+  * calibration not worse than the champion,
+  * a reproducible candidate.
+
+OPTIONAL VARIABLES
+- BETBOT_VOLLEYBALL_VALIDATION_MIN_TRAIN_GAMES=40
+- BETBOT_VOLLEYBALL_VALIDATION_MIN_TEST_GAMES=20
+- BETBOT_VOLLEYBALL_VALIDATION_MIN_FOLDS=3
+- BETBOT_VOLLEYBALL_VALIDATION_MAX_FOLDS=5
+Defaults are active automatically; no Railway variable change is required.
+
+NEW HEALTH FIELDS
+- walk_forward_status
+- walk_forward_validation_created
+- walk_forward_validation_id
+- walk_forward_candidate_id
+- walk_forward_folds
+- walk_forward_oos_samples
+- walk_forward_brier_improvement
+- walk_forward_log_loss_improvement
+- walk_forward_calibration_improvement
+- walk_forward_positive_validation
+- walk_forward_manual_approval_required=true
+- coverage.model_validations
+- coverage.positive_walk_forward_validations
+- coverage.validation_registry_integrity
+- coverage.automatic_model_promotions=0
+- coverage.validation_active_model_changes=0
+
+FILES
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/config.py
+- volleyball_v9/runtime.py
+- volleyball_v9/storage.py
+- volleyball_v9/validation.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_7_VOLLEYBALL_WALK_FORWARD.txt
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+
+DEPLOYMENT GATE
+1. Confirm BACKUP_CREATED before process startup.
+2. Confirm HEARTBEAT v9.7 includes volleyball_shadow=True.
+3. Confirm VOLLEYBALL v9.7 SHADOW START.
+4. Confirm the first cycle is HEALTHY and football_data_modified=false.
+5. Before a candidate exists, confirm:
+   walk_forward_status=WAITING_REPRODUCIBLE_CANDIDATE,
+   model_validations=0 and active_model_modified=false.
+6. After a candidate exists, confirm validation_registry_integrity=true,
+   automatic_model_promotions=0 and validation_active_model_changes=0.
+7. Do not treat REJECTED_OR_REVIEW or NO_ENOUGH_DATA as a deployment failure.
+   They are correct statistical safety outcomes.

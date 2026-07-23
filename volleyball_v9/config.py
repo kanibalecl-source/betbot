@@ -39,6 +39,10 @@ class VolleyballSettings:
     minimum_bookmakers: int
     training_min_games: int
     training_min_new_games: int
+    validation_min_train_games: int
+    validation_min_test_games: int
+    validation_min_folds: int
+    validation_max_folds: int
 
 
 def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
@@ -76,11 +80,28 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
         training_min_new_games=int(
             _float("BETBOT_VOLLEYBALL_TRAIN_MIN_NEW_GAMES", 25, 1, 10000)
         ),
+        validation_min_train_games=int(
+            _float("BETBOT_VOLLEYBALL_VALIDATION_MIN_TRAIN_GAMES", 40, 20, 100000)
+        ),
+        validation_min_test_games=int(
+            _float("BETBOT_VOLLEYBALL_VALIDATION_MIN_TEST_GAMES", 20, 10, 10000)
+        ),
+        validation_min_folds=int(
+            _float("BETBOT_VOLLEYBALL_VALIDATION_MIN_FOLDS", 3, 2, 10)
+        ),
+        validation_max_folds=int(
+            _float("BETBOT_VOLLEYBALL_VALIDATION_MAX_FOLDS", 5, 2, 20)
+        ),
     )
     if settings.enabled and not settings.shadow_only:
         raise VolleyballConfigurationError("Volleyball v9.0 must remain shadow-only")
     if settings.enabled and require_key and not settings.api_key:
         raise VolleyballConfigurationError(
             "VOLLEYBALL_API_SPORTS_KEY is required when volleyball is enabled"
+        )
+    if settings.validation_max_folds < settings.validation_min_folds:
+        raise VolleyballConfigurationError(
+            "BETBOT_VOLLEYBALL_VALIDATION_MAX_FOLDS must be at least "
+            "BETBOT_VOLLEYBALL_VALIDATION_MIN_FOLDS"
         )
     return settings

@@ -346,6 +346,31 @@ class VolleyballStorage:
                 );
                 CREATE INDEX IF NOT EXISTS idx_model_candidates_dataset
                 ON model_candidates(dataset_sha256, created_at);
+                CREATE TABLE IF NOT EXISTS model_validations (
+                    validation_id TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    candidate_id TEXT NOT NULL,
+                    validation_schema TEXT NOT NULL,
+                    method TEXT NOT NULL CHECK(method='expanding_window_walk_forward'),
+                    fold_count INTEGER NOT NULL,
+                    oos_samples INTEGER NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN (
+                        'NO_ENOUGH_DATA',
+                        'REJECTED_OR_REVIEW',
+                        'POSITIVE_VALIDATION_MANUAL_APPROVAL'
+                    )),
+                    brier_improvement REAL NOT NULL,
+                    log_loss_improvement REAL NOT NULL,
+                    calibration_improvement REAL NOT NULL,
+                    report_sha256 TEXT NOT NULL UNIQUE,
+                    report_json TEXT NOT NULL,
+                    automatic_promotion INTEGER NOT NULL CHECK(automatic_promotion=0),
+                    active_model_modified INTEGER NOT NULL CHECK(active_model_modified=0),
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(candidate_id) REFERENCES model_candidates(candidate_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_model_validations_candidate
+                ON model_validations(candidate_id, created_at);
                 CREATE TRIGGER IF NOT EXISTS protect_feature_snapshots_update
                 BEFORE UPDATE ON feature_snapshots
                 BEGIN SELECT RAISE(ABORT, 'volleyball feature snapshot is append-only'); END;
@@ -400,6 +425,12 @@ class VolleyballStorage:
                 CREATE TRIGGER IF NOT EXISTS protect_model_candidates_delete
                 BEFORE DELETE ON model_candidates
                 BEGIN SELECT RAISE(ABORT, 'volleyball candidate is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_validations_update
+                BEFORE UPDATE ON model_validations
+                BEGIN SELECT RAISE(ABORT, 'volleyball validation is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_validations_delete
+                BEFORE DELETE ON model_validations
+                BEGIN SELECT RAISE(ABORT, 'volleyball validation is immutable'); END;
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -693,10 +724,30 @@ class VolleyballStorage:
             candidate_rows = connection.execute(
                 "SELECT artifact_sha256, artifact_json FROM model_candidates"
             ).fetchall()
+            validations = connection.execute(
+                """
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN status='POSITIVE_VALIDATION_MANUAL_APPROVAL'
+                                THEN 1 ELSE 0 END) AS positive,
+                       SUM(CASE WHEN automatic_promotion<>0 THEN 1 ELSE 0 END)
+                           AS automatic_promotions,
+                       SUM(CASE WHEN active_model_modified<>0 THEN 1 ELSE 0 END)
+                           AS active_changes
+                FROM model_validations
+                """
+            ).fetchone()
+            validation_rows = connection.execute(
+                "SELECT report_sha256, report_json FROM model_validations"
+            ).fetchall()
         registry_integrity = all(
             hashlib.sha256(str(row["artifact_json"]).encode("utf-8")).hexdigest()
             == str(row["artifact_sha256"])
             for row in candidate_rows
+        )
+        validation_integrity = all(
+            hashlib.sha256(str(row["report_json"]).encode("utf-8")).hexdigest()
+            == str(row["report_sha256"])
+            for row in validation_rows
         )
         eligible = max(0, int(games) - int(finished))
         return {
@@ -738,6 +789,17 @@ class VolleyballStorage:
             "reproducible_candidates": int(candidates["verified"] or 0),
             "model_registry_integrity": registry_integrity,
             "active_model_changes": int(candidates["active_changes"] or 0),
+            "model_validations": int(validations["total"] or 0),
+            "positive_walk_forward_validations": int(
+                validations["positive"] or 0
+            ),
+            "validation_registry_integrity": validation_integrity,
+            "automatic_model_promotions": int(
+                validations["automatic_promotions"] or 0
+            ),
+            "validation_active_model_changes": int(
+                validations["active_changes"] or 0
+            ),
         }
 
     def register_model_candidate(self, payload: dict) -> tuple[bool, str]:
@@ -831,6 +893,110 @@ class VolleyballStorage:
                 """
             ).fetchone()
         return 0 if row is None else int(row["row_count"])
+
+    def latest_model_candidate(self) -> dict | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT c.*, d.payload_json AS dataset_json
+                FROM model_candidates c
+                JOIN model_training_datasets d
+                  ON d.dataset_sha256=c.dataset_sha256
+                WHERE c.reproducible=1
+                  AND c.registry_status='CANDIDATE_ONLY'
+                  AND c.active_model_modified=0
+                ORDER BY c.created_at DESC, c.candidate_id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            dataset = json.loads(str(row["dataset_json"]))
+            artifact = json.loads(str(row["artifact_json"]))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        return {
+            "candidate_id": str(row["candidate_id"]),
+            "dataset_sha256": str(row["dataset_sha256"]),
+            "artifact_sha256": str(row["artifact_sha256"]),
+            "dataset_document": dataset,
+            "artifact": artifact,
+            "reproducible": bool(row["reproducible"]),
+            "active_model_modified": bool(row["active_model_modified"]),
+        }
+
+    def register_model_validation(self, payload: dict) -> tuple[bool, str]:
+        from .training import canonical_json, sha256_text
+        from .validation import VALIDATION_METHOD, VALIDATION_SCHEMA_VERSION
+
+        validation_id = str(payload.get("validation_id", ""))
+        candidate_id = str(payload.get("candidate_id", ""))
+        report_sha = str(payload.get("report_sha256", ""))
+        report = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"validation_id", "report_sha256", "validation_created"}
+        }
+        report_json = canonical_json(report)
+        expected_sha = sha256_text(report_json)
+        expected_id = f"volleyball_validation_{expected_sha[:24]}"
+        allowed_statuses = {
+            "NO_ENOUGH_DATA",
+            "REJECTED_OR_REVIEW",
+            "POSITIVE_VALIDATION_MANUAL_APPROVAL",
+        }
+        if (
+            validation_id != expected_id
+            or report_sha != expected_sha
+            or report.get("validation_schema") != VALIDATION_SCHEMA_VERSION
+            or report.get("method") != VALIDATION_METHOD
+            or report.get("status") not in allowed_statuses
+            or report.get("automatic_promotion") is not False
+            or report.get("active_model_modified") is not False
+            or report.get("manual_approval_required") is not True
+            or report.get("real_execution_allowed") is not False
+        ):
+            return False, ""
+        with self.connect() as connection:
+            candidate = connection.execute(
+                """
+                SELECT candidate_id FROM model_candidates
+                WHERE candidate_id=? AND reproducible=1
+                  AND registry_status='CANDIDATE_ONLY'
+                  AND active_model_modified=0
+                """,
+                (candidate_id,),
+            ).fetchone()
+            if candidate is None:
+                return False, ""
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO model_validations (
+                    validation_id, candidate_id, validation_schema, method,
+                    fold_count, oos_samples, status, brier_improvement,
+                    log_loss_improvement, calibration_improvement,
+                    report_sha256, report_json, automatic_promotion,
+                    active_model_modified, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?)
+                """,
+                (
+                    validation_id,
+                    candidate_id,
+                    VALIDATION_SCHEMA_VERSION,
+                    VALIDATION_METHOD,
+                    int(report.get("folds", 0)),
+                    int(report.get("oos_samples", 0)),
+                    str(report["status"]),
+                    float(report.get("brier_improvement", 0.0)),
+                    float(report.get("log_loss_improvement", 0.0)),
+                    float(report.get("calibration_improvement", 0.0)),
+                    report_sha,
+                    report_json,
+                    utc_now(),
+                ),
+            )
+        return cursor.rowcount == 1, validation_id
 
     def point_in_time_training_set(
         self, target: VolleyballGame, observed_at: str

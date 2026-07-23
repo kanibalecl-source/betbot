@@ -21,10 +21,11 @@ from .market import (
 from .settlement import profit_for_result, settle_match_winner
 from .storage import VolleyballStorage
 from .training import train_candidate
+from .validation import ValidationSettings, validate_candidate
 
 
 MODEL_VERSION = "volleyball-elo-shadow-v1"
-RUNTIME_VERSION = "9.6"
+RUNTIME_VERSION = "9.7"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
@@ -94,6 +95,24 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
                 "CANDIDATE_CREATED" if candidate_created
                 else "CANDIDATE_ALREADY_REGISTERED"
             )
+
+    registered_candidate = storage.latest_model_candidate()
+    validation = validate_candidate(
+        registered_candidate,
+        settings=ValidationSettings(
+            minimum_train_rows=settings.validation_min_train_games,
+            minimum_test_rows=settings.validation_min_test_games,
+            minimum_folds=settings.validation_min_folds,
+            maximum_folds=settings.validation_max_folds,
+        ),
+    )
+    validation_created = False
+    validation_id = str(validation.get("validation_id", ""))
+    if validation_id:
+        validation_created, validation_id = storage.register_model_validation(
+            validation
+        )
+    validation_status = str(validation.get("status", "WAITING_REPRODUCIBLE_CANDIDATE"))
 
     picks_created = 0
     quotes_saved = 0
@@ -285,6 +304,25 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "candidate_minimum_rows": candidate.minimum_rows,
         "candidate_previous_rows": previous_candidate_rows,
         "candidate_reproducible": candidate.reproducible,
+        "walk_forward_status": validation_status,
+        "walk_forward_validation_created": validation_created,
+        "walk_forward_validation_id": validation_id,
+        "walk_forward_candidate_id": str(validation.get("candidate_id", "")),
+        "walk_forward_folds": int(validation.get("folds", 0)),
+        "walk_forward_oos_samples": int(validation.get("oos_samples", 0)),
+        "walk_forward_brier_improvement": float(
+            validation.get("brier_improvement", 0.0)
+        ),
+        "walk_forward_log_loss_improvement": float(
+            validation.get("log_loss_improvement", 0.0)
+        ),
+        "walk_forward_calibration_improvement": float(
+            validation.get("calibration_improvement", 0.0)
+        ),
+        "walk_forward_positive_validation": bool(
+            validation.get("positive_validation", False)
+        ),
+        "walk_forward_manual_approval_required": True,
         "active_model_modified": False,
         "automatic_model_promotion_allowed": False,
         "coverage": coverage,

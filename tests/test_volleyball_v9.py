@@ -6,6 +6,7 @@ import sys
 import tempfile
 import types
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import app_launcher
@@ -36,6 +37,11 @@ from volleyball_v9.training import (
     build_training_dataset,
     train_candidate,
     verify_candidate,
+)
+from volleyball_v9.validation import (
+    ValidationSettings,
+    build_walk_forward_folds,
+    validate_candidate,
 )
 
 
@@ -123,6 +129,28 @@ def training_game(index: int) -> VolleyballGame:
     )
 
 
+def validation_game(index: int) -> VolleyballGame:
+    scheduled = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=index)
+    home = f"validation-team-{index % 6}"
+    away = f"validation-team-{(index + 1) % 6}"
+    return VolleyballGame(
+        game_id=f"validation-{index}",
+        scheduled_at=scheduled.isoformat(),
+        status="FT",
+        league_id=f"league-{index % 2}",
+        league_name="Validation League",
+        country="Poland",
+        season="2026",
+        home_team_id=home,
+        home_team=home,
+        away_team_id=away,
+        away_team=away,
+        home_sets=3 if index % 3 else 1,
+        away_sets=1 if index % 3 else 3,
+        raw={},
+    )
+
+
 class VolleyballSettingsTests(unittest.TestCase):
     def test_default_does_not_start_volleyball(self):
         settings = load_settings({})
@@ -159,6 +187,13 @@ class VolleyballSettingsTests(unittest.TestCase):
         settings = load_volleyball_settings(require_key=False)
         self.assertEqual(settings.training_min_games, 100)
         self.assertEqual(settings.training_min_new_games, 25)
+
+    def test_v97_walk_forward_defaults_are_conservative(self):
+        settings = load_volleyball_settings(require_key=False)
+        self.assertEqual(settings.validation_min_train_games, 40)
+        self.assertEqual(settings.validation_min_test_games, 20)
+        self.assertEqual(settings.validation_min_folds, 3)
+        self.assertEqual(settings.validation_max_folds, 5)
 
 
 class VolleyballDomainTests(unittest.TestCase):
@@ -224,6 +259,98 @@ class VolleyballDomainTests(unittest.TestCase):
         self.assertEqual(candidate.status, "WAITING_MINIMUM_SAMPLE")
         self.assertEqual(candidate.dataset_rows, 2)
         self.assertFalse(candidate.reproducible)
+
+
+class VolleyballWalkForwardTests(unittest.TestCase):
+    def _candidate(self, count=100):
+        bundle = train_candidate(
+            [validation_game(index) for index in range(count)],
+            minimum_rows=count,
+        )
+        self.assertTrue(bundle.reproducible)
+        return bundle.payload()
+
+    def test_validation_waits_without_reproducible_candidate(self):
+        report = validate_candidate(None)
+        self.assertEqual(report["status"], "WAITING_REPRODUCIBLE_CANDIDATE")
+        self.assertFalse(report["automatic_promotion"])
+        self.assertFalse(report["active_model_modified"])
+
+    def test_folds_are_strictly_chronological(self):
+        games = [validation_game(index) for index in range(100)]
+        settings = ValidationSettings(
+            minimum_train_rows=40,
+            minimum_test_rows=20,
+            minimum_folds=3,
+            maximum_folds=5,
+            bootstrap_samples=100,
+        )
+        folds = build_walk_forward_folds(games, settings)
+        self.assertEqual(len(folds), 3)
+        for training, testing in folds:
+            self.assertLess(
+                max(item.scheduled_at for item in training),
+                min(item.scheduled_at for item in testing),
+            )
+
+    def test_equal_timestamp_is_never_split_across_fold_boundary(self):
+        games = [validation_game(index) for index in range(100)]
+        paired = []
+        for index, item in enumerate(games):
+            paired.append(
+                VolleyballGame(
+                    **{
+                        **item.__dict__,
+                        "scheduled_at": games[index - index % 2].scheduled_at,
+                    }
+                )
+            )
+        folds = build_walk_forward_folds(
+            paired,
+            ValidationSettings(
+                minimum_train_rows=40,
+                minimum_test_rows=20,
+                minimum_folds=3,
+                maximum_folds=5,
+                bootstrap_samples=100,
+            ),
+        )
+        for training, testing in folds:
+            self.assertNotEqual(
+                training[-1].scheduled_at,
+                testing[0].scheduled_at,
+            )
+
+    def test_identical_challenger_is_rejected_and_never_promoted(self):
+        report = validate_candidate(
+            self._candidate(),
+            settings=ValidationSettings(bootstrap_samples=200),
+        )
+        self.assertEqual(report["folds"], 3)
+        self.assertEqual(report["oos_samples"], 60)
+        self.assertEqual(report["status"], "REJECTED_OR_REVIEW")
+        self.assertFalse(report["positive_validation"])
+        self.assertFalse(report["automatic_promotion"])
+        self.assertTrue(report["manual_approval_required"])
+        self.assertFalse(report["active_model_modified"])
+        self.assertEqual(report["brier_improvement"], 0.0)
+        self.assertEqual(report["log_loss_improvement"], 0.0)
+        self.assertTrue(report["gates"]["chronological_no_leakage"])
+
+    def test_insufficient_candidate_never_passes(self):
+        report = validate_candidate(
+            self._candidate(60),
+            settings=ValidationSettings(
+                minimum_train_rows=40,
+                minimum_test_rows=20,
+                minimum_folds=3,
+                maximum_folds=5,
+                bootstrap_samples=100,
+            ),
+        )
+        self.assertEqual(report["status"], "NO_ENOUGH_DATA")
+        self.assertFalse(report["positive_validation"])
+        self.assertFalse(report["automatic_promotion"])
 
 
 class VolleyballStorageTests(unittest.TestCase):
@@ -712,6 +839,76 @@ class VolleyballStorageTests(unittest.TestCase):
             self.assertFalse(inserted)
             self.assertFalse(candidate_id)
             self.assertEqual(storage.coverage_summary()["model_candidates"], 0)
+
+    def test_v97_validation_registry_is_idempotent_and_immutable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = train_candidate(
+                [validation_game(index) for index in range(100)],
+                minimum_rows=100,
+            )
+            inserted, candidate_id = storage.register_model_candidate(
+                candidate.payload()
+            )
+            self.assertTrue(inserted)
+            registered = storage.latest_model_candidate()
+            self.assertEqual(registered["candidate_id"], candidate_id)
+            report = validate_candidate(
+                registered,
+                settings=ValidationSettings(bootstrap_samples=100),
+            )
+            created, validation_id = storage.register_model_validation(report)
+            self.assertTrue(created)
+            self.assertEqual(validation_id, report["validation_id"])
+            created_again, same_id = storage.register_model_validation(report)
+            self.assertFalse(created_again)
+            self.assertEqual(same_id, validation_id)
+            coverage = storage.coverage_summary()
+            self.assertEqual(coverage["model_validations"], 1)
+            self.assertEqual(coverage["positive_walk_forward_validations"], 0)
+            self.assertTrue(coverage["validation_registry_integrity"])
+            self.assertEqual(coverage["automatic_model_promotions"], 0)
+            self.assertEqual(coverage["validation_active_model_changes"], 0)
+            with storage.connect() as connection:
+                with self.assertRaises(Exception):
+                    connection.execute(
+                        "UPDATE model_validations SET status='NO_ENOUGH_DATA'"
+                    )
+                with self.assertRaises(Exception):
+                    connection.execute("DELETE FROM model_validations")
+
+    def test_v97_migration_preserves_existing_v96_registry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = train_candidate(
+                [validation_game(index) for index in range(100)],
+                minimum_rows=100,
+            )
+            inserted, candidate_id = storage.register_model_candidate(
+                candidate.payload()
+            )
+            self.assertTrue(inserted)
+            with storage.connect() as connection:
+                connection.execute("DROP TABLE model_validations")
+            storage.initialize()
+            with storage.connect() as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM model_candidates WHERE candidate_id=?",
+                        (candidate_id,),
+                    ).fetchone()[0],
+                    1,
+                )
+                self.assertIsNotNone(
+                    connection.execute(
+                        """
+                        SELECT name FROM sqlite_master
+                        WHERE type='table' AND name='model_validations'
+                        """
+                    ).fetchone()
+                )
 
     def test_v96_migration_preserves_existing_v95_rows(self):
         with tempfile.TemporaryDirectory() as temporary:

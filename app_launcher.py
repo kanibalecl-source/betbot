@@ -162,7 +162,7 @@ class ProcessSupervisor:
 
 def main() -> int:
     settings = load_settings()
-    print("APP LAUNCHER v9.6 START", flush=True)
+    print("APP LAUNCHER v9.7 START", flush=True)
     print(
         f"CONFIG VALID schema={settings.schema_version} fingerprint={settings.fingerprint()}",
         flush=True,
@@ -182,7 +182,7 @@ def main() -> int:
             states = supervisor.tick()
             supervisor.write_health(states)
             state_text = " | ".join(f"{name}={alive}" for name, alive in states.items())
-            print(f"HEARTBEAT v9.6 | {state_text}", flush=True)
+            print(f"HEARTBEAT v9.7 | {state_text}", flush=True)
             time.sleep(settings.heartbeat_seconds)
         except Exception as exc:
             print(f"APP LAUNCHER ERROR: {exc}", flush=True)
