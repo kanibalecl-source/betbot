@@ -1,0 +1,78 @@
+BETBOT SERVER PATCH v9.6 - VOLLEYBALL CANDIDATE TRAINING AND MODEL REGISTRY
+
+REQUIRES
+- Successfully deployed and verified v9.5.
+- Volleyball remains shadow-only.
+- The isolated volleyball SQLite database is on the persistent Railway volume.
+
+PURPOSE
+- Create deterministic volleyball model candidates from verified finished games.
+- Make every candidate exactly reproducible from an immutable training dataset.
+- Build the registry required by v9.7 walk-forward Champion-Challenger testing.
+
+SAFETY CONTRACT
+- Football source, history, models, databases and execution are unchanged.
+- Existing volleyball schema is migrated additively; no table or row is deleted.
+- Existing v9.0-v9.5 games, odds, picks, features, market snapshots and CLV are
+  not rewritten.
+- Training datasets and candidates are append-only and protected by triggers.
+- A v9.6 candidate is never loaded by the prediction runtime.
+- Automatic promotion and real execution remain disabled.
+
+TRAINING CONTRACT
+- Only finished matches with valid non-draw set scores are eligible.
+- Rows are sorted chronologically and contain only stable match identity, teams,
+  league, season, scheduled time and final set scores.
+- Raw provider payloads and bookmaker odds are excluded.
+- The first candidate requires 100 eligible matches by default.
+- A later candidate requires 25 additional eligible matches by default.
+- Dataset JSON, dataset SHA-256, hyperparameters, learned Elo state and artifact
+  SHA-256 are stored together in the isolated volleyball database.
+- Re-training on identical rows must create the exact same candidate ID and
+  artifact SHA-256.
+- A modified or non-reproducible candidate is refused before registry insertion.
+
+OPTIONAL VARIABLES
+- BETBOT_VOLLEYBALL_TRAIN_MIN_GAMES=100
+- BETBOT_VOLLEYBALL_TRAIN_MIN_NEW_GAMES=25
+Defaults are active automatically; no Railway variable change is required.
+
+NEW HEALTH FIELDS
+- candidate_training_status
+- candidate_created
+- candidate_id
+- candidate_dataset_rows
+- candidate_minimum_rows
+- candidate_previous_rows
+- candidate_reproducible
+- active_model_modified=false
+- automatic_model_promotion_allowed=false
+- coverage.model_training_datasets
+- coverage.model_candidates
+- coverage.reproducible_candidates
+- coverage.model_registry_integrity
+- coverage.active_model_changes
+
+FILES
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/config.py
+- volleyball_v9/model.py
+- volleyball_v9/training.py
+- volleyball_v9/storage.py
+- volleyball_v9/runtime.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_6_VOLLEYBALL_CANDIDATE_REGISTRY.txt
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+
+DEPLOYMENT GATE
+1. Confirm BACKUP_CREATED before process startup.
+2. Confirm HEARTBEAT v9.6 includes volleyball_shadow=True.
+3. Confirm VOLLEYBALL v9.6 SHADOW START.
+4. Confirm the first cycle is HEALTHY and football_data_modified=false.
+5. Before 100 eligible matches, confirm WAITING_MINIMUM_SAMPLE and zero active
+   model changes; this is expected.
+6. After the threshold, confirm candidate_reproducible=true,
+   model_registry_integrity=true and active_model_changes=0.
+7. Do not proceed to v9.7 until at least one reproducible candidate exists and
+   the v9.5 closing-line coverage gate is satisfied.

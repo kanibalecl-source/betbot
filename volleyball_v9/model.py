@@ -37,6 +37,18 @@ class VolleyballEloModel:
             self.matches[game.home_team_id] = self.matches.get(game.home_team_id, 0) + 1
             self.matches[game.away_team_id] = self.matches.get(game.away_team_id, 0) + 1
 
+    def export_state(self) -> dict:
+        return {
+            "ratings": {
+                key: round(float(value), 12)
+                for key, value in sorted(self.ratings.items())
+            },
+            "matches": {
+                key: int(value)
+                for key, value in sorted(self.matches.items())
+            },
+        }
+
     def predict(self, home_team_id: str, away_team_id: str) -> ModelPrediction:
         home_rating = self._rating(home_team_id)
         away_rating = self._rating(away_team_id)
@@ -60,4 +72,3 @@ class VolleyballEloModel:
             away_matches=away_matches,
             confidence=confidence,
         )
-

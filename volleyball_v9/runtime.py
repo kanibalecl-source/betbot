@@ -20,10 +20,11 @@ from .market import (
 )
 from .settlement import profit_for_result, settle_match_winner
 from .storage import VolleyballStorage
+from .training import train_candidate
 
 
 MODEL_VERSION = "volleyball-elo-shadow-v1"
-RUNTIME_VERSION = "9.5"
+RUNTIME_VERSION = "9.6"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
@@ -68,6 +69,31 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
     storage.upsert_games(games)
     if settings.backfill_days and days_failed == 0:
         storage.set_state("initial_backfill_complete", "1")
+
+    previous_candidate_rows = storage.latest_candidate_dataset_rows()
+    candidate_required_rows = (
+        settings.training_min_games
+        if previous_candidate_rows == 0
+        else previous_candidate_rows + settings.training_min_new_games
+    )
+    candidate = train_candidate(
+        storage.load_games(),
+        minimum_rows=candidate_required_rows,
+    )
+    candidate_created = False
+    candidate_id = candidate.candidate_id
+    candidate_status = candidate.status
+    if candidate.status == "CANDIDATE_READY":
+        if not candidate.reproducible:
+            candidate_status = "BLOCKED_NOT_REPRODUCIBLE"
+        else:
+            candidate_created, candidate_id = storage.register_model_candidate(
+                candidate.payload()
+            )
+            candidate_status = (
+                "CANDIDATE_CREATED" if candidate_created
+                else "CANDIDATE_ALREADY_REGISTERED"
+            )
 
     picks_created = 0
     quotes_saved = 0
@@ -252,6 +278,15 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "market_consensus_saved": market_consensus_saved,
         "market_insufficient_books": market_insufficient_books,
         "clv_recorded": clv_recorded,
+        "candidate_training_status": candidate_status,
+        "candidate_created": candidate_created,
+        "candidate_id": candidate_id,
+        "candidate_dataset_rows": candidate.dataset_rows,
+        "candidate_minimum_rows": candidate.minimum_rows,
+        "candidate_previous_rows": previous_candidate_rows,
+        "candidate_reproducible": candidate.reproducible,
+        "active_model_modified": False,
+        "automatic_model_promotion_allowed": False,
         "coverage": coverage,
         "real_execution_allowed": False,
         "football_data_modified": False,

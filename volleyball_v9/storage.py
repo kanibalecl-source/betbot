@@ -316,6 +316,36 @@ class VolleyballStorage:
                     FOREIGN KEY(consensus_key)
                         REFERENCES market_consensus_snapshots(consensus_key)
                 );
+                CREATE TABLE IF NOT EXISTS model_training_datasets (
+                    dataset_sha256 TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    training_schema TEXT NOT NULL,
+                    row_count INTEGER NOT NULL,
+                    first_scheduled_at TEXT,
+                    last_scheduled_at TEXT,
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    registered_at TEXT NOT NULL,
+                    CHECK(dataset_sha256=payload_sha256)
+                );
+                CREATE TABLE IF NOT EXISTS model_candidates (
+                    candidate_id TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    dataset_sha256 TEXT NOT NULL,
+                    candidate_schema TEXT NOT NULL,
+                    algorithm TEXT NOT NULL,
+                    hyperparameters_json TEXT NOT NULL,
+                    artifact_sha256 TEXT NOT NULL UNIQUE,
+                    artifact_json TEXT NOT NULL,
+                    reproducible INTEGER NOT NULL CHECK(reproducible=1),
+                    registry_status TEXT NOT NULL CHECK(registry_status='CANDIDATE_ONLY'),
+                    active_model_modified INTEGER NOT NULL CHECK(active_model_modified=0),
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(dataset_sha256)
+                        REFERENCES model_training_datasets(dataset_sha256)
+                );
+                CREATE INDEX IF NOT EXISTS idx_model_candidates_dataset
+                ON model_candidates(dataset_sha256, created_at);
                 CREATE TRIGGER IF NOT EXISTS protect_feature_snapshots_update
                 BEFORE UPDATE ON feature_snapshots
                 BEGIN SELECT RAISE(ABORT, 'volleyball feature snapshot is append-only'); END;
@@ -358,6 +388,18 @@ class VolleyballStorage:
                 CREATE TRIGGER IF NOT EXISTS protect_pick_market_links_delete
                 BEFORE DELETE ON pick_market_links
                 BEGIN SELECT RAISE(ABORT, 'volleyball pick market link is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_training_datasets_update
+                BEFORE UPDATE ON model_training_datasets
+                BEGIN SELECT RAISE(ABORT, 'volleyball training dataset is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_training_datasets_delete
+                BEFORE DELETE ON model_training_datasets
+                BEGIN SELECT RAISE(ABORT, 'volleyball training dataset is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_candidates_update
+                BEFORE UPDATE ON model_candidates
+                BEGIN SELECT RAISE(ABORT, 'volleyball candidate is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_candidates_delete
+                BEFORE DELETE ON model_candidates
+                BEGIN SELECT RAISE(ABORT, 'volleyball candidate is immutable'); END;
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -637,6 +679,25 @@ class VolleyballStorage:
             market_linked_picks = connection.execute(
                 "SELECT COUNT(*) FROM pick_market_links"
             ).fetchone()[0]
+            training_datasets = connection.execute(
+                "SELECT COUNT(*) FROM model_training_datasets"
+            ).fetchone()[0]
+            candidates = connection.execute(
+                """
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN reproducible=1 THEN 1 ELSE 0 END) AS verified,
+                       SUM(CASE WHEN active_model_modified<>0 THEN 1 ELSE 0 END) AS active_changes
+                FROM model_candidates
+                """
+            ).fetchone()
+            candidate_rows = connection.execute(
+                "SELECT artifact_sha256, artifact_json FROM model_candidates"
+            ).fetchall()
+        registry_integrity = all(
+            hashlib.sha256(str(row["artifact_json"]).encode("utf-8")).hexdigest()
+            == str(row["artifact_sha256"])
+            for row in candidate_rows
+        )
         eligible = max(0, int(games) - int(finished))
         return {
             "games_total": int(games),
@@ -672,7 +733,104 @@ class VolleyballStorage:
             "average_clv_price": round(float(clv["average_price"] or 0.0), 8),
             "average_clv_fair": round(float(clv["average_fair"] or 0.0), 8),
             "market_linked_picks": int(market_linked_picks),
+            "model_training_datasets": int(training_datasets),
+            "model_candidates": int(candidates["total"] or 0),
+            "reproducible_candidates": int(candidates["verified"] or 0),
+            "model_registry_integrity": registry_integrity,
+            "active_model_changes": int(candidates["active_changes"] or 0),
         }
+
+    def register_model_candidate(self, payload: dict) -> tuple[bool, str]:
+        from .training import (
+            CANDIDATE_SCHEMA_VERSION,
+            CandidateBundle,
+            TRAINING_SCHEMA_VERSION,
+            canonical_json,
+            sha256_text,
+            verify_candidate,
+        )
+
+        dataset = payload.get("dataset_document")
+        artifact = payload.get("artifact")
+        if not isinstance(dataset, dict) or not isinstance(artifact, dict):
+            return False, ""
+        dataset_json = canonical_json(dataset)
+        artifact_json = canonical_json(artifact)
+        dataset_sha = sha256_text(dataset_json)
+        artifact_sha = sha256_text(artifact_json)
+        candidate_id = f"volleyball_candidate_{artifact_sha[:24]}"
+        verification_bundle = CandidateBundle(
+            status="CANDIDATE_READY",
+            dataset_sha256=dataset_sha,
+            dataset_rows=int(dataset.get("row_count", -1)),
+            minimum_rows=int(payload.get("minimum_rows", 1)),
+            dataset_document=dataset,
+            artifact=artifact,
+            artifact_sha256=artifact_sha,
+            candidate_id=candidate_id,
+            reproducible=True,
+        )
+        if (
+            dataset_sha != payload.get("dataset_sha256")
+            or artifact_sha != payload.get("artifact_sha256")
+            or candidate_id != payload.get("candidate_id")
+            or dataset.get("schema_version") != TRAINING_SCHEMA_VERSION
+            or artifact.get("schema_version") != CANDIDATE_SCHEMA_VERSION
+            or artifact.get("registry_status") != "CANDIDATE_ONLY"
+            or artifact.get("active_model_modified") is not False
+            or artifact.get("dataset", {}).get("sha256") != dataset_sha
+            or int(dataset.get("row_count", -1)) != len(dataset.get("rows", []))
+            or payload.get("reproducible") is not True
+            or not verify_candidate(verification_bundle)
+        ):
+            return False, ""
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO model_training_datasets (
+                    dataset_sha256, training_schema, row_count,
+                    first_scheduled_at, last_scheduled_at, payload_sha256,
+                    payload_json, registered_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    dataset_sha, TRAINING_SCHEMA_VERSION, dataset["row_count"],
+                    dataset.get("first_scheduled_at"),
+                    dataset.get("last_scheduled_at"), dataset_sha,
+                    dataset_json, utc_now(),
+                ),
+            )
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO model_candidates (
+                    candidate_id, dataset_sha256, candidate_schema, algorithm,
+                    hyperparameters_json, artifact_sha256, artifact_json,
+                    reproducible, registry_status, active_model_modified,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'CANDIDATE_ONLY', 0, ?)
+                """,
+                (
+                    candidate_id, dataset_sha, CANDIDATE_SCHEMA_VERSION,
+                    artifact["algorithm"],
+                    canonical_json(artifact["hyperparameters"]),
+                    artifact_sha, artifact_json, utc_now(),
+                ),
+            )
+        return cursor.rowcount == 1, candidate_id
+
+    def latest_candidate_dataset_rows(self) -> int:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT d.row_count
+                FROM model_candidates c
+                JOIN model_training_datasets d
+                  ON d.dataset_sha256=c.dataset_sha256
+                ORDER BY c.created_at DESC, c.candidate_id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return 0 if row is None else int(row["row_count"])
 
     def point_in_time_training_set(
         self, target: VolleyballGame, observed_at: str

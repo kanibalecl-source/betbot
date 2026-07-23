@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 import tempfile
 import types
@@ -31,6 +32,11 @@ from volleyball_v9.market import (
 from volleyball_v9.model import VolleyballEloModel
 from volleyball_v9.settlement import settle_match_winner
 from volleyball_v9.storage import VolleyballStorage
+from volleyball_v9.training import (
+    build_training_dataset,
+    train_candidate,
+    verify_candidate,
+)
 
 
 def game(
@@ -95,6 +101,28 @@ def quote(
     )
 
 
+def training_game(index: int) -> VolleyballGame:
+    return VolleyballGame(
+        game_id=f"training-{index}",
+        scheduled_at=f"2026-01-{index + 1:02d}T18:00:00+00:00",
+        status="FT",
+        league_id="training-league",
+        league_name="Training League",
+        country="Poland",
+        season="2026",
+        home_team_id=f"team-{index % 3}",
+        home_team=f"Team {index % 3}",
+        away_team_id=f"team-{(index + 1) % 3}",
+        away_team=f"Team {(index + 1) % 3}",
+        home_sets=3 if index % 2 == 0 else 1,
+        away_sets=1 if index % 2 == 0 else 3,
+        raw={
+            "private_provider_payload": f"raw-{index}",
+            "bookmaker_odds": 9.99,
+        },
+    )
+
+
 class VolleyballSettingsTests(unittest.TestCase):
     def test_default_does_not_start_volleyball(self):
         settings = load_settings({})
@@ -126,6 +154,11 @@ class VolleyballSettingsTests(unittest.TestCase):
             load_volleyball_settings(require_key=False).minimum_bookmakers,
             2,
         )
+
+    def test_v96_requires_minimum_training_sample_by_default(self):
+        settings = load_volleyball_settings(require_key=False)
+        self.assertEqual(settings.training_min_games, 100)
+        self.assertEqual(settings.training_min_new_games, 25)
 
 
 class VolleyballDomainTests(unittest.TestCase):
@@ -167,6 +200,30 @@ class VolleyballDomainTests(unittest.TestCase):
         self.assertEqual(consensus.best_home_odds, 1.90)
         self.assertEqual(consensus.best_away_odds, 2.20)
         self.assertGreaterEqual(consensus.probability_dispersion, 0.0)
+
+    def test_candidate_artifact_is_reproducible_and_odds_free(self):
+        games = [training_game(index) for index in range(5)]
+        first = train_candidate(games, minimum_rows=5)
+        second = train_candidate(reversed(games), minimum_rows=5)
+        self.assertEqual(first.status, "CANDIDATE_READY")
+        self.assertTrue(first.reproducible)
+        self.assertTrue(verify_candidate(first))
+        self.assertEqual(first.dataset_sha256, second.dataset_sha256)
+        self.assertEqual(first.artifact_sha256, second.artifact_sha256)
+        self.assertEqual(first.candidate_id, second.candidate_id)
+        serialized = json.dumps(first.dataset_document).lower()
+        self.assertNotIn("bookmaker_odds", serialized)
+        self.assertNotIn("private_provider_payload", serialized)
+        self.assertFalse(first.artifact["active_model_modified"])
+
+    def test_candidate_waits_for_minimum_sample(self):
+        candidate = train_candidate(
+            [training_game(0), training_game(1)],
+            minimum_rows=3,
+        )
+        self.assertEqual(candidate.status, "WAITING_MINIMUM_SAMPLE")
+        self.assertEqual(candidate.dataset_rows, 2)
+        self.assertFalse(candidate.reproducible)
 
 
 class VolleyballStorageTests(unittest.TestCase):
@@ -596,6 +653,110 @@ class VolleyballStorageTests(unittest.TestCase):
                     )
                 with self.assertRaises(Exception):
                     connection.execute("DELETE FROM pick_clv")
+
+    def test_model_candidate_registry_is_idempotent_and_immutable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = train_candidate(
+                [training_game(index) for index in range(5)],
+                minimum_rows=5,
+            )
+            inserted, candidate_id = storage.register_model_candidate(
+                candidate.payload()
+            )
+            self.assertTrue(inserted)
+            self.assertEqual(candidate_id, candidate.candidate_id)
+            inserted_again, same_id = storage.register_model_candidate(
+                candidate.payload()
+            )
+            self.assertFalse(inserted_again)
+            self.assertEqual(same_id, candidate_id)
+            coverage = storage.coverage_summary()
+            self.assertEqual(coverage["model_training_datasets"], 1)
+            self.assertEqual(coverage["model_candidates"], 1)
+            self.assertEqual(coverage["reproducible_candidates"], 1)
+            self.assertTrue(coverage["model_registry_integrity"])
+            self.assertEqual(coverage["active_model_changes"], 0)
+            self.assertEqual(storage.latest_candidate_dataset_rows(), 5)
+            with storage.connect() as connection:
+                with self.assertRaises(Exception):
+                    connection.execute(
+                        "UPDATE model_candidates SET registry_status='ACTIVE'"
+                    )
+                with self.assertRaises(Exception):
+                    connection.execute("DELETE FROM model_training_datasets")
+
+    def test_model_registry_rejects_tampered_candidate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = train_candidate(
+                [training_game(index) for index in range(4)],
+                minimum_rows=4,
+            ).payload()
+            candidate["artifact"]["state"]["ratings"]["team-0"] = 9999.0
+            artifact_json = json.dumps(
+                candidate["artifact"],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            candidate["artifact_sha256"] = hashlib.sha256(
+                artifact_json.encode("utf-8")
+            ).hexdigest()
+            candidate["candidate_id"] = (
+                f"volleyball_candidate_{candidate['artifact_sha256'][:24]}"
+            )
+            inserted, candidate_id = storage.register_model_candidate(candidate)
+            self.assertFalse(inserted)
+            self.assertFalse(candidate_id)
+            self.assertEqual(storage.coverage_summary()["model_candidates"], 0)
+
+    def test_v96_migration_preserves_existing_v95_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            existing = game(
+                game_id="v95-existing",
+                status="NS",
+                home_sets=None,
+                away_sets=None,
+            )
+            storage.upsert_games([existing])
+            storage.create_shadow_pick(pick_payload(game_id=existing.game_id))
+            with storage.connect() as connection:
+                connection.execute("DROP TABLE model_candidates")
+                connection.execute("DROP TABLE model_training_datasets")
+            storage.initialize()
+            with storage.connect() as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM games WHERE game_id='v95-existing'"
+                    ).fetchone()[0],
+                    1,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM shadow_picks "
+                        "WHERE game_id='v95-existing'"
+                    ).fetchone()[0],
+                    1,
+                )
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        """
+                        SELECT name FROM sqlite_master
+                        WHERE type='table' AND name IN (
+                            'model_training_datasets', 'model_candidates'
+                        )
+                        """
+                    ).fetchall()
+                }
+                self.assertEqual(
+                    tables, {"model_training_datasets", "model_candidates"}
+                )
 
     def test_v95_migration_preserves_existing_v94_rows(self):
         with tempfile.TemporaryDirectory() as temporary:
