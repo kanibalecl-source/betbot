@@ -1,0 +1,45 @@
+BETBOT SERVER PATCH v9.2 - VOLLEYBALL IDENTITY & DATA QUARANTINE
+
+REQUIRES
+- Successfully deployed v9.1.
+- Volleyball remains shadow-only.
+
+PURPOSE
+- Give every team and league a stable provider-scoped identity.
+- Prevent malformed or duplicated rows from reaching the learning dataset.
+- Preserve rejected evidence for diagnosis instead of deleting it.
+
+SAFETY CONTRACT
+- Football source, history, models and execution are unchanged.
+- Existing volleyball data is migrated additively; no table or row is deleted.
+- Existing v9.1 games receive identities automatically on startup.
+- Quarantine is append-only and covered by the deployment backup.
+- Training, model promotion and real execution remain disabled.
+
+CHANGES
+- Unicode-safe normalization of team and league names.
+- Stable canonical keys based on sport, provider, entity type and provider ID.
+- Game fingerprints detect duplicate provider records.
+- Validation rejects missing identities, impossible team pairings, invalid
+  timestamps, impossible set scores and tied finished matches.
+- New identity tables for teams, leagues and games.
+- New append-only identity_quarantine table.
+- Coverage health includes identity acceptance and quarantine counts.
+
+FILES
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/identity.py
+- volleyball_v9/storage.py
+- volleyball_v9/runtime.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_2_VOLLEYBALL_IDENTITY_QUALITY.txt
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+
+DEPLOYMENT GATE
+1. Confirm BACKUP_CREATED before process startup.
+2. Confirm HEARTBEAT v9.2 includes volleyball_shadow=True.
+3. Confirm VOLLEYBALL v9.2 SHADOW START poll=120m backfill=1d.
+4. Confirm the first cycle is HEALTHY and football_data_modified=false.
+5. Inspect identity_acceptance_rate and quarantine reasons.
+6. Do not proceed to v9.3 if valid provider rows are quarantined unexpectedly.

@@ -14,7 +14,7 @@ from .storage import VolleyballStorage
 
 
 MODEL_VERSION = "volleyball-elo-shadow-v1"
-RUNTIME_VERSION = "9.1"
+RUNTIME_VERSION = "9.2"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):

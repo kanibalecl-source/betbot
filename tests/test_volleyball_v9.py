@@ -19,6 +19,7 @@ except ModuleNotFoundError:
 from volleyball_v9.api_sports import ApiSportsVolleyballClient
 from volleyball_v9.config import load_volleyball_settings
 from volleyball_v9.domain import VolleyballGame
+from volleyball_v9.identity import normalize_name, stable_key
 from volleyball_v9.model import VolleyballEloModel
 from volleyball_v9.settlement import settle_match_winner
 from volleyball_v9.storage import VolleyballStorage
@@ -137,6 +138,76 @@ class VolleyballStorageTests(unittest.TestCase):
             coverage = storage.coverage_summary()
             self.assertEqual(coverage["odds_quotes"], 1)
             self.assertEqual(coverage["games_with_odds"], 1)
+
+    def test_identities_are_stable_and_created_for_valid_games(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            self.assertEqual(storage.upsert_games([game()]), 1)
+            with storage.connect() as connection:
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM team_identities").fetchone()[0],
+                    2,
+                )
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM league_identities").fetchone()[0],
+                    1,
+                )
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM game_identities").fetchone()[0],
+                    1,
+                )
+            self.assertEqual(
+                stable_key("team", "home", "Home"),
+                stable_key("team", "home", "Renamed Home"),
+            )
+            self.assertEqual(normalize_name("  Śląsk   Wrocław "), "śląsk wrocław")
+
+    def test_invalid_and_duplicate_games_are_quarantined_append_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            valid = game(game_id="valid")
+            duplicate = VolleyballGame(
+                **{**valid.__dict__, "game_id": "duplicate", "raw": {"id": "duplicate"}}
+            )
+            invalid = VolleyballGame(
+                **{
+                    **valid.__dict__,
+                    "game_id": "invalid",
+                    "away_team_id": valid.home_team_id,
+                    "away_team": valid.home_team,
+                    "raw": {"id": "invalid"},
+                }
+            )
+            self.assertEqual(storage.upsert_games([valid, duplicate, invalid]), 1)
+            with storage.connect() as connection:
+                rows = connection.execute(
+                    "SELECT quarantine_key, reason FROM identity_quarantine ORDER BY reason"
+                ).fetchall()
+                self.assertEqual(len(rows), 2)
+                reasons = " ".join(row["reason"] for row in rows)
+                self.assertIn("duplicate_fingerprint", reasons)
+                self.assertIn("same_team_id", reasons)
+                with self.assertRaises(Exception):
+                    connection.execute(
+                        "DELETE FROM identity_quarantine WHERE quarantine_key=?",
+                        (rows[0]["quarantine_key"],),
+                    )
+
+    def test_initialize_backfills_identities_for_existing_v91_games(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            storage.upsert_games([game(game_id="legacy")])
+            with storage.connect() as connection:
+                connection.execute("DELETE FROM game_identities WHERE game_id='legacy'")
+            storage.initialize()
+            with storage.connect() as connection:
+                count = connection.execute(
+                    "SELECT COUNT(*) FROM game_identities WHERE game_id='legacy'"
+                ).fetchone()[0]
+            self.assertEqual(count, 1)
 
 
 class _FakeResponse:

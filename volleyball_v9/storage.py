@@ -11,6 +11,7 @@ from typing import Iterator, Iterable
 from storage_paths import DATA_DIR
 
 from .domain import OddsQuote, VolleyballGame, utc_now
+from .identity import PROVIDER, identity_for, normalize_name, validate_game
 
 
 def volleyball_data_dir(root: str | Path | None = None) -> Path:
@@ -131,6 +132,57 @@ class VolleyballStorage:
                 );
                 CREATE INDEX IF NOT EXISTS idx_provider_calls_endpoint_time
                 ON provider_calls(endpoint, observed_at);
+                CREATE TABLE IF NOT EXISTS team_identities (
+                    canonical_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    provider TEXT NOT NULL,
+                    source_team_id TEXT NOT NULL,
+                    normalized_name TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    first_seen_at TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL,
+                    UNIQUE(provider, source_team_id)
+                );
+                CREATE TABLE IF NOT EXISTS league_identities (
+                    canonical_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    provider TEXT NOT NULL,
+                    source_league_id TEXT NOT NULL,
+                    normalized_name TEXT NOT NULL,
+                    display_name TEXT NOT NULL,
+                    country TEXT,
+                    first_seen_at TEXT NOT NULL,
+                    last_seen_at TEXT NOT NULL,
+                    UNIQUE(provider, source_league_id)
+                );
+                CREATE TABLE IF NOT EXISTS game_identities (
+                    game_id TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    home_team_key TEXT NOT NULL,
+                    away_team_key TEXT NOT NULL,
+                    league_key TEXT NOT NULL,
+                    game_fingerprint TEXT NOT NULL UNIQUE,
+                    observed_at TEXT NOT NULL,
+                    FOREIGN KEY(game_id) REFERENCES games(game_id),
+                    FOREIGN KEY(home_team_key) REFERENCES team_identities(canonical_key),
+                    FOREIGN KEY(away_team_key) REFERENCES team_identities(canonical_key),
+                    FOREIGN KEY(league_key) REFERENCES league_identities(canonical_key)
+                );
+                CREATE TABLE IF NOT EXISTS identity_quarantine (
+                    quarantine_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    game_id TEXT,
+                    reason TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    observed_at TEXT NOT NULL
+                );
+                CREATE TRIGGER IF NOT EXISTS protect_identity_quarantine_update
+                BEFORE UPDATE ON identity_quarantine
+                BEGIN SELECT RAISE(ABORT, 'volleyball identity quarantine is append-only'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_identity_quarantine_delete
+                BEFORE DELETE ON identity_quarantine
+                BEGIN SELECT RAISE(ABORT, 'volleyball identity quarantine is append-only'); END;
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -147,11 +199,39 @@ class VolleyballStorage:
                 BEGIN SELECT RAISE(ABORT, 'volleyball evidence is append-only'); END;
                 """
             )
+            missing_identities = connection.execute(
+                """
+                SELECT COUNT(*) FROM games g
+                LEFT JOIN game_identities i ON i.game_id=g.game_id
+                WHERE i.game_id IS NULL
+                """
+            ).fetchone()[0]
+        if missing_identities:
+            self.upsert_games(self.load_games())
 
     def upsert_games(self, games: Iterable[VolleyballGame]) -> int:
         count = 0
         with self.connect() as connection:
             for game in games:
+                reasons = validate_game(game)
+                if reasons:
+                    self._quarantine(connection, game, ",".join(reasons))
+                    continue
+                identity = identity_for(game)
+                duplicate = connection.execute(
+                    """
+                    SELECT game_id FROM game_identities
+                    WHERE game_fingerprint=? AND game_id<>?
+                    """,
+                    (identity.fingerprint, game.game_id),
+                ).fetchone()
+                if duplicate is not None:
+                    self._quarantine(
+                        connection,
+                        game,
+                        f"duplicate_fingerprint_existing_game:{duplicate['game_id']}",
+                    )
+                    continue
                 connection.execute(
                     """
                     INSERT INTO games (
@@ -176,8 +256,87 @@ class VolleyballStorage:
                         json.dumps(game.raw, ensure_ascii=False, sort_keys=True), utc_now(),
                     ),
                 )
+                now = utc_now()
+                for canonical_key, source_id, display_name in (
+                    (identity.team_home_key, game.home_team_id, game.home_team),
+                    (identity.team_away_key, game.away_team_id, game.away_team),
+                ):
+                    connection.execute(
+                        """
+                        INSERT INTO team_identities (
+                            canonical_key, provider, source_team_id, normalized_name,
+                            display_name, first_seen_at, last_seen_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(provider, source_team_id) DO UPDATE SET
+                            normalized_name=excluded.normalized_name,
+                            display_name=excluded.display_name,
+                            last_seen_at=excluded.last_seen_at
+                        """,
+                        (
+                            canonical_key, PROVIDER, source_id,
+                            normalize_name(display_name), display_name, now, now,
+                        ),
+                    )
+                connection.execute(
+                    """
+                    INSERT INTO league_identities (
+                        canonical_key, provider, source_league_id, normalized_name,
+                        display_name, country, first_seen_at, last_seen_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(provider, source_league_id) DO UPDATE SET
+                        normalized_name=excluded.normalized_name,
+                        display_name=excluded.display_name,
+                        country=excluded.country,
+                        last_seen_at=excluded.last_seen_at
+                    """,
+                    (
+                        identity.league_key, PROVIDER, game.league_id,
+                        normalize_name(game.league_name), game.league_name,
+                        game.country, now, now,
+                    ),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO game_identities (
+                        game_id, home_team_key, away_team_key, league_key,
+                        game_fingerprint, observed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(game_id) DO UPDATE SET
+                        home_team_key=excluded.home_team_key,
+                        away_team_key=excluded.away_team_key,
+                        league_key=excluded.league_key,
+                        game_fingerprint=excluded.game_fingerprint,
+                        observed_at=excluded.observed_at
+                    """,
+                    (
+                        game.game_id, identity.team_home_key, identity.team_away_key,
+                        identity.league_key, identity.fingerprint, now,
+                    ),
+                )
                 count += 1
         return count
+
+    @staticmethod
+    def _quarantine(
+        connection: sqlite3.Connection, game: VolleyballGame, reason: str
+    ) -> None:
+        payload = json.dumps(game.raw, ensure_ascii=False, sort_keys=True)
+        payload_sha = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        quarantine_key = hashlib.sha256(
+            f"{game.game_id}|{reason}|{payload_sha}".encode("utf-8")
+        ).hexdigest()
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO identity_quarantine (
+                quarantine_key, game_id, reason, payload_sha256,
+                payload_json, observed_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                quarantine_key, game.game_id or None, reason, payload_sha,
+                payload, utc_now(),
+            ),
+        )
 
     def load_games(self, *, finished_only: bool = False) -> list[VolleyballGame]:
         query = "SELECT * FROM games"
@@ -260,6 +419,12 @@ class VolleyballStorage:
                 FROM provider_calls
                 """
             ).fetchone()
+            quarantined = connection.execute(
+                "SELECT COUNT(*) FROM identity_quarantine"
+            ).fetchone()[0]
+            identities = connection.execute(
+                "SELECT COUNT(*) FROM game_identities"
+            ).fetchone()[0]
         eligible = max(0, int(games) - int(finished))
         return {
             "games_total": int(games),
@@ -273,6 +438,11 @@ class VolleyballStorage:
             "provider_calls": int(calls["total"] or 0),
             "provider_success": int(calls["ok"] or 0),
             "provider_failed": int(calls["failed"] or 0),
+            "identity_records": int(identities),
+            "identity_quarantined": int(quarantined),
+            "identity_acceptance_rate": round(
+                int(identities) / (int(identities) + int(quarantined)), 6
+            ) if int(identities) + int(quarantined) else 0.0,
         }
 
     def odds_refresh_due(self, game_id: str, refresh_hours: int) -> bool:
