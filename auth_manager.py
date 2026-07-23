@@ -149,7 +149,9 @@ def _login_css() -> None:
         .ka-metric strong {{ display:block; margin-top:7px; font:850 20px/1 Inter,Arial,sans-serif; }}
         .ka-metric.one {{ left:1.5vw; top:38%; }}
         .ka-metric.two {{ left:34%; top:23%; }}
-        .ka-metric.three {{ right:3%; top:23%; bottom:auto; }}
+        .ka-metric.three {{
+          left:calc(34% + clamp(124px,11vw,170px)); right:auto; top:23%; bottom:auto;
+        }}
 
         div[data-testid="stForm"] {{
           position:fixed!important; z-index:4!important;

@@ -1,0 +1,14 @@
+BETBOT SERVER v8.4 - LOGIN METRIC SPACING
+
+Zakres:
+- karta "Pewnosc 72%" przesunieta blizej karty "Value 48.0",
+- zachowany bezpieczny odstep zapobiegajacy nachodzeniu kart,
+- pozycja pozostaje responsywna wzgledem szerokosci wykresu.
+
+Pliki wdrozeniowe:
+- auth_manager.py
+
+Bezpieczenstwo:
+- brak plikow danych, historii, modeli, baz danych i danych logowania,
+- brak zmian w logice typowania, uczenia i rozliczania,
+- brak zmian w konfiguracji Railway.
