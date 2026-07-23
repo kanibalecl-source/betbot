@@ -1810,7 +1810,22 @@ def _render_quality_governance() -> None:
         return
     validation = status.get("candidate_validation", {})
     live = status.get("live_shadow", {})
+    work = DATA_DIR / "quality_retraining"
+    try:
+        scorecard = json.loads((work / "statistical_evidence_scorecard_v8.json").read_text(encoding="utf-8"))
+    except Exception:
+        scorecard = {}
+    try:
+        capital = json.loads((work / "staged_capital_governor_v8.json").read_text(encoding="utf-8"))
+    except Exception:
+        capital = {}
     with st.expander("CHAMPION–CHALLENGER | AUDYT I RĘCZNA PROMOCJA", expanded=True):
+        metrics([
+            ("Evidence v8", str(scorecard.get("status", "OCZEKUJE")), f"wynik: {scorecard.get('score', 0)}/{scorecard.get('maximum_score', 10)}"),
+            ("Kapitał v8", str(capital.get("current_stage", "SHADOW")), str(capital.get("status", "FAIL_CLOSED"))),
+            ("Gotowość", str(scorecard.get("capital_readiness", "NOT_READY")), "95% CI + CLV + yield"),
+            ("Egzekucja", "DOZWOLONA" if capital.get("execution_allowed") is True else "ZABLOKOWANA", "nie zmienia BETTING_ENABLED"),
+        ])
         metrics([
             ("Walk-forward", str(validation.get("status", "BRAK")), f"foldy: {validation.get('folds', 0)}"),
             ("Live shadow", str(live.get("status", "BRAK")), f"rozliczone: {live.get('settled_samples', 0)}"),
@@ -1830,8 +1845,9 @@ def _render_quality_governance() -> None:
                 unsafe_allow_html=True,
             )
         st.caption(
-            "Promocja nigdy nie jest automatyczna. Wymagany jest pozytywny walk-forward, "
-            "pozytywny live shadow oraz dokładne przepisanie identyfikatora kandydata."
+            "Ręczna promocja pozostaje dostępna wyłącznie po pozytywnym walk-forward i live shadow. "
+            "Scorecard v8 nie modyfikuje modelu, a Capital Governor bez osobnej zgody na realny "
+            "kapitał pozostaje w trybie SHADOW/PAPER."
         )
         token = str(status.get("candidate_token", ""))
         st.code(token or "Brak kandydata")

@@ -1,0 +1,22 @@
+KANIBAL STATISTICAL EVIDENCE + STAGED CAPITAL GOVERNOR v8
+========================================================
+
+Pliki kodu w paczce:
+- statistical_evidence_scorecard.py
+- staged_capital_governor.py
+- quality_governance_v8_loop.py
+- execution_guard.py
+- app_launcher.py
+- dashboard_streamlit.py
+- .env.example
+- WDROZENIE_STATISTICAL_EVIDENCE_CAPITAL_GOVERNOR_V8.md
+
+Gwarancje:
+- brak katalogu data i brak plikow historii,
+- brak SQLite, CSV, modeli produkcyjnych i sekretow,
+- Scorecard zapisuje tylko raport pochodny,
+- Capital Governor nigdy nie zmienia BETTING_ENABLED,
+- domyslnie BETBOT_CAPITAL_REAL_ENABLED=0,
+- brak lub przeterminowany raport powoduje blokade wykonania,
+- pogorszenie dowodow natychmiast cofa etap,
+- aktywny model i logika typowania nie sa zmieniane przez te moduly.

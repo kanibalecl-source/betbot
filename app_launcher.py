@@ -21,7 +21,7 @@ PROCESS_SPECS = {
     "settlement": [PYTHON, "settle_loop.py"],
     "persistence": [PYTHON, "persistence_runtime.py"],
     "retraining": [PYTHON, "auto_retraining_loop.py"],
-    "quality_governor_v7": [PYTHON, "autonomous_learning_governor_loop.py"],
+    "quality_governance_v8": [PYTHON, "quality_governance_v8_loop.py"],
     "dashboard": [
         PYTHON, "-m", "streamlit", "run", "dashboard_streamlit.py",
         "--server.port", str(PORT),
