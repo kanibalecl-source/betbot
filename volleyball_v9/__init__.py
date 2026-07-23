@@ -1,5 +1,4 @@
-"""Isolated, shadow-only volleyball subsystem for BetBot v9.0."""
+"""Isolated, shadow-only volleyball subsystem for BetBot v9.1."""
 
 SPORT = "volleyball"
-SCHEMA_VERSION = "betbot.volleyball.v9.0"
-
+SCHEMA_VERSION = "betbot.volleyball.v9.1"

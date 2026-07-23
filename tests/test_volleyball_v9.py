@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import json
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
 import app_launcher
 from server_data_guard import snapshot_hashes
 from settings_v81 import ConfigurationError, load_settings
+try:
+    import requests as _requests  # noqa: F401
+except ModuleNotFoundError:
+    requests_stub = types.ModuleType("requests")
+    requests_stub.Session = object
+    sys.modules["requests"] = requests_stub
+from volleyball_v9.api_sports import ApiSportsVolleyballClient
+from volleyball_v9.config import load_volleyball_settings
 from volleyball_v9.domain import VolleyballGame
 from volleyball_v9.model import VolleyballEloModel
 from volleyball_v9.settlement import settle_match_winner
@@ -105,6 +115,79 @@ class VolleyballStorageTests(unittest.TestCase):
         serialized = json.dumps(load_settings({}).public_snapshot()).lower()
         self.assertNotIn("volleyball_api_sports_key", serialized)
         self.assertNotIn("api_key", serialized)
+
+    def test_coverage_counts_only_inserted_odds(self):
+        from volleyball_v9.domain import OddsQuote
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            upcoming = game(status="NS", home_sets=None, away_sets=None)
+            storage.upsert_games([upcoming])
+            quote = OddsQuote(
+                game_id=upcoming.game_id,
+                bookmaker_id="1",
+                bookmaker="Test",
+                market="MATCH_WINNER",
+                outcome="HOME",
+                odds=1.90,
+                observed_at="2026-07-23T12:00:00+00:00",
+            )
+            self.assertEqual(storage.save_odds([quote]), 1)
+            self.assertEqual(storage.save_odds([quote]), 0)
+            coverage = storage.coverage_summary()
+            self.assertEqual(coverage["odds_quotes"], 1)
+            self.assertEqual(coverage["games_with_odds"], 1)
+
+
+class _FakeResponse:
+    def __init__(self, status_code, payload, headers=None):
+        self.status_code = status_code
+        self._payload = payload
+        self.headers = headers or {}
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self._payload
+
+
+class _FakeSession:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def get(self, *args, **kwargs):
+        response = self.responses[min(self.calls, len(self.responses) - 1)]
+        self.calls += 1
+        return response
+
+
+class VolleyballProviderTests(unittest.TestCase):
+    def test_retry_is_bounded_and_observed(self):
+        observed = []
+        settings = load_volleyball_settings(require_key=False)
+        session = _FakeSession(
+            [
+                _FakeResponse(500, {}),
+                _FakeResponse(
+                    200,
+                    {"errors": [], "response": [{"id": 1}]},
+                    {"x-ratelimit-requests-remaining": "99"},
+                ),
+            ]
+        )
+        client = ApiSportsVolleyballClient(
+            settings, session=session, observer=observed.append
+        )
+        rows = client._get("games", {"date": "2026-07-23"})
+        self.assertEqual(rows, [{"id": 1}])
+        self.assertEqual(session.calls, 2)
+        self.assertEqual(len(observed), 2)
+        self.assertEqual(observed[0]["status"], "RETRY")
+        self.assertEqual(observed[-1]["status"], "SUCCESS")
+        self.assertEqual(observed[-1]["remaining"], 99)
 
 
 if __name__ == "__main__":

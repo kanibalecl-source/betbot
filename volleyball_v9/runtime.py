@@ -5,7 +5,7 @@ import time
 from datetime import date, timedelta
 
 from . import SCHEMA_VERSION
-from .api_sports import ApiSportsVolleyballClient
+from .api_sports import ApiSportsVolleyballClient, VolleyballProviderError
 from .config import load_volleyball_settings
 from .domain import VolleyballGame, utc_now
 from .model import VolleyballEloModel
@@ -14,14 +14,21 @@ from .storage import VolleyballStorage
 
 
 MODEL_VERSION = "volleyball-elo-shadow-v1"
+RUNTIME_VERSION = "9.1"
 
 
-def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]) -> list[VolleyballGame]:
+def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
     games: dict[str, VolleyballGame] = {}
+    succeeded = 0
+    failed = 0
     for day in days:
-        for game in client.games_for_date(day):
-            games[game.game_id] = game
-    return list(games.values())
+        try:
+            for game in client.games_for_date(day):
+                games[game.game_id] = game
+            succeeded += 1
+        except VolleyballProviderError:
+            failed += 1
+    return list(games.values()), succeeded, failed
 
 
 def _best_quotes(quotes):
@@ -40,19 +47,31 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         days = [today - timedelta(days=offset) for offset in range(settings.backfill_days, -1, -1)] + [
             today + timedelta(days=1)
         ]
-    games = _fetch_days(client, list(dict.fromkeys(days)))
+    requested_days = list(dict.fromkeys(days))
+    games, days_succeeded, days_failed = _fetch_days(client, requested_days)
+    if not games and days_failed:
+        raise VolleyballProviderError("all volleyball game-date requests failed")
     storage.upsert_games(games)
-    if settings.backfill_days:
+    if settings.backfill_days and days_failed == 0:
         storage.set_state("initial_backfill_complete", "1")
 
     model = VolleyballEloModel()
     model.fit(storage.load_games(finished_only=True))
     picks_created = 0
     quotes_saved = 0
+    odds_attempted = 0
+    odds_failed = 0
     for game in games:
         if game.finished or game.status.upper() not in {"NS", "NOT_STARTED", "TBD"}:
             continue
-        quotes = client.odds_for_game(game.game_id)
+        if not storage.odds_refresh_due(game.game_id, settings.odds_refresh_hours):
+            continue
+        odds_attempted += 1
+        try:
+            quotes = client.odds_for_game(game.game_id)
+        except VolleyballProviderError:
+            odds_failed += 1
+            continue
         quotes_saved += storage.save_odds(quotes)
         prediction = model.predict(game.home_team_id, game.away_team_id)
         for outcome, quote in _best_quotes(quotes).items():
@@ -105,6 +124,7 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         storage.close_pick(str(pick["pick_key"]), result, profit, game)
         settled += 1
 
+    coverage = storage.coverage_summary()
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "HEALTHY",
@@ -113,6 +133,12 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "quotes_saved": quotes_saved,
         "picks_created": picks_created,
         "picks_settled": settled,
+        "days_requested": len(requested_days),
+        "days_succeeded": days_succeeded,
+        "days_failed": days_failed,
+        "odds_attempted": odds_attempted,
+        "odds_failed": odds_failed,
+        "coverage": coverage,
         "real_execution_allowed": False,
         "football_data_modified": False,
         "updated_at": utc_now(),
@@ -126,9 +152,9 @@ def main() -> int:
         return 0
     storage = VolleyballStorage()
     storage.initialize()
-    client = ApiSportsVolleyballClient(settings)
+    client = ApiSportsVolleyballClient(settings, observer=storage.record_provider_call)
     print(
-        f"VOLLEYBALL v9.0 SHADOW START poll={settings.poll_minutes}m "
+        f"VOLLEYBALL v{RUNTIME_VERSION} SHADOW START poll={settings.poll_minutes}m "
         f"backfill={settings.backfill_days}d",
         flush=True,
     )
@@ -136,7 +162,7 @@ def main() -> int:
         try:
             health = run_cycle(storage, client, settings)
             storage.set_state("last_health", json.dumps(health, sort_keys=True))
-            print(json.dumps({"event": "VOLLEYBALL_SHADOW_CYCLE", **health}), flush=True)
+            print(json.dumps({"event": "VOLLEYBALL_SHADOW_CYCLE", "runtime_version": RUNTIME_VERSION, **health}), flush=True)
         except Exception as exc:
             failure = {
                 "schema_version": SCHEMA_VERSION,
@@ -155,4 +181,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

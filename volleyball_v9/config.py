@@ -33,6 +33,9 @@ class VolleyballSettings:
     timezone: str
     minimum_edge: float
     request_timeout_seconds: float
+    retry_attempts: int
+    retry_backoff_seconds: float
+    odds_refresh_hours: int
 
 
 def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
@@ -52,6 +55,15 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
         request_timeout_seconds=_float(
             "BETBOT_VOLLEYBALL_REQUEST_TIMEOUT_SECONDS", 20.0, 3.0, 120.0
         ),
+        retry_attempts=int(
+            _float("BETBOT_VOLLEYBALL_RETRY_ATTEMPTS", 3, 1, 6)
+        ),
+        retry_backoff_seconds=_float(
+            "BETBOT_VOLLEYBALL_RETRY_BACKOFF_SECONDS", 1.5, 0.1, 30.0
+        ),
+        odds_refresh_hours=int(
+            _float("BETBOT_VOLLEYBALL_ODDS_REFRESH_HOURS", 12, 1, 24)
+        ),
     )
     if settings.enabled and not settings.shadow_only:
         raise VolleyballConfigurationError("Volleyball v9.0 must remain shadow-only")
@@ -60,4 +72,3 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
             "VOLLEYBALL_API_SPORTS_KEY is required when volleyball is enabled"
         )
     return settings
-

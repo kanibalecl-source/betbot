@@ -1,0 +1,49 @@
+BETBOT SERVER PATCH v9.1 - VOLLEYBALL DATA COVERAGE & RESILIENCE
+
+PURPOSE
+- Measure whether volleyball data is complete enough to support future learning.
+- Make provider failures visible and non-destructive.
+- Avoid unnecessary odds requests; API-Sports publishes pre-match odds 1-7 days
+  before a match and updates them approximately once per day.
+
+SAFETY CONTRACT
+- Football code, data, models and execution are unchanged.
+- Volleyball remains disabled by default and hard-blocked to shadow-only.
+- Existing /data/volleyball data is migrated with CREATE TABLE IF NOT EXISTS only.
+- No data file is included in this patch.
+- No real or simulated capital execution is added.
+
+CHANGES
+- Bounded retry with exponential backoff for 429, 5xx and transport failures.
+- Persistent provider-call telemetry without API secrets.
+- Coverage metrics for games, results and odds.
+- Per-game odds failures no longer abort the whole collection cycle.
+- Initial backfill is complete only when all requested dates succeed.
+- Odds refresh defaults to 12 hours instead of every 15-minute cycle.
+- Duplicate odds snapshots are no longer counted as newly saved rows.
+
+FILES
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/config.py
+- volleyball_v9/api_sports.py
+- volleyball_v9/storage.py
+- volleyball_v9/runtime.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_1_VOLLEYBALL_DATA_COVERAGE.txt
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+
+VARIABLES
+BETBOT_VOLLEYBALL_ENABLED=0
+BETBOT_VOLLEYBALL_SHADOW_ONLY=1
+VOLLEYBALL_API_SPORTS_KEY=<Railway secret; never commit>
+BETBOT_VOLLEYBALL_RETRY_ATTEMPTS=3
+BETBOT_VOLLEYBALL_RETRY_BACKOFF_SECONDS=1.5
+BETBOT_VOLLEYBALL_ODDS_REFRESH_HOURS=12
+
+DEPLOYMENT GATE
+1. Deploy with BETBOT_VOLLEYBALL_ENABLED=0.
+2. Verify HEARTBEAT v9.1 and all existing football processes.
+3. Verify SERVER DATA GUARD reports BACKUP_CREATED.
+4. Only then add the secret and enable volleyball shadow.
+5. Require at least 7 days of coverage evidence before v9.2.

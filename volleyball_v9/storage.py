@@ -114,6 +114,23 @@ class VolleyballStorage:
                     value TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS provider_calls (
+                    call_id TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    endpoint TEXT NOT NULL,
+                    params_json TEXT NOT NULL,
+                    attempt INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    http_status INTEGER NOT NULL DEFAULT 0,
+                    rows_received INTEGER NOT NULL DEFAULT 0,
+                    duration_ms INTEGER NOT NULL DEFAULT 0,
+                    rate_limit_remaining INTEGER,
+                    error_type TEXT,
+                    error TEXT,
+                    observed_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_provider_calls_endpoint_time
+                ON provider_calls(endpoint, observed_at);
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -189,7 +206,7 @@ class VolleyballStorage:
                     [quote.game_id, quote.bookmaker_id, quote.market, quote.outcome, quote.observed_at]
                 )
                 key = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
-                connection.execute(
+                cursor = connection.execute(
                     """
                     INSERT OR IGNORE INTO odds_snapshots (
                         snapshot_key, game_id, bookmaker_id, bookmaker, market,
@@ -201,8 +218,85 @@ class VolleyballStorage:
                         quote.market, quote.outcome, quote.odds, quote.observed_at,
                     ),
                 )
-                count += 1
+                count += int(cursor.rowcount == 1)
         return count
+
+    def record_provider_call(self, payload: dict) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO provider_calls (
+                    call_id, endpoint, params_json, attempt, status, http_status,
+                    rows_received, duration_ms, rate_limit_remaining, error_type,
+                    error, observed_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload["call_id"], payload["endpoint"], payload["params_json"],
+                    int(payload.get("attempt", 1)), payload["status"],
+                    int(payload.get("http_status", 0)), int(payload.get("rows", 0)),
+                    int(payload.get("duration_ms", 0)), payload.get("remaining"),
+                    payload.get("error_type"), payload.get("error"), utc_now(),
+                ),
+            )
+
+    def coverage_summary(self) -> dict:
+        with self.connect() as connection:
+            games = connection.execute("SELECT COUNT(*) FROM games").fetchone()[0]
+            finished = connection.execute(
+                "SELECT COUNT(*) FROM games WHERE home_sets IS NOT NULL AND away_sets IS NOT NULL"
+            ).fetchone()[0]
+            games_with_odds = connection.execute(
+                "SELECT COUNT(DISTINCT game_id) FROM odds_snapshots"
+            ).fetchone()[0]
+            quotes = connection.execute(
+                "SELECT COUNT(*) FROM odds_snapshots"
+            ).fetchone()[0]
+            calls = connection.execute(
+                """
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN status='SUCCESS' THEN 1 ELSE 0 END) AS ok,
+                       SUM(CASE WHEN status='FAILED' THEN 1 ELSE 0 END) AS failed
+                FROM provider_calls
+                """
+            ).fetchone()
+        eligible = max(0, int(games) - int(finished))
+        return {
+            "games_total": int(games),
+            "games_finished": int(finished),
+            "games_upcoming": eligible,
+            "games_with_odds": int(games_with_odds),
+            "odds_quotes": int(quotes),
+            "upcoming_odds_coverage": round(
+                min(1.0, int(games_with_odds) / eligible), 6
+            ) if eligible else 0.0,
+            "provider_calls": int(calls["total"] or 0),
+            "provider_success": int(calls["ok"] or 0),
+            "provider_failed": int(calls["failed"] or 0),
+        }
+
+    def odds_refresh_due(self, game_id: str, refresh_hours: int) -> bool:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT MAX(observed_at) AS latest
+                FROM odds_snapshots WHERE game_id=?
+                """,
+                (str(game_id),),
+            ).fetchone()
+        latest = None if row is None else row["latest"]
+        if not latest:
+            return True
+        from datetime import datetime, timedelta, timezone
+        try:
+            observed = datetime.fromisoformat(str(latest).replace("Z", "+00:00"))
+            if observed.tzinfo is None:
+                observed = observed.replace(tzinfo=timezone.utc)
+            return datetime.now(timezone.utc) - observed >= timedelta(
+                hours=refresh_hours
+            )
+        except ValueError:
+            return True
 
     def create_shadow_pick(self, payload: dict) -> bool:
         raw_key = "|".join(
