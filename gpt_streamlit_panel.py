@@ -6,6 +6,12 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import streamlit as st
+from odds_display import (
+    extract_odds_snapshot,
+    format_closing_clv,
+    format_odds,
+    format_percent,
+)
 
 
 def _load_report(base_dir: Path, profile: str = "prematch", source_files=None) -> Dict[str, Any]:
@@ -103,7 +109,7 @@ def _inject_gpt_css() -> None:
         <style>
         .gpt-row-head,.gpt-row{
             display:grid;
-            grid-template-columns:2.6fr .82fr .52fr .82fr .9fr .62fr .9fr .82fr;
+            grid-template-columns:2.25fr .8fr 1.25fr .62fr .82fr .76fr .76fr .72fr .76fr;
             gap:0;
             align-items:center;
         }
@@ -169,13 +175,19 @@ def _inject_gpt_css() -> None:
 
 def _render_row(candidate: Dict[str, Any], analysis: Dict[str, Any] | None, idx: int, selected: bool, base_dir: Path, key_prefix: str, source_files, limit: int) -> None:
     source = analysis or candidate
+    odds_source = dict(candidate)
+    odds_source.update(source)
+    odds_snapshot = extract_odds_snapshot(odds_source)
     decision = _decision_label(source.get("decision")) if analysis else "OCZEKUJE"
     row_class = "gpt-row selected" if selected else "gpt-row"
     match = html.escape(_first_text(source, "match"))
     league = html.escape(_first_text(source, "league", default=""))
     bet = html.escape(_first_text(source, "bet"))
-    odds = html.escape(_first_text(source, "odds"))
-    value = html.escape(_first_text(source, "value_score", default="-")) if analysis else "-"
+    model_odds = html.escape(format_odds(odds_snapshot.model))
+    bot_odds = html.escape(format_odds(odds_snapshot.bot))
+    book_odds = html.escape(format_odds(odds_snapshot.bookmaker))
+    value = html.escape(format_percent(odds_snapshot.value_percent))
+    closing_clv = html.escape(format_closing_clv(odds_snapshot))
     risk = html.escape(_risk_label(source.get("risk"))) if analysis else "-"
     confidence = _progress(source.get("confidence")) if analysis else "-"
     st.markdown(
@@ -183,10 +195,11 @@ def _render_row(candidate: Dict[str, Any], analysis: Dict[str, Any] | None, idx:
         <div class="{row_class}">
             <div><b>{match}</b><br><span class="muted-small">{league}</span></div>
             <div><b>{bet}</b></div>
-            <div><b>{odds}</b></div>
+            <div><b>M {model_odds} / B {bot_odds} / BK {book_odds}</b></div>
+            <div><b>{value}</b></div>
+            <div><b>{closing_clv}</b></div>
             <div><span class="pill {_pill_class(decision)}">{html.escape(decision)}</span></div>
             <div>{confidence}</div>
-            <div><b>{value}</b></div>
             <div><b>{risk}</b></div>
             <div class="gpt-action"></div>
         </div>
@@ -220,7 +233,11 @@ def _render_details(item: Dict[str, Any] | None) -> None:
     decision = _decision_label(item.get("decision"))
     match = html.escape(_first_text(item, "match"))
     bet = html.escape(_first_text(item, "bet"))
-    odds = html.escape(_first_text(item, "odds"))
+    odds_snapshot = extract_odds_snapshot(item)
+    model_odds = html.escape(format_odds(odds_snapshot.model))
+    bot_odds = html.escape(format_odds(odds_snapshot.bot))
+    book_odds = html.escape(format_odds(odds_snapshot.bookmaker))
+    closing_clv = html.escape(format_closing_clv(odds_snapshot))
     confidence = html.escape(_first_text(item, "confidence", default="0"))
     quality = html.escape(_first_text(item, "quality_score", default="0"))
     value = html.escape(_first_text(item, "value_score", default="0"))
@@ -236,7 +253,9 @@ def _render_details(item: Dict[str, Any] | None) -> None:
             <h3>Szczegóły analizy</h3>
             <div class="gpt-detail-head">
                 <b>{match}</b>
-                <span>Typ bota: <b>{bet} @ {odds}</b></span>
+                <span>Typ bota: <b>{bet}</b></span>
+                <span>Kurs modelu / bota / buka: <b>{model_odds} / {bot_odds} / {book_odds}</b></span>
+                <span>Zamknięcie / CLV: <b>{closing_clv}</b></span>
                 <span>Decyzja GPT: <b class="{color}">{html.escape(decision)}</b></span>
             </div>
             <div class="gpt-score-grid">
@@ -306,6 +325,13 @@ def render_gpt_tab(base_dir=None, profile_name: str = "Prematch", key_prefix: st
     avg_conf = round(sum(float(a.get("confidence", 0) or 0) for a in analyses) / len(analyses), 1) if analyses else 0
     selected_key = st.session_state.get(f"{key_prefix}_selected_gpt_key")
     selected = lookup.get(selected_key) if selected_key else (analyses[0] if analyses else None)
+    if selected:
+        matching_candidate = next(
+            (candidate for candidate in candidates if _key(candidate) == _key(selected)),
+            None,
+        )
+        if matching_candidate:
+            selected = {**matching_candidate, **selected}
 
     left, right = st.columns([2.45, 1], gap="medium")
     with left:
@@ -327,7 +353,7 @@ def render_gpt_tab(base_dir=None, profile_name: str = "Prematch", key_prefix: st
             """
             <div class="ka-panel">
                 <div class="gpt-row-head">
-                    <div>Mecz</div><div>Typ</div><div>Kurs</div><div>Decyzja</div><div>Pewność</div><div>Value</div><div>Ryzyko</div><div>Akcja</div>
+                    <div>Mecz</div><div>Typ</div><div>Model / Bot / Buk</div><div>Value</div><div>Zamk./CLV</div><div>Decyzja</div><div>Pewność</div><div>Ryzyko</div><div>Akcja</div>
                 </div>
             """,
             unsafe_allow_html=True,
