@@ -28,7 +28,6 @@ except Exception:
 
 REPORT_FILE = Path("data/gpt_analysis_report.json")
 CACHE_DIR = Path("cache/gpt_analysis")
-PROMPT_VERSION = "v2"
 try:
     from storage_paths import DATA_DIR as SHARED_DATA_DIR
 except Exception:
@@ -99,6 +98,15 @@ def load_candidate_matches(base_dir: Path, limit: int | None = None, source_file
                 "match": match,
                 "bet": bet,
                 "odds": odds or "",
+                "kurs_buk": _first(r, ["kurs_buk", "bookmaker_odds", "book_odds", "odds", "kurs", "price"]),
+                "kurs_model": _first(r, ["kurs_model", "model_odds", "fair_odds_model"]),
+                "kurs_bota": _first(r, ["kurs_bota", "bot_odds", "fair_odds_final", "fair_odds"]),
+                "prawd_model": _first(r, ["prawd_model", "model_probability", "model_prob"]),
+                "prawd_final": _first(r, ["prawd_final", "final_probability", "final_prob"]),
+                "closing_odds": _first(r, ["closing_odds", "close_odds", "closing_line_odds"]),
+                "clv_percent": _first(r, ["clv_percent", "clv"]),
+                "bookmaker": _first(r, ["bookmaker", "margin_bookmaker"]),
+                "odds_observed_at": _first(r, ["odds_observed_at", "observed_at", "decision_at"]),
                 "league": _first(r, ["league", "liga"]),
                 "time": _first(r, ["time", "start", "date", "kickoff"]),
                 "profile": _profile_slug(profile),
@@ -125,7 +133,7 @@ def _safe_name(text: str) -> str:
 
 def _cache_path(base_dir: Path, item: Dict[str, Any]) -> Path:
     profile = _safe_name(str(item.get("profile") or "prematch"))
-    return base_dir / CACHE_DIR / f"{PROMPT_VERSION}_{profile}_{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
+    return base_dir / CACHE_DIR / f"{profile}_{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
 
 
 def _load_cache(base_dir: Path, item: Dict[str, Any], ttl_seconds: int = 1800):
@@ -147,6 +155,38 @@ def _save_cache(base_dir: Path, item: Dict[str, Any], data: Dict[str, Any]):
 
 
 def _prompt(item: Dict[str, Any]) -> str:
+    return f"""
+Jesteś profesjonalnym analitykiem zakładów sportowych. Oceń, czy wskazany zakład jest warty grania.
+
+Mecz: {item.get('match')}
+Liga: {item.get('league')}
+Termin: {item.get('time')}
+Typ zakładu: {item.get('bet')}
+Kurs: {item.get('odds')}
+
+Wykorzystaj aktualnie dostępne informacje z internetu: forma drużyn, styl gry, kontuzje, zawieszenia, rotacje, atmosfera w klubie, terminarz, motywacja, newsy, przewidywane składy, H2H i ryzyko pułapki bukmacherskiej.
+
+Zwróć WYŁĄCZNIE poprawny JSON bez markdown:
+{{
+  "decision": "PLAY albo SKIP",
+  "confidence": 0-100,
+  "value_score": 0-10,
+  "risk": "low albo medium albo high",
+  "summary": "krótka decyzja po polsku",
+  "analysis": {{
+    "forma": "opis po polsku",
+    "kontuzje_kadra": "opis po polsku",
+    "styl_matchup": "opis po polsku",
+    "motywacja_atmosfera": "opis po polsku",
+    "value_kurs": "opis po polsku",
+    "ryzyka": "opis po polsku",
+    "rekomendacja": "opis po polsku"
+  }}
+}}
+""".strip()
+
+
+def _prompt(item: Dict[str, Any]) -> str:
     return build_hidden_match_analysis_prompt(item)
 
 
@@ -157,6 +197,15 @@ def _fallback_analysis(item: Dict[str, Any], reason: str = "") -> Dict[str, Any]
         "odds": item.get("odds", ""),
         "league": item.get("league", ""),
         "time": item.get("time", ""),
+        "kurs_buk": item.get("kurs_buk", item.get("odds", "")),
+        "kurs_model": item.get("kurs_model", ""),
+        "kurs_bota": item.get("kurs_bota", ""),
+        "prawd_model": item.get("prawd_model", ""),
+        "prawd_final": item.get("prawd_final", ""),
+        "closing_odds": item.get("closing_odds", ""),
+        "clv_percent": item.get("clv_percent", ""),
+        "bookmaker": item.get("bookmaker", ""),
+        "odds_observed_at": item.get("odds_observed_at", ""),
         "decision": "SKIP",
         "confidence": 0,
         "value_score": 0,
@@ -194,11 +243,24 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
         # Najpierw próbujemy z web search, bo użytkownik chce analizę formy, kontuzji i newsów.
         # Jeśli konto/model nie obsłuży web_search_preview, robimy drugi bezpieczny fallback bez narzędzia,
         # żeby zakładka GPT nie wywróciła całego dashboardu.
-        response = client.responses.create(
-            model=model,
-            tools=[{"type": "web_search_preview"}],
-            input=prompt,
-        )
+        try:
+            response = client.responses.create(
+                model=model,
+                tools=[{"type": "web_search_preview"}],
+                input=prompt,
+            )
+        except Exception:
+            try:
+                response = client.responses.create(
+                    model=model,
+                    input=prompt,
+                )
+            except Exception:
+                fallback_model = os.getenv("GPT_ANALYSIS_FALLBACK_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
+                response = client.responses.create(
+                    model=fallback_model,
+                    input=prompt,
+                )
 
         text = getattr(response, "output_text", "") or ""
         parsed = _parse_json(text)
@@ -208,6 +270,15 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
             "odds": item.get("odds", ""),
             "league": item.get("league", ""),
             "time": item.get("time", ""),
+            "kurs_buk": item.get("kurs_buk", item.get("odds", "")),
+            "kurs_model": item.get("kurs_model", ""),
+            "kurs_bota": item.get("kurs_bota", ""),
+            "prawd_model": item.get("prawd_model", ""),
+            "prawd_final": item.get("prawd_final", ""),
+            "closing_odds": item.get("closing_odds", ""),
+            "clv_percent": item.get("clv_percent", ""),
+            "bookmaker": item.get("bookmaker", ""),
+            "odds_observed_at": item.get("odds_observed_at", ""),
             **parsed,
         }
         data["confidence"] = int(float(data.get("confidence", 0) or 0))
@@ -215,7 +286,6 @@ def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, An
         data["quality_score"] = float(data.get("quality_score", 0) or 0)
         data["decision"] = str(data.get("decision", "SKIP")).upper()
         data["profile"] = str(item.get("profile") or "")
-        data["data_provenance"] = "OPENAI_WEB_SEARCH"
         _save_cache(base_dir, item, data)
         return data
     except Exception as e:

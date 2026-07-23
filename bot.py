@@ -1091,6 +1091,12 @@ def run_bot(mode="main"):
                 "kurs_model": round(fair_odds_model, 2),
                 "kurs_bota": round(fair_odds_final, 2),
                 "fair_odds": round(fair_odds_final, 2),
+                "closing_odds": (
+                    round(float(closing_odds), 4)
+                    if _valid_decimal_odds(closing_odds) is not None
+                    else ""
+                ),
+                "closing_observed_at": data.get("closing_observed_at", ""),
 
                 "prawd_model": round(model_prob, 4),
                 "prawd_rynek": round(true_book_prob, 4),

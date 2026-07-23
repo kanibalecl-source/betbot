@@ -1,0 +1,25 @@
+BetBot SERVER v8.2 — Odds Transparency
+
+PLIKI:
+odds_display.py
+bot.py
+dashboard_streamlit.py
+executive_dashboard_theme.py
+gpt_match_value_engine.py
+gpt_streamlit_panel.py
+WDROZENIE_ODDS_TRANSPARENCY_V8_2.md
+PATCH_MANIFEST_SERVER_V8_2_ODDS_TRANSPARENCY.txt
+
+NIE ZAWIERA:
+data/
+*.csv
+*.db
+*.sqlite*
+historii
+modeli i wag
+plików użytkowników
+sekretów i plików .env
+
+KOMPATYBILNOŚĆ:
+Brakujące kolumny w starszych rekordach są obsługiwane bez migracji.
+Zmiana prezentacyjna i rozszerzenie zapisu closing_odds nie zmieniają logiki typowania.
