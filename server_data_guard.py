@@ -15,8 +15,8 @@ from storage_paths import BASE_DIR, DATA_DIR, require_persistent_storage_on_serv
 
 
 CRITICAL_PATTERNS = (
-    "*.sqlite3",
-    "*.db",
+    "**/*.sqlite3",
+    "**/*.db",
     "results_history.csv",
     "*_history.csv",
     "history/**/*",

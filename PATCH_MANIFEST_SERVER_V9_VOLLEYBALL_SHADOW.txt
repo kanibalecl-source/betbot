@@ -1,0 +1,42 @@
+BETBOT SERVER PATCH v9.0 - VOLLEYBALL SHADOW FOUNDATION
+
+SAFETY CONTRACT
+- Football prediction logic is unchanged.
+- Existing football history, models, training files and databases are not included.
+- Volleyball is disabled by default.
+- Volleyball v9.0 is hard-blocked from non-shadow execution.
+- Volleyball data is stored only under the persistent /data/volleyball namespace.
+- A dedicated SQLite database and append-only settlement evidence are used.
+- Nested volleyball databases are included in verified server backups.
+- No API secret is stored in source code, runtime health or this package.
+
+FILES
+- app_launcher.py
+- settings_v81.py
+- server_data_guard.py
+- volleyball_v9/__init__.py
+- volleyball_v9/config.py
+- volleyball_v9/domain.py
+- volleyball_v9/api_sports.py
+- volleyball_v9/model.py
+- volleyball_v9/settlement.py
+- volleyball_v9/storage.py
+- volleyball_v9/runtime.py
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V9_VOLLEYBALL_SHADOW.txt
+
+SERVER VARIABLES - DO NOT ENABLE UNTIL API COVERAGE TEST IS APPROVED
+BETBOT_VOLLEYBALL_ENABLED=0
+BETBOT_VOLLEYBALL_SHADOW_ONLY=1
+VOLLEYBALL_API_SPORTS_KEY=<secret>
+BETBOT_VOLLEYBALL_POLL_MINUTES=15
+BETBOT_VOLLEYBALL_BACKFILL_DAYS=30
+BETBOT_VOLLEYBALL_MIN_EDGE=0.03
+
+ENABLEMENT ORDER
+1. Deploy with BETBOT_VOLLEYBALL_ENABLED=0.
+2. Confirm football scheduler, settlement, persistence, quality governance and dashboard.
+3. Add VOLLEYBALL_API_SPORTS_KEY as a Railway secret.
+4. Keep BETBOT_VOLLEYBALL_SHADOW_ONLY=1.
+5. Set BETBOT_VOLLEYBALL_ENABLED=1 and redeploy.
+6. Confirm volleyball_shadow=True in the v9.0 heartbeat.

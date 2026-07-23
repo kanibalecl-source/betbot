@@ -59,6 +59,10 @@ class RuntimeSettings:
     capital_real_enabled: bool
     autonomous_governor_enabled: bool
     autonomous_promotion_enabled: bool
+    volleyball_enabled: bool
+    volleyball_shadow_only: bool
+    volleyball_poll_minutes: int
+    volleyball_backfill_days: int
 
     def public_snapshot(self) -> dict[str, object]:
         return asdict(self)
@@ -89,6 +93,14 @@ def load_settings(
         capital_real_enabled=_bool(source, "BETBOT_CAPITAL_REAL_ENABLED", False),
         autonomous_governor_enabled=_bool(source, "BETBOT_AUTONOMOUS_GOVERNOR_ENABLED", False),
         autonomous_promotion_enabled=_bool(source, "BETBOT_AUTONOMOUS_PROMOTION_ENABLED", False),
+        volleyball_enabled=_bool(source, "BETBOT_VOLLEYBALL_ENABLED", False),
+        volleyball_shadow_only=_bool(source, "BETBOT_VOLLEYBALL_SHADOW_ONLY", True),
+        volleyball_poll_minutes=_int(
+            source, "BETBOT_VOLLEYBALL_POLL_MINUTES", 15, 5, 1440
+        ),
+        volleyball_backfill_days=_int(
+            source, "BETBOT_VOLLEYBALL_BACKFILL_DAYS", 30, 0, 365
+        ),
     )
     if validate_cross_fields and settings.betting_enabled and not settings.capital_real_enabled:
         raise ConfigurationError(
@@ -101,5 +113,9 @@ def load_settings(
     if validate_cross_fields and settings.evidence_min_clv_samples > settings.evidence_min_oos_samples:
         raise ConfigurationError(
             "BETBOT_EVIDENCE_MIN_CLV_SAMPLES cannot exceed BETBOT_EVIDENCE_MIN_OOS_SAMPLES"
+        )
+    if validate_cross_fields and settings.volleyball_enabled and not settings.volleyball_shadow_only:
+        raise ConfigurationError(
+            "Volleyball v9.0 is shadow-only; BETBOT_VOLLEYBALL_SHADOW_ONLY must remain enabled"
         )
     return settings

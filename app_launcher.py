@@ -28,7 +28,7 @@ from settings_v81 import RuntimeSettings, load_settings
 def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, list[str]]:
     config = settings or load_settings()
     python = sys.executable or "python3"
-    return {
+    specs = {
         "scheduler": [python, "scheduler_engine.py"],
         "live_pipeline": [python, "live_pipeline_runtime.py"],
         "settlement": [python, "settle_loop.py"],
@@ -41,6 +41,9 @@ def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, li
             "--server.headless", "true",
         ],
     }
+    if config.volleyball_enabled:
+        specs["volleyball_shadow"] = [python, "-m", "volleyball_v9.runtime"]
+    return specs
 
 
 class ProcessSupervisor:
@@ -130,6 +133,15 @@ class ProcessSupervisor:
             "financial_execution": {
                 "betting_enabled": self.settings.betting_enabled,
                 "capital_real_enabled": self.settings.capital_real_enabled,
+                "volleyball_execution_enabled": False,
+            },
+            "sports": {
+                "football": {"enabled": True, "storage": "existing"},
+                "volleyball": {
+                    "enabled": self.settings.volleyball_enabled,
+                    "shadow_only": self.settings.volleyball_shadow_only,
+                    "storage": "isolated",
+                },
             },
             "contains_secrets": False,
             "source_history_modified": False,
@@ -150,7 +162,7 @@ class ProcessSupervisor:
 
 def main() -> int:
     settings = load_settings()
-    print("APP LAUNCHER v8.1 START", flush=True)
+    print("APP LAUNCHER v9.0 START", flush=True)
     print(
         f"CONFIG VALID schema={settings.schema_version} fingerprint={settings.fingerprint()}",
         flush=True,
@@ -170,7 +182,7 @@ def main() -> int:
             states = supervisor.tick()
             supervisor.write_health(states)
             state_text = " | ".join(f"{name}={alive}" for name, alive in states.items())
-            print(f"HEARTBEAT v8.1 | {state_text}", flush=True)
+            print(f"HEARTBEAT v9.0 | {state_text}", flush=True)
             time.sleep(settings.heartbeat_seconds)
         except Exception as exc:
             print(f"APP LAUNCHER ERROR: {exc}", flush=True)
