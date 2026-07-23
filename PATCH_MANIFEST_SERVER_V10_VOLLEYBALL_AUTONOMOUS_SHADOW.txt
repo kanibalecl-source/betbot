@@ -1,0 +1,84 @@
+BETBOT SERVER PATCH — VOLLEYBALL v10.0 AUTONOMOUS SHADOW
+=========================================================
+
+CEL
+---
+Domknięcie autonomicznego cyklu uczenia dla siatkówki w bezpiecznym trybie
+shadow-only. Wersja v10 zawiera łącznie zabezpieczenia planowane dla v9.8,
+v9.9 i v10.0.
+
+ZAKRES
+------
+1. Deterministyczne strojenie parametrów Elo na danych chronologicznych.
+2. Brak kursów bukmachera i brak danych z przyszłości w treningu modelu.
+3. Walk-forward out-of-sample z kontrolą stabilności segmentów ligowych.
+4. Parowane prognozy Champion–Challenger rejestrowane przed rozpoczęciem meczu.
+5. Niezmienny rejestr rozliczeń i raportów live-shadow.
+6. Kontrola Brier score, log loss, kalibracji, segmentów oraz PSI drift.
+7. Promocja dopiero po:
+   - pozytywnym walk-forward,
+   - minimum 30 rozliczonych prognozach live,
+   - 3 kolejnych dodatnich raportach na rosnących próbach.
+8. Automatyczny rollback po 3 kolejnych negatywnych raportach.
+9. Rejestr zdarzeń cyklu życia modelu jest tylko dopisywany.
+
+GRANICE BEZPIECZEŃSTWA
+----------------------
+- Promocja dotyczy wyłącznie aktywnego modelu VOLLEYBALL SHADOW.
+- Realne wykonanie zakładów pozostaje wyłączone.
+- Model, dane, historia i logika piłki nożnej nie są modyfikowane.
+- Migracja SQLite jest wyłącznie addytywna: CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS.
+- Paczka nie zawiera bazy danych, historii, CSV, sekretów ani plików środowiskowych.
+- Wdrożenie nie usuwa i nie nadpisuje istniejących danych woluminu.
+
+DOMYŚLNE PROGI v10
+------------------
+BETBOT_VOLLEYBALL_AUTONOMOUS_GOVERNOR_ENABLED=1
+BETBOT_VOLLEYBALL_LIVE_MIN_SAMPLES=30
+BETBOT_VOLLEYBALL_LIVE_REPORT_STEP=10
+BETBOT_VOLLEYBALL_LIVE_POSITIVE_REPORTS=3
+BETBOT_VOLLEYBALL_LIVE_ROLLBACK_REPORTS=3
+BETBOT_VOLLEYBALL_DRIFT_PSI_LIMIT=0.25
+
+Zmienne są opcjonalne — powyższe wartości są bezpiecznymi wartościami domyślnymi.
+
+OCZEKIWANY STAN PO WDROŻENIU PRZY MAŁEJ PRÓBIE
+-----------------------------------------------
+- status procesu: HEALTHY
+- candidate_training_status: WAITING_MINIMUM_SAMPLE
+  lub CANDIDATE_ALREADY_REGISTERED
+- autonomous_governor_status: WAITING_CANDIDATE / WAITING_WALK_FORWARD
+- active_shadow_model_id: BASELINE
+- shadow_model_changed: false
+- football_active_model_modified: false
+- real_execution_allowed: false
+
+PLIKI PACZKI
+------------
+- app_launcher.py
+- volleyball_v9/__init__.py
+- volleyball_v9/api_sports.py
+- volleyball_v9/config.py
+- volleyball_v9/domain.py
+- volleyball_v9/features.py
+- volleyball_v9/governor.py
+- volleyball_v9/identity.py
+- volleyball_v9/market.py
+- volleyball_v9/model.py
+- volleyball_v9/runtime.py
+- volleyball_v9/settlement.py
+- volleyball_v9/storage.py
+- volleyball_v9/training.py
+- volleyball_v9/validation.py
+- tests/test_volleyball_v9.py
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+- PATCH_MANIFEST_SERVER_V10_VOLLEYBALL_AUTONOMOUS_SHADOW.txt
+
+KONTROLA WDROŻENIA
+------------------
+1. Przed wdrożeniem potwierdzić działający backup woluminu.
+2. Wgrać pliki jako nakładkę bez usuwania pozostałych plików serwera.
+3. Wykonać redeploy.
+4. W logach potwierdzić APP LAUNCHER v10.0 oraz VOLLEYBALL v10.0 SHADOW START.
+5. Potwierdzić status HEALTHY i brak błędów migracji.
+6. Przy obecnej małej próbie oczekiwane jest czekanie — brak promocji jest prawidłowy.

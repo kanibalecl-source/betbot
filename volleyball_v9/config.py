@@ -22,6 +22,16 @@ def _float(name: str, default: float, minimum: float, maximum: float) -> float:
     return value
 
 
+def _enabled(name: str, default: bool) -> bool:
+    fallback = "1" if default else "0"
+    return os.getenv(name, fallback).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 @dataclass(frozen=True)
 class VolleyballSettings:
     enabled: bool
@@ -43,6 +53,12 @@ class VolleyballSettings:
     validation_min_test_games: int
     validation_min_folds: int
     validation_max_folds: int
+    autonomous_governor_enabled: bool
+    live_shadow_min_samples: int
+    live_shadow_report_step: int
+    live_shadow_positive_reports: int
+    live_shadow_rollback_reports: int
+    live_shadow_drift_psi_limit: float
 
 
 def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
@@ -91,6 +107,28 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
         ),
         validation_max_folds=int(
             _float("BETBOT_VOLLEYBALL_VALIDATION_MAX_FOLDS", 5, 2, 20)
+        ),
+        autonomous_governor_enabled=_enabled(
+            "BETBOT_VOLLEYBALL_AUTONOMOUS_GOVERNOR_ENABLED",
+            True,
+        ),
+        live_shadow_min_samples=int(
+            _float("BETBOT_VOLLEYBALL_LIVE_MIN_SAMPLES", 30, 20, 10000)
+        ),
+        live_shadow_report_step=int(
+            _float("BETBOT_VOLLEYBALL_LIVE_REPORT_STEP", 10, 5, 1000)
+        ),
+        live_shadow_positive_reports=int(
+            _float("BETBOT_VOLLEYBALL_LIVE_POSITIVE_REPORTS", 3, 2, 10)
+        ),
+        live_shadow_rollback_reports=int(
+            _float("BETBOT_VOLLEYBALL_LIVE_ROLLBACK_REPORTS", 3, 2, 10)
+        ),
+        live_shadow_drift_psi_limit=_float(
+            "BETBOT_VOLLEYBALL_DRIFT_PSI_LIMIT",
+            0.25,
+            0.05,
+            1.0,
         ),
     )
     if settings.enabled and not settings.shadow_only:

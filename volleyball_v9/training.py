@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -10,12 +11,21 @@ from .model import VolleyballEloModel
 
 
 TRAINING_SCHEMA_VERSION = "volleyball.training_dataset.v1"
-CANDIDATE_SCHEMA_VERSION = "volleyball.elo_candidate.v1"
+CANDIDATE_SCHEMA_VERSION = "volleyball.elo_candidate.v2"
 DEFAULT_HYPERPARAMETERS = {
     "base_rating": 1500.0,
     "home_advantage": 35.0,
     "k_factor": 24.0,
 }
+HYPERPARAMETER_GRID = tuple(
+    {
+        "base_rating": 1500.0,
+        "home_advantage": home_advantage,
+        "k_factor": k_factor,
+    }
+    for home_advantage in (0.0, 20.0, 35.0, 50.0, 70.0)
+    for k_factor in (12.0, 18.0, 24.0, 32.0, 40.0)
+)
 
 
 def canonical_json(payload: dict) -> str:
@@ -112,8 +122,98 @@ class CandidateBundle:
         }
 
 
+def _clip(value: float) -> float:
+    return min(1.0 - 1e-12, max(1e-12, float(value)))
+
+
+def _score_parameters(
+    training: list[VolleyballGame],
+    validation: list[VolleyballGame],
+    parameters: dict,
+) -> dict:
+    model = VolleyballEloModel(**parameters)
+    model.fit(training)
+    brier: list[float] = []
+    log_loss: list[float] = []
+    for game in validation:
+        probability = _clip(
+            model.predict(game.home_team_id, game.away_team_id).home_probability
+        )
+        target = 1 if int(game.home_sets or 0) > int(game.away_sets or 0) else 0
+        brier.append((probability - target) ** 2)
+        log_loss.append(
+            -(target * math.log(probability) + (1 - target) * math.log(1 - probability))
+        )
+        model.fit([game])
+    mean_brier = sum(brier) / len(brier)
+    mean_log = sum(log_loss) / len(log_loss)
+    return {
+        "brier": round(mean_brier, 12),
+        "log_loss": round(mean_log, 12),
+        "objective": round(mean_brier + 0.25 * mean_log, 12),
+    }
+
+
+def tune_hyperparameters(games: list[VolleyballGame]) -> tuple[dict, dict]:
+    ordered = sorted(games, key=lambda item: (item.scheduled_at, item.game_id))
+    if len(ordered) < 60:
+        return dict(DEFAULT_HYPERPARAMETERS), {
+            "status": "FALLBACK_INSUFFICIENT_TUNING_WINDOW",
+            "chronological": True,
+            "training_rows": len(ordered),
+            "validation_rows": 0,
+            "bookmaker_data_used": False,
+        }
+    split_target = max(40, int(len(ordered) * 0.70))
+    split = min(len(ordered) - 20, split_target)
+    while (
+        0 < split < len(ordered)
+        and ordered[split - 1].scheduled_at == ordered[split].scheduled_at
+    ):
+        split += 1
+    if split >= len(ordered) or len(ordered) - split < 20:
+        return dict(DEFAULT_HYPERPARAMETERS), {
+            "status": "FALLBACK_INSUFFICIENT_TUNING_WINDOW",
+            "chronological": True,
+            "training_rows": len(ordered),
+            "validation_rows": 0,
+            "bookmaker_data_used": False,
+        }
+    training = ordered[:split]
+    validation = ordered[split:]
+    scored = [
+        {
+            "hyperparameters": dict(parameters),
+            **_score_parameters(training, validation, parameters),
+        }
+        for parameters in HYPERPARAMETER_GRID
+    ]
+    ranked = sorted(
+        scored,
+        key=lambda item: (
+            item["objective"],
+            item["brier"],
+            item["log_loss"],
+            canonical_json(item["hyperparameters"]),
+        ),
+    )
+    winner = ranked[0]
+    return dict(winner["hyperparameters"]), {
+        "status": "TUNED_TIME_SAFE",
+        "chronological": True,
+        "training_rows": len(training),
+        "validation_rows": len(validation),
+        "training_end_timestamp": training[-1].scheduled_at,
+        "validation_start_timestamp": validation[0].scheduled_at,
+        "bookmaker_data_used": False,
+        "grid_size": len(HYPERPARAMETER_GRID),
+        "selection_metric": "brier_plus_0.25_log_loss",
+        "winner": winner,
+    }
+
+
 def _artifact(dataset: dict, games: list[VolleyballGame]) -> dict:
-    parameters = dict(DEFAULT_HYPERPARAMETERS)
+    parameters, tuning = tune_hyperparameters(games)
     model = VolleyballEloModel(**parameters)
     model.fit(games)
     return {
@@ -123,7 +223,7 @@ def _artifact(dataset: dict, games: list[VolleyballGame]) -> dict:
         "shadow_only": True,
         "real_execution_allowed": False,
         "active_model_modified": False,
-        "algorithm": "chronological_elo",
+        "algorithm": "tuned_chronological_elo",
         "dataset": {
             "schema_version": TRAINING_SCHEMA_VERSION,
             "sha256": dataset["sha256"],
@@ -132,6 +232,7 @@ def _artifact(dataset: dict, games: list[VolleyballGame]) -> dict:
             "last_scheduled_at": dataset["document"]["last_scheduled_at"],
         },
         "hyperparameters": parameters,
+        "tuning": tuning,
         "state": model.export_state(),
         "training_contract": {
             "chronological_order": True,
@@ -139,6 +240,7 @@ def _artifact(dataset: dict, games: list[VolleyballGame]) -> dict:
             "bookmaker_odds_used": False,
             "candidate_not_activated": True,
             "validation_required_before_promotion": True,
+            "hyperparameters_selected_on_earlier_results_only": True,
         },
     }
 

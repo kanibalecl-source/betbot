@@ -12,7 +12,7 @@ from .model import VolleyballEloModel
 from .training import DEFAULT_HYPERPARAMETERS, canonical_json
 
 
-VALIDATION_SCHEMA_VERSION = "volleyball.walk_forward_validation.v1"
+VALIDATION_SCHEMA_VERSION = "volleyball.walk_forward_validation.v2"
 VALIDATION_METHOD = "expanding_window_walk_forward"
 
 
@@ -24,6 +24,8 @@ class ValidationSettings:
     maximum_folds: int = 5
     bootstrap_samples: int = 1000
     calibration_bins: int = 10
+    segment_minimum_samples: int = 15
+    segment_maximum_loss_degradation: float = 0.01
 
 
 def _game_from_row(row: dict) -> VolleyballGame:
@@ -200,6 +202,7 @@ def _score_fold(
         "test_end_timestamp": testing[-1].scheduled_at,
         "time_safe": training[-1].scheduled_at < testing[0].scheduled_at,
         "targets": targets,
+        "league_ids": [str(game.league_id or "UNKNOWN") for game in testing],
         "champion_probabilities": champion_probabilities,
         "challenger_probabilities": challenger_probabilities,
         "champion_brier_losses": champion_brier,
@@ -268,6 +271,11 @@ def validate_candidate(
     targets = [
         target for report in fold_reports for target in report["targets"]
     ]
+    league_ids = [
+        league_id
+        for report in fold_reports
+        for league_id in report["league_ids"]
+    ]
     champion_brier = [
         value
         for report in fold_reports
@@ -313,6 +321,47 @@ def validate_candidate(
         samples=selected.bootstrap_samples,
         seed=seed ^ 0x9E3779B97F4A7C15,
     )
+    segments: dict[str, dict] = {}
+    for league_id in sorted(set(league_ids)):
+        indexes = [
+            index
+            for index, value in enumerate(league_ids)
+            if value == league_id
+        ]
+        if len(indexes) < selected.segment_minimum_samples:
+            continue
+        champion_segment_brier = _mean([champion_brier[index] for index in indexes])
+        challenger_segment_brier = _mean(
+            [challenger_brier[index] for index in indexes]
+        )
+        champion_segment_log = _mean([champion_log[index] for index in indexes])
+        challenger_segment_log = _mean(
+            [challenger_log[index] for index in indexes]
+        )
+        segments[league_id] = {
+            "samples": len(indexes),
+            "champion_brier": round(champion_segment_brier, 10),
+            "challenger_brier": round(challenger_segment_brier, 10),
+            "brier_improvement": round(
+                champion_segment_brier - challenger_segment_brier,
+                10,
+            ),
+            "champion_log_loss": round(champion_segment_log, 10),
+            "challenger_log_loss": round(challenger_segment_log, 10),
+            "log_loss_improvement": round(
+                champion_segment_log - challenger_segment_log,
+                10,
+            ),
+            "stable": (
+                challenger_segment_brier
+                <= champion_segment_brier
+                + selected.segment_maximum_loss_degradation
+                and challenger_segment_log
+                <= champion_segment_log
+                + selected.segment_maximum_loss_degradation
+            ),
+        }
+    segment_stability = all(item["stable"] for item in segments.values())
     gates = {
         "enough_out_of_sample_folds": enough_data,
         "chronological_no_leakage": all_time_safe,
@@ -320,6 +369,7 @@ def validate_candidate(
         "log_loss_improvement_ci_positive": log_improvement > 0 and log_ci[0] > 0,
         "calibration_not_degraded": challenger_ece <= champion_ece,
         "candidate_reproducible": True,
+        "segment_stability": segment_stability,
     }
     positive = all(gates.values())
     status = (
@@ -382,6 +432,8 @@ def validate_candidate(
         "log_loss_improvement": round(log_improvement, 10),
         "log_loss_improvement_ci95": log_ci,
         "calibration_improvement": round(champion_ece - challenger_ece, 10),
+        "league_segments": segments,
+        "segment_minimum_samples": selected.segment_minimum_samples,
         "fold_details": public_folds,
         "gates": gates,
         "status": status,

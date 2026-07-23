@@ -25,6 +25,11 @@ from volleyball_v9.features import (
     FeatureLeakageError,
     build_point_in_time_features,
 )
+from volleyball_v9.governor import (
+    GovernorSettings,
+    build_live_shadow_report,
+    run_autonomous_governor,
+)
 from volleyball_v9.identity import normalize_name, stable_key
 from volleyball_v9.market import (
     build_no_vig_consensus,
@@ -34,8 +39,11 @@ from volleyball_v9.model import VolleyballEloModel
 from volleyball_v9.settlement import settle_match_winner
 from volleyball_v9.storage import VolleyballStorage
 from volleyball_v9.training import (
+    DEFAULT_HYPERPARAMETERS,
+    HYPERPARAMETER_GRID,
     build_training_dataset,
     train_candidate,
+    tune_hyperparameters,
     verify_candidate,
 )
 from volleyball_v9.validation import (
@@ -151,6 +159,26 @@ def validation_game(index: int) -> VolleyballGame:
     )
 
 
+def live_game(index: int, *, finished: bool) -> VolleyballGame:
+    scheduled = datetime(2027, 1, 1, tzinfo=timezone.utc) + timedelta(days=index)
+    return VolleyballGame(
+        game_id=f"live-{index}",
+        scheduled_at=scheduled.isoformat(),
+        status="FT" if finished else "NS",
+        league_id=f"live-league-{index % 2}",
+        league_name="Live League",
+        country="Poland",
+        season="2027",
+        home_team_id=f"live-home-{index % 5}",
+        home_team=f"Live Home {index % 5}",
+        away_team_id=f"live-away-{index % 5}",
+        away_team=f"Live Away {index % 5}",
+        home_sets=3 if finished else None,
+        away_sets=1 if finished else None,
+        raw={},
+    )
+
+
 class VolleyballSettingsTests(unittest.TestCase):
     def test_default_does_not_start_volleyball(self):
         settings = load_settings({})
@@ -194,6 +222,14 @@ class VolleyballSettingsTests(unittest.TestCase):
         self.assertEqual(settings.validation_min_test_games, 20)
         self.assertEqual(settings.validation_min_folds, 3)
         self.assertEqual(settings.validation_max_folds, 5)
+
+    def test_v10_autonomous_shadow_defaults_are_safe(self):
+        settings = load_volleyball_settings(require_key=False)
+        self.assertTrue(settings.autonomous_governor_enabled)
+        self.assertEqual(settings.live_shadow_min_samples, 30)
+        self.assertEqual(settings.live_shadow_positive_reports, 3)
+        self.assertEqual(settings.live_shadow_rollback_reports, 3)
+        self.assertAlmostEqual(settings.live_shadow_drift_psi_limit, 0.25)
 
 
 class VolleyballDomainTests(unittest.TestCase):
@@ -250,6 +286,22 @@ class VolleyballDomainTests(unittest.TestCase):
         self.assertNotIn("bookmaker_odds", serialized)
         self.assertNotIn("private_provider_payload", serialized)
         self.assertFalse(first.artifact["active_model_modified"])
+        self.assertEqual(first.artifact["algorithm"], "tuned_chronological_elo")
+        self.assertIn(first.artifact["hyperparameters"], HYPERPARAMETER_GRID)
+        self.assertFalse(first.artifact["tuning"]["bookmaker_data_used"])
+
+    def test_v10_tuning_is_deterministic_and_time_safe(self):
+        games = [validation_game(index) for index in range(100)]
+        first_parameters, first_report = tune_hyperparameters(games)
+        second_parameters, second_report = tune_hyperparameters(list(reversed(games)))
+        self.assertEqual(first_parameters, second_parameters)
+        self.assertEqual(first_report, second_report)
+        self.assertEqual(first_report["status"], "TUNED_TIME_SAFE")
+        self.assertLess(
+            first_report["training_end_timestamp"],
+            first_report["validation_start_timestamp"],
+        )
+        self.assertFalse(first_report["bookmaker_data_used"])
 
     def test_candidate_waits_for_minimum_sample(self):
         candidate = train_candidate(
@@ -322,8 +374,11 @@ class VolleyballWalkForwardTests(unittest.TestCase):
             )
 
     def test_identical_challenger_is_rejected_and_never_promoted(self):
+        candidate = self._candidate()
+        candidate["artifact"]["hyperparameters"] = dict(DEFAULT_HYPERPARAMETERS)
+        candidate["artifact"]["algorithm"] = "chronological_elo"
         report = validate_candidate(
-            self._candidate(),
+            candidate,
             settings=ValidationSettings(bootstrap_samples=200),
         )
         self.assertEqual(report["folds"], 3)
@@ -351,6 +406,191 @@ class VolleyballWalkForwardTests(unittest.TestCase):
         self.assertEqual(report["status"], "NO_ENOUGH_DATA")
         self.assertFalse(report["positive_validation"])
         self.assertFalse(report["automatic_promotion"])
+
+
+class VolleyballV10GovernorTests(unittest.TestCase):
+    def _registered_candidate(self, storage):
+        training = [validation_game(index) for index in range(100)]
+        storage.upsert_games(training)
+        bundle = train_candidate(training, minimum_rows=100)
+        inserted, candidate_id = storage.register_model_candidate(bundle.payload())
+        self.assertTrue(inserted)
+        candidate = storage.model_candidate(candidate_id)
+        self.assertIsNotNone(candidate)
+        return candidate
+
+    def _settled_pair_evidence(
+        self,
+        storage,
+        candidate,
+        count=30,
+        *,
+        start=0,
+        challenger_probability=0.85,
+    ):
+        observed_at = "2026-12-01T00:00:00+00:00"
+        upcoming = [
+            live_game(index, finished=False)
+            for index in range(start, start + count)
+        ]
+        storage.upsert_games(upcoming)
+        for item in upcoming:
+            inserted, _ = storage.record_live_prediction(
+                candidate_id=candidate["candidate_id"],
+                comparator_model_id="BASELINE",
+                role="CHAMPION",
+                game=item,
+                observed_at=observed_at,
+                home_probability=0.50,
+                model_parameters=DEFAULT_HYPERPARAMETERS,
+            )
+            self.assertTrue(inserted)
+            inserted, _ = storage.record_live_prediction(
+                candidate_id=candidate["candidate_id"],
+                comparator_model_id=candidate["candidate_id"],
+                role="CHALLENGER",
+                game=item,
+                observed_at=observed_at,
+                home_probability=challenger_probability,
+                model_parameters=candidate["artifact"]["hyperparameters"],
+            )
+            self.assertTrue(inserted)
+        finished = [
+            live_game(index, finished=True)
+            for index in range(start, start + count)
+        ]
+        storage.upsert_games(finished)
+        self.assertEqual(storage.settle_live_predictions(finished), count * 2)
+
+    def test_governor_waits_without_candidate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            result = run_autonomous_governor(
+                storage,
+                [],
+                None,
+                None,
+            )
+            self.assertEqual(result["status"], "WAITING_REPRODUCIBLE_CANDIDATE")
+            self.assertFalse(result["shadow_model_changed"])
+            self.assertFalse(result["real_execution_allowed"])
+
+    def test_live_shadow_report_uses_paired_future_results(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = self._registered_candidate(storage)
+            self._settled_pair_evidence(storage, candidate)
+            report = build_live_shadow_report(
+                storage,
+                candidate,
+                GovernorSettings(
+                    minimum_live_samples=30,
+                    drift_psi_limit=100.0,
+                    bootstrap_samples=200,
+                ),
+            )
+            self.assertEqual(report["status"], "POSITIVE_LIVE_SHADOW")
+            self.assertTrue(report["positive"])
+            self.assertGreater(report["brier_improvement"], 0)
+            self.assertGreater(report["log_loss_improvement"], 0)
+            self.assertTrue(report["gates"]["segment_stability"])
+            self.assertFalse(report["real_execution_allowed"])
+
+    def test_governor_promotes_only_after_repeated_positive_live_reports(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = self._registered_candidate(storage)
+            validation = {"status": "POSITIVE_VALIDATION_MANUAL_APPROVAL"}
+            settings = GovernorSettings(
+                minimum_live_samples=30,
+                report_step_samples=10,
+                required_positive_reports=3,
+                rollback_negative_reports=3,
+                drift_psi_limit=100.0,
+                bootstrap_samples=100,
+            )
+            statuses = []
+            for start, count in ((0, 30), (30, 10), (40, 10)):
+                self._settled_pair_evidence(
+                    storage,
+                    candidate,
+                    count=count,
+                    start=start,
+                )
+                result = run_autonomous_governor(
+                    storage,
+                    storage.load_games(),
+                    candidate,
+                    validation,
+                    settings=settings,
+                )
+                statuses.append(result["status"])
+            self.assertEqual(
+                statuses[:2],
+                [
+                    "WAITING_REPEATED_POSITIVE_LIVE_REPORTS",
+                    "WAITING_REPEATED_POSITIVE_LIVE_REPORTS",
+                ],
+            )
+            self.assertEqual(statuses[2], "PROMOTED_SHADOW")
+            self.assertEqual(
+                storage.active_shadow_model_id(),
+                candidate["candidate_id"],
+            )
+            self.assertFalse(result["real_execution_allowed"])
+
+    def test_shadow_promotion_and_rollback_are_append_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = self._registered_candidate(storage)
+            promoted, promotion_id = storage.record_lifecycle_event(
+                candidate_id=candidate["candidate_id"],
+                event_type="PROMOTED_SHADOW",
+                previous_model_id="BASELINE",
+                evidence_report_id="report-positive",
+                reason="test_positive_evidence",
+            )
+            self.assertTrue(promoted)
+            self.assertTrue(promotion_id)
+            self.assertEqual(
+                storage.active_shadow_model_id(),
+                candidate["candidate_id"],
+            )
+            rolled_back, rollback_id = storage.record_lifecycle_event(
+                candidate_id=candidate["candidate_id"],
+                event_type="ROLLED_BACK_SHADOW",
+                previous_model_id="BASELINE",
+                evidence_report_id="report-negative",
+                reason="test_regression",
+            )
+            self.assertTrue(rolled_back)
+            self.assertTrue(rollback_id)
+            self.assertEqual(storage.active_shadow_model_id(), "BASELINE")
+            coverage = storage.coverage_summary()
+            self.assertEqual(coverage["shadow_model_promotions"], 1)
+            self.assertEqual(coverage["shadow_model_rollbacks"], 1)
+            self.assertTrue(coverage["live_registry_integrity"])
+            with storage.connect() as connection:
+                with self.assertRaises(Exception):
+                    connection.execute("DELETE FROM model_lifecycle_events")
+
+    def test_live_prediction_and_settlement_are_immutable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = self._registered_candidate(storage)
+            self._settled_pair_evidence(storage, candidate, count=1)
+            with storage.connect() as connection:
+                with self.assertRaises(Exception):
+                    connection.execute(
+                        "UPDATE model_live_predictions SET home_probability=0.1"
+                    )
+                with self.assertRaises(Exception):
+                    connection.execute("DELETE FROM model_live_settlements")
 
 
 class VolleyballStorageTests(unittest.TestCase):
@@ -866,7 +1106,10 @@ class VolleyballStorageTests(unittest.TestCase):
             self.assertEqual(same_id, validation_id)
             coverage = storage.coverage_summary()
             self.assertEqual(coverage["model_validations"], 1)
-            self.assertEqual(coverage["positive_walk_forward_validations"], 0)
+            self.assertEqual(
+                coverage["positive_walk_forward_validations"],
+                int(report["status"] == "POSITIVE_VALIDATION_MANUAL_APPROVAL"),
+            )
             self.assertTrue(coverage["validation_registry_integrity"])
             self.assertEqual(coverage["automatic_model_promotions"], 0)
             self.assertEqual(coverage["validation_active_model_changes"], 0)
@@ -908,6 +1151,67 @@ class VolleyballStorageTests(unittest.TestCase):
                         WHERE type='table' AND name='model_validations'
                         """
                     ).fetchone()
+                )
+
+    def test_v10_migration_preserves_v97_candidate_and_validation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage.initialize()
+            candidate = train_candidate(
+                [validation_game(index) for index in range(100)],
+                minimum_rows=100,
+            )
+            inserted, candidate_id = storage.register_model_candidate(
+                candidate.payload()
+            )
+            self.assertTrue(inserted)
+            report = validate_candidate(
+                storage.model_candidate(candidate_id),
+                settings=ValidationSettings(bootstrap_samples=100),
+            )
+            storage.register_model_validation(report)
+            with storage.connect() as connection:
+                connection.execute("DROP TABLE model_lifecycle_events")
+                connection.execute("DROP TABLE model_live_reports")
+                connection.execute("DROP TABLE model_live_settlements")
+                connection.execute("DROP TABLE model_live_predictions")
+            storage.initialize()
+            with storage.connect() as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM model_candidates WHERE candidate_id=?",
+                        (candidate_id,),
+                    ).fetchone()[0],
+                    1,
+                )
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM model_validations"
+                    ).fetchone()[0],
+                    1,
+                )
+                tables = {
+                    row[0]
+                    for row in connection.execute(
+                        """
+                        SELECT name FROM sqlite_master
+                        WHERE type='table' AND name IN (
+                            'model_live_predictions',
+                            'model_live_settlements',
+                            'model_live_reports',
+                            'model_lifecycle_events'
+                        )
+                        """
+                    ).fetchall()
+                }
+                self.assertEqual(
+                    tables,
+                    {
+                        "model_live_predictions",
+                        "model_live_settlements",
+                        "model_live_reports",
+                        "model_lifecycle_events",
+                    },
                 )
 
     def test_v96_migration_preserves_existing_v95_rows(self):

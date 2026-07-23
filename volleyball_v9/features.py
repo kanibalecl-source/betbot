@@ -35,6 +35,7 @@ def build_point_in_time_features(
     observed_at: str,
     model_version: str,
     source_metadata: dict,
+    hyperparameters: dict | None = None,
 ) -> PointInTimeFeatures:
     observed = parse_utc(observed_at)
     scheduled = parse_utc(target.scheduled_at)
@@ -46,12 +47,13 @@ def build_point_in_time_features(
         if parse_utc(source.scheduled_at) >= observed:
             raise FeatureLeakageError("source_game_not_before_feature_cutoff")
 
-    model = VolleyballEloModel()
+    model = VolleyballEloModel(**dict(hyperparameters or {}))
     model.fit(eligible)
     prediction = model.predict(target.home_team_id, target.away_team_id)
     payload = {
         "feature_schema": FEATURE_SCHEMA_VERSION,
         "model_version": model_version,
+        "model_hyperparameters": dict(hyperparameters or {}),
         "game_id": target.game_id,
         "scheduled_at": target.scheduled_at,
         "observed_at": observed_at,

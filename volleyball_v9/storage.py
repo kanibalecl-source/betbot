@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import sqlite3
 from contextlib import contextmanager
@@ -371,6 +372,75 @@ class VolleyballStorage:
                 );
                 CREATE INDEX IF NOT EXISTS idx_model_validations_candidate
                 ON model_validations(candidate_id, created_at);
+                CREATE TABLE IF NOT EXISTS model_live_predictions (
+                    prediction_key TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    candidate_id TEXT NOT NULL,
+                    comparator_model_id TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('CHAMPION', 'CHALLENGER')),
+                    game_id TEXT NOT NULL,
+                    league_id TEXT,
+                    scheduled_at TEXT NOT NULL,
+                    observed_at TEXT NOT NULL,
+                    home_probability REAL NOT NULL CHECK(
+                        home_probability>0 AND home_probability<1
+                    ),
+                    model_parameters_json TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    UNIQUE(candidate_id, game_id, role),
+                    FOREIGN KEY(candidate_id) REFERENCES model_candidates(candidate_id),
+                    FOREIGN KEY(game_id) REFERENCES games(game_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_model_live_predictions_candidate
+                ON model_live_predictions(candidate_id, role, scheduled_at);
+                CREATE TABLE IF NOT EXISTS model_live_settlements (
+                    prediction_key TEXT PRIMARY KEY,
+                    target INTEGER NOT NULL CHECK(target IN (0, 1)),
+                    brier_loss REAL NOT NULL,
+                    log_loss REAL NOT NULL,
+                    settled_at TEXT NOT NULL,
+                    FOREIGN KEY(prediction_key)
+                        REFERENCES model_live_predictions(prediction_key)
+                );
+                CREATE TABLE IF NOT EXISTS model_live_reports (
+                    report_id TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    candidate_id TEXT NOT NULL,
+                    report_schema TEXT NOT NULL,
+                    settled_samples INTEGER NOT NULL,
+                    status TEXT NOT NULL CHECK(status IN (
+                        'COLLECTING_LIVE_SHADOW',
+                        'POSITIVE_LIVE_SHADOW',
+                        'NEGATIVE_LIVE_SHADOW'
+                    )),
+                    positive INTEGER NOT NULL CHECK(positive IN (0, 1)),
+                    drift_status TEXT NOT NULL,
+                    report_sha256 TEXT NOT NULL UNIQUE,
+                    report_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(candidate_id) REFERENCES model_candidates(candidate_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_model_live_reports_candidate
+                ON model_live_reports(candidate_id, settled_samples, created_at);
+                CREATE TABLE IF NOT EXISTS model_lifecycle_events (
+                    event_id TEXT PRIMARY KEY,
+                    sport TEXT NOT NULL DEFAULT 'volleyball' CHECK(sport='volleyball'),
+                    candidate_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL CHECK(event_type IN (
+                        'PROMOTED_SHADOW',
+                        'ROLLED_BACK_SHADOW'
+                    )),
+                    previous_model_id TEXT NOT NULL,
+                    evidence_report_id TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(candidate_id) REFERENCES model_candidates(candidate_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_model_lifecycle_events_time
+                ON model_lifecycle_events(created_at, event_id);
                 CREATE TRIGGER IF NOT EXISTS protect_feature_snapshots_update
                 BEFORE UPDATE ON feature_snapshots
                 BEGIN SELECT RAISE(ABORT, 'volleyball feature snapshot is append-only'); END;
@@ -431,6 +501,30 @@ class VolleyballStorage:
                 CREATE TRIGGER IF NOT EXISTS protect_model_validations_delete
                 BEFORE DELETE ON model_validations
                 BEGIN SELECT RAISE(ABORT, 'volleyball validation is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_live_predictions_update
+                BEFORE UPDATE ON model_live_predictions
+                BEGIN SELECT RAISE(ABORT, 'volleyball live prediction is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_live_predictions_delete
+                BEFORE DELETE ON model_live_predictions
+                BEGIN SELECT RAISE(ABORT, 'volleyball live prediction is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_live_settlements_update
+                BEFORE UPDATE ON model_live_settlements
+                BEGIN SELECT RAISE(ABORT, 'volleyball live settlement is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_live_settlements_delete
+                BEFORE DELETE ON model_live_settlements
+                BEGIN SELECT RAISE(ABORT, 'volleyball live settlement is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_live_reports_update
+                BEFORE UPDATE ON model_live_reports
+                BEGIN SELECT RAISE(ABORT, 'volleyball live report is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_live_reports_delete
+                BEFORE DELETE ON model_live_reports
+                BEGIN SELECT RAISE(ABORT, 'volleyball live report is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_lifecycle_events_update
+                BEFORE UPDATE ON model_lifecycle_events
+                BEGIN SELECT RAISE(ABORT, 'volleyball lifecycle event is immutable'); END;
+                CREATE TRIGGER IF NOT EXISTS protect_model_lifecycle_events_delete
+                BEFORE DELETE ON model_lifecycle_events
+                BEGIN SELECT RAISE(ABORT, 'volleyball lifecycle event is immutable'); END;
                 CREATE TRIGGER IF NOT EXISTS protect_settled_pick_update
                 BEFORE UPDATE ON shadow_picks
                 WHEN OLD.status='CLOSED'
@@ -739,6 +833,41 @@ class VolleyballStorage:
             validation_rows = connection.execute(
                 "SELECT report_sha256, report_json FROM model_validations"
             ).fetchall()
+            live_predictions = connection.execute(
+                "SELECT COUNT(*) FROM model_live_predictions"
+            ).fetchone()[0]
+            live_settlements = connection.execute(
+                "SELECT COUNT(*) FROM model_live_settlements"
+            ).fetchone()[0]
+            live_reports = connection.execute(
+                """
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN positive=1 THEN 1 ELSE 0 END) AS positive
+                FROM model_live_reports
+                """
+            ).fetchone()
+            lifecycle = connection.execute(
+                """
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN event_type='PROMOTED_SHADOW'
+                                THEN 1 ELSE 0 END) AS promotions,
+                       SUM(CASE WHEN event_type='ROLLED_BACK_SHADOW'
+                                THEN 1 ELSE 0 END) AS rollbacks
+                FROM model_lifecycle_events
+                """
+            ).fetchone()
+            live_integrity_rows = connection.execute(
+                """
+                SELECT payload_sha256 AS expected, payload_json AS payload
+                FROM model_live_predictions
+                UNION ALL
+                SELECT report_sha256 AS expected, report_json AS payload
+                FROM model_live_reports
+                UNION ALL
+                SELECT payload_sha256 AS expected, payload_json AS payload
+                FROM model_lifecycle_events
+                """
+            ).fetchall()
         registry_integrity = all(
             hashlib.sha256(str(row["artifact_json"]).encode("utf-8")).hexdigest()
             == str(row["artifact_sha256"])
@@ -748,6 +877,11 @@ class VolleyballStorage:
             hashlib.sha256(str(row["report_json"]).encode("utf-8")).hexdigest()
             == str(row["report_sha256"])
             for row in validation_rows
+        )
+        live_registry_integrity = all(
+            hashlib.sha256(str(row["payload"]).encode("utf-8")).hexdigest()
+            == str(row["expected"])
+            for row in live_integrity_rows
         )
         eligible = max(0, int(games) - int(finished))
         return {
@@ -800,6 +934,14 @@ class VolleyballStorage:
             "validation_active_model_changes": int(
                 validations["active_changes"] or 0
             ),
+            "live_shadow_predictions": int(live_predictions),
+            "live_shadow_settlements": int(live_settlements),
+            "live_shadow_reports": int(live_reports["total"] or 0),
+            "positive_live_shadow_reports": int(live_reports["positive"] or 0),
+            "shadow_model_promotions": int(lifecycle["promotions"] or 0),
+            "shadow_model_rollbacks": int(lifecycle["rollbacks"] or 0),
+            "model_lifecycle_events": int(lifecycle["total"] or 0),
+            "live_registry_integrity": live_registry_integrity,
         }
 
     def register_model_candidate(self, payload: dict) -> tuple[bool, str]:
@@ -997,6 +1139,393 @@ class VolleyballStorage:
                 ),
             )
         return cursor.rowcount == 1, validation_id
+
+    def validation_for_candidate(self, candidate_id: str) -> dict | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT report_json FROM model_validations
+                WHERE candidate_id=?
+                ORDER BY created_at DESC, validation_id DESC
+                LIMIT 1
+                """,
+                (str(candidate_id),),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            return json.loads(str(row["report_json"]))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    def model_candidate(self, candidate_id: str) -> dict | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT c.*, d.payload_json AS dataset_json
+                FROM model_candidates c
+                JOIN model_training_datasets d
+                  ON d.dataset_sha256=c.dataset_sha256
+                WHERE c.candidate_id=? AND c.reproducible=1
+                  AND c.registry_status='CANDIDATE_ONLY'
+                  AND c.active_model_modified=0
+                """,
+                (str(candidate_id),),
+            ).fetchone()
+        if row is None:
+            return None
+        try:
+            return {
+                "candidate_id": str(row["candidate_id"]),
+                "dataset_sha256": str(row["dataset_sha256"]),
+                "artifact_sha256": str(row["artifact_sha256"]),
+                "dataset_document": json.loads(str(row["dataset_json"])),
+                "artifact": json.loads(str(row["artifact_json"])),
+                "reproducible": bool(row["reproducible"]),
+                "active_model_modified": bool(row["active_model_modified"]),
+            }
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+
+    def record_live_prediction(
+        self,
+        *,
+        candidate_id: str,
+        comparator_model_id: str,
+        role: str,
+        game: VolleyballGame,
+        observed_at: str,
+        home_probability: float,
+        model_parameters: dict,
+    ) -> tuple[bool, str]:
+        from .training import canonical_json, sha256_text
+
+        selected_role = str(role).upper()
+        probability = float(home_probability)
+        if (
+            selected_role not in {"CHAMPION", "CHALLENGER"}
+            or not (0.0 < probability < 1.0)
+            or parse_utc(observed_at) >= parse_utc(game.scheduled_at)
+        ):
+            return False, ""
+        payload = {
+            "candidate_id": str(candidate_id),
+            "comparator_model_id": str(comparator_model_id),
+            "role": selected_role,
+            "game_id": str(game.game_id),
+            "league_id": str(game.league_id),
+            "scheduled_at": str(game.scheduled_at),
+            "observed_at": str(observed_at),
+            "home_probability": round(probability, 10),
+            "model_parameters": dict(model_parameters),
+            "shadow_only": True,
+            "real_execution_allowed": False,
+        }
+        payload_json = canonical_json(payload)
+        payload_sha = sha256_text(payload_json)
+        prediction_key = f"volleyball_live_prediction_{payload_sha[:24]}"
+        with self.connect() as connection:
+            candidate = connection.execute(
+                "SELECT candidate_id FROM model_candidates WHERE candidate_id=?",
+                (str(candidate_id),),
+            ).fetchone()
+            if candidate is None:
+                return False, ""
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO model_live_predictions (
+                    prediction_key, candidate_id, comparator_model_id, role,
+                    game_id, league_id, scheduled_at, observed_at,
+                    home_probability, model_parameters_json,
+                    payload_sha256, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    prediction_key,
+                    str(candidate_id),
+                    str(comparator_model_id),
+                    selected_role,
+                    str(game.game_id),
+                    str(game.league_id),
+                    str(game.scheduled_at),
+                    str(observed_at),
+                    round(probability, 10),
+                    canonical_json(dict(model_parameters)),
+                    payload_sha,
+                    payload_json,
+                ),
+            )
+        return cursor.rowcount == 1, prediction_key
+
+    def settle_live_predictions(
+        self,
+        games: Iterable[VolleyballGame],
+    ) -> int:
+        game_index = {
+            str(game.game_id): game
+            for game in games
+            if game.finished
+            and game.home_sets is not None
+            and game.away_sets is not None
+            and game.home_sets != game.away_sets
+        }
+        if not game_index:
+            return 0
+        inserted = 0
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT p.prediction_key, p.game_id, p.home_probability
+                FROM model_live_predictions p
+                LEFT JOIN model_live_settlements s
+                  ON s.prediction_key=p.prediction_key
+                WHERE s.prediction_key IS NULL
+                """
+            ).fetchall()
+            for row in rows:
+                game = game_index.get(str(row["game_id"]))
+                if game is None:
+                    continue
+                target = 1 if int(game.home_sets) > int(game.away_sets) else 0
+                probability = min(
+                    1.0 - 1e-12,
+                    max(1e-12, float(row["home_probability"])),
+                )
+                brier = (probability - target) ** 2
+                log_loss = -(
+                    target * math.log(probability)
+                    + (1 - target) * math.log(1.0 - probability)
+                )
+                cursor = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO model_live_settlements (
+                        prediction_key, target, brier_loss, log_loss, settled_at
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(row["prediction_key"]),
+                        target,
+                        brier,
+                        log_loss,
+                        utc_now(),
+                    ),
+                )
+                inserted += int(cursor.rowcount == 1)
+        return inserted
+
+    def paired_live_rows(self, candidate_id: str) -> list[dict]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT c.game_id, c.league_id, c.scheduled_at,
+                       c.home_probability AS champion_probability,
+                       ch.home_probability AS challenger_probability,
+                       sc.target,
+                       sc.brier_loss AS champion_brier,
+                       sch.brier_loss AS challenger_brier,
+                       sc.log_loss AS champion_log_loss,
+                       sch.log_loss AS challenger_log_loss
+                FROM model_live_predictions c
+                JOIN model_live_predictions ch
+                  ON ch.candidate_id=c.candidate_id
+                 AND ch.game_id=c.game_id
+                 AND ch.role='CHALLENGER'
+                JOIN model_live_settlements sc
+                  ON sc.prediction_key=c.prediction_key
+                JOIN model_live_settlements sch
+                  ON sch.prediction_key=ch.prediction_key
+                WHERE c.candidate_id=? AND c.role='CHAMPION'
+                ORDER BY c.scheduled_at, c.game_id
+                """,
+                (str(candidate_id),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def register_live_report(self, payload: dict) -> tuple[bool, str]:
+        from .training import canonical_json, sha256_text
+        from .governor import LIVE_REPORT_SCHEMA_VERSION
+
+        report = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"report_id", "report_sha256", "report_created"}
+        }
+        report_json = canonical_json(report)
+        report_sha = sha256_text(report_json)
+        report_id = f"volleyball_live_report_{report_sha[:24]}"
+        if (
+            payload.get("report_id") != report_id
+            or payload.get("report_sha256") != report_sha
+            or report.get("report_schema") != LIVE_REPORT_SCHEMA_VERSION
+            or report.get("status")
+            not in {
+                "COLLECTING_LIVE_SHADOW",
+                "POSITIVE_LIVE_SHADOW",
+                "NEGATIVE_LIVE_SHADOW",
+            }
+            or report.get("real_execution_allowed") is not False
+        ):
+            return False, ""
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO model_live_reports (
+                    report_id, candidate_id, report_schema, settled_samples,
+                    status, positive, drift_status, report_sha256,
+                    report_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    report_id,
+                    str(report["candidate_id"]),
+                    LIVE_REPORT_SCHEMA_VERSION,
+                    int(report.get("settled_samples", 0)),
+                    str(report["status"]),
+                    int(bool(report.get("positive", False))),
+                    str(report.get("drift_status", "UNKNOWN")),
+                    report_sha,
+                    report_json,
+                    utc_now(),
+                ),
+            )
+        return cursor.rowcount == 1, report_id
+
+    def live_report_counts(self, candidate_id: str) -> dict:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT COUNT(*) AS total,
+                       SUM(CASE WHEN positive=1 THEN 1 ELSE 0 END) AS positive,
+                       SUM(CASE WHEN positive=0
+                                 AND status='NEGATIVE_LIVE_SHADOW'
+                                THEN 1 ELSE 0 END) AS negative
+                FROM model_live_reports WHERE candidate_id=?
+                """,
+                (str(candidate_id),),
+            ).fetchone()
+        return {
+            "total": int(row["total"] or 0),
+            "positive": int(row["positive"] or 0),
+            "negative": int(row["negative"] or 0),
+        }
+
+    def latest_live_report_samples(self, candidate_id: str) -> int:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT settled_samples FROM model_live_reports
+                WHERE candidate_id=?
+                ORDER BY settled_samples DESC, created_at DESC
+                LIMIT 1
+                """,
+                (str(candidate_id),),
+            ).fetchone()
+        return 0 if row is None else int(row["settled_samples"])
+
+    def recent_live_report_statuses(
+        self,
+        candidate_id: str,
+        limit: int,
+    ) -> list[str]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT status FROM model_live_reports
+                WHERE candidate_id=?
+                ORDER BY settled_samples DESC, rowid DESC
+                LIMIT ?
+                """,
+                (str(candidate_id), max(1, int(limit))),
+            ).fetchall()
+        return [str(row["status"]) for row in rows]
+
+    def record_lifecycle_event(
+        self,
+        *,
+        candidate_id: str,
+        event_type: str,
+        previous_model_id: str,
+        evidence_report_id: str,
+        reason: str,
+    ) -> tuple[bool, str]:
+        from .training import canonical_json, sha256_text
+
+        selected_type = str(event_type).upper()
+        if selected_type not in {"PROMOTED_SHADOW", "ROLLED_BACK_SHADOW"}:
+            return False, ""
+        payload = {
+            "candidate_id": str(candidate_id),
+            "event_type": selected_type,
+            "previous_model_id": str(previous_model_id or "BASELINE"),
+            "evidence_report_id": str(evidence_report_id),
+            "reason": str(reason),
+            "shadow_only": True,
+            "real_execution_allowed": False,
+            "football_model_modified": False,
+        }
+        payload_json = canonical_json(payload)
+        payload_sha = sha256_text(payload_json)
+        event_id = f"volleyball_lifecycle_{payload_sha[:24]}"
+        with self.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT OR IGNORE INTO model_lifecycle_events (
+                    event_id, candidate_id, event_type, previous_model_id,
+                    evidence_report_id, reason, payload_sha256, payload_json,
+                    created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    str(candidate_id),
+                    selected_type,
+                    str(previous_model_id or "BASELINE"),
+                    str(evidence_report_id),
+                    str(reason),
+                    payload_sha,
+                    payload_json,
+                    utc_now(),
+                ),
+            )
+        return cursor.rowcount == 1, event_id
+
+    def active_shadow_model_id(self) -> str:
+        active = "BASELINE"
+        with self.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT candidate_id, event_type, previous_model_id
+                FROM model_lifecycle_events
+                ORDER BY rowid
+                """
+            ).fetchall()
+        for row in rows:
+            if row["event_type"] == "PROMOTED_SHADOW":
+                active = str(row["candidate_id"])
+            elif row["event_type"] == "ROLLED_BACK_SHADOW":
+                active = str(row["previous_model_id"] or "BASELINE")
+        return active
+
+    def comparator_model_id(self, candidate_id: str) -> str:
+        with self.connect() as connection:
+            row = connection.execute(
+                """
+                SELECT previous_model_id
+                FROM model_lifecycle_events
+                WHERE candidate_id=? AND event_type='PROMOTED_SHADOW'
+                ORDER BY rowid DESC LIMIT 1
+                """,
+                (str(candidate_id),),
+            ).fetchone()
+        return "BASELINE" if row is None else str(
+            row["previous_model_id"] or "BASELINE"
+        )
+
+    def active_shadow_model(self) -> dict | None:
+        candidate_id = self.active_shadow_model_id()
+        if candidate_id == "BASELINE":
+            return None
+        return self.model_candidate(candidate_id)
 
     def point_in_time_training_set(
         self, target: VolleyballGame, observed_at: str

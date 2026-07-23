@@ -13,6 +13,7 @@ from .features import (
     FeatureLeakageError,
     build_point_in_time_features,
 )
+from .governor import GovernorSettings, run_autonomous_governor
 from .market import (
     MARKET_SCHEMA_VERSION,
     build_no_vig_consensus,
@@ -20,12 +21,12 @@ from .market import (
 )
 from .settlement import profit_for_result, settle_match_winner
 from .storage import VolleyballStorage
-from .training import train_candidate
+from .training import DEFAULT_HYPERPARAMETERS, train_candidate
 from .validation import ValidationSettings, validate_candidate
 
 
-MODEL_VERSION = "volleyball-elo-shadow-v1"
-RUNTIME_VERSION = "9.7"
+MODEL_VERSION = "volleyball-elo-shadow-baseline-v1"
+RUNTIME_VERSION = "10.0"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
@@ -113,6 +114,57 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             validation
         )
     validation_status = str(validation.get("status", "WAITING_REPRODUCIBLE_CANDIDATE"))
+    stored_games = storage.load_games()
+    active_before_governor = storage.active_shadow_model()
+    active_monitor = None
+    if (
+        active_before_governor
+        and (
+            not registered_candidate
+            or active_before_governor["candidate_id"]
+            != registered_candidate["candidate_id"]
+        )
+    ):
+        active_monitor = run_autonomous_governor(
+            storage,
+            stored_games,
+            active_before_governor,
+            storage.validation_for_candidate(
+                active_before_governor["candidate_id"]
+            ),
+            settings=GovernorSettings(
+                enabled=settings.autonomous_governor_enabled,
+                minimum_live_samples=settings.live_shadow_min_samples,
+                report_step_samples=settings.live_shadow_report_step,
+                required_positive_reports=settings.live_shadow_positive_reports,
+                rollback_negative_reports=settings.live_shadow_rollback_reports,
+                drift_psi_limit=settings.live_shadow_drift_psi_limit,
+            ),
+        )
+    governor = run_autonomous_governor(
+        storage,
+        stored_games,
+        registered_candidate,
+        validation,
+        settings=GovernorSettings(
+            enabled=settings.autonomous_governor_enabled,
+            minimum_live_samples=settings.live_shadow_min_samples,
+            report_step_samples=settings.live_shadow_report_step,
+            required_positive_reports=settings.live_shadow_positive_reports,
+            rollback_negative_reports=settings.live_shadow_rollback_reports,
+            drift_psi_limit=settings.live_shadow_drift_psi_limit,
+        ),
+    )
+    active_shadow_model = storage.active_shadow_model()
+    active_model_id = storage.active_shadow_model_id()
+    active_hyperparameters = (
+        dict(active_shadow_model["artifact"]["hyperparameters"])
+        if active_shadow_model
+        else dict(DEFAULT_HYPERPARAMETERS)
+    )
+    active_model_version = (
+        active_model_id if active_shadow_model else MODEL_VERSION
+    )
 
     picks_created = 0
     quotes_saved = 0
@@ -161,8 +213,9 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
                 game,
                 training_games,
                 observed_at=feature_observed_at,
-                model_version=MODEL_VERSION,
+                model_version=active_model_version,
                 source_metadata=source_metadata,
+                hyperparameters=active_hyperparameters,
             )
         except FeatureLeakageError as exc:
             features_quarantined += int(
@@ -211,7 +264,7 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
                 "bot_odds": fair_odds,
                 "edge": round(edge, 8),
                 "confidence": prediction.confidence,
-                "model_version": MODEL_VERSION,
+                "model_version": active_model_version,
                 "feature_key": feature_key,
                 "feature_schema": FEATURE_SCHEMA_VERSION,
                 "market_schema": MARKET_SCHEMA_VERSION,
@@ -243,7 +296,7 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             }
             picks_created += int(storage.create_shadow_pick(payload))
 
-    game_index = {game.game_id: game for game in storage.load_games()}
+    game_index = {game.game_id: game for game in stored_games}
     settled = 0
     for pick in storage.open_picks():
         game = game_index.get(str(pick["game_id"]))
@@ -323,8 +376,31 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             validation.get("positive_validation", False)
         ),
         "walk_forward_manual_approval_required": True,
-        "active_model_modified": False,
-        "automatic_model_promotion_allowed": False,
+        "autonomous_governor_status": str(governor.get("status", "UNKNOWN")),
+        "active_shadow_monitor_status": str(
+            (active_monitor or {}).get("status", "NOT_REQUIRED")
+        ),
+        "autonomous_governor_enabled": settings.autonomous_governor_enabled,
+        "live_shadow_report_status": str(
+            governor.get("live_report_status", "WAITING")
+        ),
+        "live_shadow_settled_samples": int(
+            governor.get("settled_samples", 0)
+        ),
+        "active_shadow_model_id": active_model_id,
+        "shadow_model_changed": bool(
+            governor.get("shadow_model_changed", False)
+            or (active_monitor or {}).get("shadow_model_changed", False)
+        ),
+        "active_model_modified": bool(
+            governor.get("shadow_model_changed", False)
+            or (active_monitor or {}).get("shadow_model_changed", False)
+        ),
+        "active_model_scope": "volleyball_shadow_only",
+        "automatic_model_promotion_allowed": True,
+        "automatic_model_promotion_scope": "volleyball_shadow_only",
+        "automatic_rollback_enabled": True,
+        "football_active_model_modified": False,
         "coverage": coverage,
         "real_execution_allowed": False,
         "football_data_modified": False,

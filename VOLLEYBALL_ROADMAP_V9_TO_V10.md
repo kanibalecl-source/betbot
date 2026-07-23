@@ -13,9 +13,9 @@ backed up before startup, and deployed only after the previous gate passes.
 | v9.5 | Multiple bookmaker snapshots, no-vig consensus and immutable CLV (implemented) | sufficient closing-line coverage |
 | v9.6 | Candidate training pipeline and reproducible model registry (implemented) | minimum settled sample and reproducible artifact |
 | v9.7 | Walk-forward Champion-Challenger validation (implemented) | positive out-of-sample Brier/log-loss and calibration |
-| v9.8 | Segment stability, drift detection and automatic rollback | no weak league/market slice breaches |
-| v9.9 | Autonomous learning governor; candidate creation only | repeated positive shadow validations |
-| v10.0 | Self-improving volleyball shadow system | quality depends on new verified data; real betting remains disabled |
+| v9.8 | Segment stability, drift detection and automatic rollback (integrated in v10) | no weak league/market slice breaches |
+| v9.9 | Autonomous learning governor; candidate creation only (integrated in v10) | repeated positive shadow validations |
+| v10.0 | Self-improving volleyball shadow system (implemented) | quality depends on new verified data; real betting remains disabled |
 
 ## Non-negotiable rules
 
