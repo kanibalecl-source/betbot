@@ -149,7 +149,7 @@ def _login_css() -> None:
         .ka-metric strong {{ display:block; margin-top:7px; font:850 20px/1 Inter,Arial,sans-serif; }}
         .ka-metric.one {{ left:1.5vw; top:38%; }}
         .ka-metric.two {{ left:34%; top:23%; }}
-        .ka-metric.three {{ right:3%; bottom:7%; }}
+        .ka-metric.three {{ right:3%; top:23%; bottom:auto; }}
 
         div[data-testid="stForm"] {{
           position:fixed!important; z-index:4!important;
@@ -186,31 +186,43 @@ def _login_css() -> None:
           color:var(--login-navy)!important; font-size:14px!important; font-weight:750!important;
           letter-spacing:0!important; text-transform:none!important;
         }}
-        div[data-testid="stForm"] [data-baseweb="input"] {{
+        div[data-testid="stForm"] [data-baseweb="input"],
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"] {{
           position:relative!important; height:clamp(52px,6.1vh,62px)!important;
           border:1px solid #b9c8da!important; border-radius:10px!important;
           background:#fff!important; box-shadow:none!important; transition:.16s ease!important;
         }}
         div[data-testid="stForm"] [data-baseweb="input"] > div,
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"] > div,
         div[data-testid="stForm"] [data-baseweb="input"] input {{ background:#fff!important; background-color:#fff!important; }}
-        div[data-testid="stForm"] [data-baseweb="input"]:focus-within {{
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"] input {{
+          background:#fff!important; background-color:#fff!important;
+        }}
+        div[data-testid="stForm"] [data-baseweb="input"]:focus-within,
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"]:focus-within {{
           border-color:var(--login-blue)!important; box-shadow:0 0 0 3px rgba(8,122,245,.10)!important;
         }}
         div[data-testid="stForm"] [data-testid="InputInstructions"] {{ display:none!important; }}
-        div[data-testid="stForm"] [data-baseweb="input"]::before {{
+        div[data-testid="stForm"] [data-baseweb="input"]::before,
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"]::before {{
           content:""; position:absolute; z-index:3; left:17px; top:50%; width:23px; height:23px;
           transform:translateY(-50%); background:#6a7b92; opacity:.92;
           -webkit-mask-position:center; -webkit-mask-size:contain; -webkit-mask-repeat:no-repeat;
         }}
-        div[data-testid="stForm"] [data-baseweb="input"]:has(input[aria-label="Adres e-mail lub login"])::before {{
+        div[data-testid="stForm"] [data-baseweb="input"]:has(input[aria-label="Adres e-mail lub login"])::before,
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"]:has(input[aria-label="Adres e-mail lub login"])::before {{
           -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 12a5 5 0 100-10 5 5 0 000 10zm0-2a3 3 0 110-6 3 3 0 010 6zm0 4c-5 0-9 2.5-9 6v2h18v-2c0-3.5-4-6-9-6zm-6.8 6c.5-2.2 3.4-4 6.8-4s6.3 1.8 6.8 4H5.2z'/%3E%3C/svg%3E");
         }}
-        div[data-testid="stForm"] [data-baseweb="input"]:has(input[type="password"])::before {{
+        div[data-testid="stForm"] [data-baseweb="input"]:has(input[type="password"])::before,
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"]:has(input[type="password"])::before {{
           -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M17 8h-1V6a4 4 0 00-8 0v2H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V10a2 2 0 00-2-2zm-7-2a2 2 0 014 0v2h-4V6zm7 14H7V10h10v10z'/%3E%3C/svg%3E");
         }}
         div[data-testid="stForm"] input {{
           padding-left:52px!important; color:var(--login-navy)!important; -webkit-text-fill-color:var(--login-navy)!important;
           font:550 clamp(14px,1vw,17px) Inter,Arial,sans-serif!important; caret-color:var(--login-blue)!important;
+        }}
+        div[data-testid="stForm"] [data-testid="stTextInputRootElement"] button {{
+          color:#6a7b92!important; background:transparent!important;
         }}
         div[data-testid="stForm"] input::placeholder {{ color:#8998ab!important; -webkit-text-fill-color:#8998ab!important; opacity:1!important; }}
         div[data-testid="stForm"] input:-webkit-autofill {{

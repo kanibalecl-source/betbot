@@ -1,0 +1,16 @@
+BETBOT SERVER v8.3 - LOGIN UI ALIGNMENT
+
+Zakres:
+- karta "Pewnosc 72%" przeniesiona nad wykres i wyrownana z karta "Value",
+- pola loginu i hasla maja stale biale tlo,
+- wpisywany tekst ma kolor granatowy zgodny z identyfikacja KANIBAL,
+- placeholder, kursor, obramowanie aktywnego pola i autofill zachowuja spojna kolorystyke,
+- selektory obsluguja aktualna i starsza strukture komponentow Streamlit.
+
+Pliki wdrozeniowe:
+- auth_manager.py
+
+Bezpieczenstwo:
+- brak plikow danych, historii, modeli, baz danych i danych logowania,
+- brak zmian w logice typowania, uczenia i rozliczania,
+- brak zmian w konfiguracji Railway.
