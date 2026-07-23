@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from storage_paths import get_data_dir
+from settings_v81 import load_settings
 
 STAGES = ("SHADOW", "PAPER", "CANARY", "LIMITED", "CONTROLLED")
 REAL_STAGES = {"CANARY", "LIMITED", "CONTROLLED"}
@@ -111,6 +112,7 @@ def evaluate_capital_stage(
 
     execution_allowed = enforced in REAL_STAGES and real_capital_opt_in
     return {
+        "schema_version": "betbot.staged_capital_governor.v8",
         "version": 8,
         "updated_at": _now(),
         "status": "EXECUTION_ALLOWED" if execution_allowed else "FAIL_CLOSED",
@@ -141,15 +143,14 @@ class StagedCapitalGovernor:
         self.events_path = self.work / "staged_capital_governor_events_v8.jsonl"
 
     def run(self) -> dict[str, Any]:
+        settings = load_settings()
         previous = _read(self.state_path)
         result = evaluate_capital_stage(
             _read(self.scorecard_path),
             _read(self.runtime_path),
             str(previous.get("current_stage", "SHADOW")),
-            real_capital_opt_in=_enabled("BETBOT_CAPITAL_REAL_ENABLED", "0"),
-            maximum_runtime_age_seconds=max(
-                60, int(os.getenv("BETBOT_CAPITAL_RUNTIME_MAX_AGE_SECONDS", "7200"))
-            ),
+            real_capital_opt_in=settings.capital_real_enabled,
+            maximum_runtime_age_seconds=settings.capital_runtime_max_age_seconds,
         )
         _atomic(self.state_path, result)
         _append(self.events_path, result)

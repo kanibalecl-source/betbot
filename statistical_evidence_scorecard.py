@@ -14,6 +14,7 @@ from typing import Any, Mapping
 
 from diagnostic_advantage_report import generate_report, load_rows
 from quality_live_shadow import live_shadow_report
+from settings_v81 import load_settings
 from storage_paths import get_data_dir
 
 
@@ -94,6 +95,7 @@ def build_scorecard(
     confirmed = all(gates.values())
     status = "STATISTICAL_EDGE_CONFIRMED" if confirmed else "REVIEW" if passed >= 7 else "COLLECTING"
     return {
+        "schema_version": "betbot.statistical_evidence_scorecard.v8",
         "version": 8,
         "created_at": _now(),
         "status": status,
@@ -139,8 +141,9 @@ class StatisticalEvidenceScorecard:
         self.output_path = self.work / "statistical_evidence_scorecard_v8.json"
 
     def run(self) -> dict[str, Any]:
+        settings = load_settings()
         rows = load_rows(self.training_path) if self.training_path.is_file() else []
-        minimum_segment = max(50, int(os.getenv("BETBOT_EVIDENCE_MIN_SEGMENT_SAMPLES", "250")))
+        minimum_segment = settings.evidence_min_segment_samples
         diagnostic, _ = generate_report(rows, minimum_segment_samples=minimum_segment)
         candidate = _read(self.candidate_path)
         scorecard = build_scorecard(
@@ -148,9 +151,9 @@ class StatisticalEvidenceScorecard:
             candidate.get("validation", {}) if isinstance(candidate.get("validation"), Mapping) else {},
             live_shadow_report(self.root),
             _read(self.guardian_path),
-            minimum_samples=max(100, int(os.getenv("BETBOT_EVIDENCE_MIN_OOS_SAMPLES", "1000"))),
-            minimum_clv_samples=max(50, int(os.getenv("BETBOT_EVIDENCE_MIN_CLV_SAMPLES", "200"))),
-            maximum_ece=max(0.001, float(os.getenv("BETBOT_EVIDENCE_MAX_ECE", "0.05"))),
+            minimum_samples=settings.evidence_min_oos_samples,
+            minimum_clv_samples=settings.evidence_min_clv_samples,
+            maximum_ece=settings.evidence_max_ece,
         )
         _atomic(self.output_path, scorecard)
         return scorecard

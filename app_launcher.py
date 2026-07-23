@@ -1,119 +1,181 @@
+"""Production process supervisor — Architecture Hardening v8.1.
+
+Importing this module has no side effects.  Quality Governance is the single
+owner of controlled retraining; the legacy retraining loop is not launched.
+"""
+from __future__ import annotations
+
 import os
 import signal
 import subprocess
 import sys
 import threading
 import time
+from typing import Any
 
+from runtime_health_v81 import (
+    RUNTIME_SCHEMA,
+    atomic_json,
+    quality_health_path,
+    read_json,
+    runtime_health_path,
+    utc_now,
+)
 from server_start_guard import run_server_start_guard_once
-
-print("🚀 APP LAUNCHER START")
-sys.stdout.flush()
-
-run_server_start_guard_once()
-
-PORT = os.environ.get("PORT", "8080")
-PYTHON = sys.executable or "python3"
-
-PROCESS_SPECS = {
-    "scheduler": [PYTHON, "scheduler_engine.py"],
-    "live_pipeline": [PYTHON, "live_pipeline_runtime.py"],
-    "settlement": [PYTHON, "settle_loop.py"],
-    "persistence": [PYTHON, "persistence_runtime.py"],
-    "retraining": [PYTHON, "auto_retraining_loop.py"],
-    "quality_governance_v8": [PYTHON, "quality_governance_v8_loop.py"],
-    "dashboard": [
-        PYTHON, "-m", "streamlit", "run", "dashboard_streamlit.py",
-        "--server.port", str(PORT),
-        "--server.address", "0.0.0.0",
-        "--server.headless", "true",
-    ],
-}
-
-processes = {}
+from settings_v81 import RuntimeSettings, load_settings
 
 
-def stream_output(process, prefix):
-    try:
-        for line in iter(process.stdout.readline, ""):
-            if line:
-                print(f"{prefix} {line.strip()}")
-                sys.stdout.flush()
-    except Exception as exc:
-        print(f"{prefix} OUTPUT STREAM ERROR: {exc}")
-        sys.stdout.flush()
+def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, list[str]]:
+    config = settings or load_settings()
+    python = sys.executable or "python3"
+    return {
+        "scheduler": [python, "scheduler_engine.py"],
+        "live_pipeline": [python, "live_pipeline_runtime.py"],
+        "settlement": [python, "settle_loop.py"],
+        "persistence": [python, "persistence_runtime.py"],
+        "quality_governance_v8": [python, "quality_governance_v8_loop.py"],
+        "dashboard": [
+            python, "-m", "streamlit", "run", "dashboard_streamlit.py",
+            "--server.port", str(config.port),
+            "--server.address", "0.0.0.0",
+            "--server.headless", "true",
+        ],
+    }
 
 
-def start_process(name, command):
-    print(f"🚀 START {name}: {' '.join(command)}")
-    sys.stdout.flush()
+class ProcessSupervisor:
+    def __init__(self, settings: RuntimeSettings) -> None:
+        self.settings = settings
+        self.specs = build_process_specs(settings)
+        self.processes: dict[str, subprocess.Popen[str]] = {}
+        self.metadata: dict[str, dict[str, Any]] = {
+            name: {"restart_count": 0, "last_started_at": None, "last_exit_code": None}
+            for name in self.specs
+        }
+        self.started_at = utc_now()
+        self.health_path = runtime_health_path()
+        self.quality_path = quality_health_path()
 
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-    )
-
-    threading.Thread(
-        target=stream_output,
-        args=(process, f"[{name.upper()}]"),
-        daemon=True,
-    ).start()
-
-    print(f"✅ {name} STARTED")
-    sys.stdout.flush()
-    return process
-
-
-def start_all():
-    for name, command in PROCESS_SPECS.items():
-        processes[name] = start_process(name, command)
-
-
-def shutdown(*args):
-    print("🛑 SHUTDOWN START")
-    sys.stdout.flush()
-
-    for name, process in list(processes.items()):
+    @staticmethod
+    def _stream_output(process: subprocess.Popen[str], prefix: str) -> None:
         try:
-            print(f"🛑 TERMINATE {name}")
-            process.terminate()
-        except Exception:
-            pass
+            if process.stdout is None:
+                return
+            for line in iter(process.stdout.readline, ""):
+                if line:
+                    print(f"{prefix} {line.strip()}", flush=True)
+        except Exception as exc:
+            print(f"{prefix} OUTPUT STREAM ERROR: {exc}", flush=True)
 
-    print("✅ SHUTDOWN COMPLETE")
-    sys.stdout.flush()
-    sys.exit(0)
+    def start_process(self, name: str, command: list[str], *, restart: bool = False) -> subprocess.Popen[str]:
+        print(f"START {name}: {' '.join(command)}", flush=True)
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+        threading.Thread(
+            target=self._stream_output,
+            args=(process, f"[{name.upper()}]"),
+            daemon=True,
+        ).start()
+        info = self.metadata[name]
+        info["last_started_at"] = utc_now()
+        if restart:
+            info["restart_count"] = int(info.get("restart_count", 0)) + 1
+        print(f"{name} STARTED pid={process.pid}", flush=True)
+        return process
 
+    def start_all(self) -> None:
+        for name, command in self.specs.items():
+            self.processes[name] = self.start_process(name, command)
 
-signal.signal(signal.SIGTERM, shutdown)
-signal.signal(signal.SIGINT, shutdown)
-
-start_all()
-
-while True:
-    try:
-        states = {}
-
-        for name, command in PROCESS_SPECS.items():
-            process = processes.get(name)
+    def tick(self) -> dict[str, bool]:
+        states: dict[str, bool] = {}
+        for name, command in self.specs.items():
+            process = self.processes.get(name)
             alive = process is not None and process.poll() is None
-            states[name] = alive
-
             if not alive:
-                print(f"❌ {name} CRASHED -> RESTART")
-                sys.stdout.flush()
-                processes[name] = start_process(name, command)
+                exit_code = None if process is None else process.poll()
+                self.metadata[name]["last_exit_code"] = exit_code
+                print(f"{name} CRASHED exit={exit_code} -> RESTART", flush=True)
+                self.processes[name] = self.start_process(name, command, restart=True)
+                alive = True
+            states[name] = alive
+        return states
 
-        state_text = " | ".join(f"{name}={alive}" for name, alive in states.items())
-        print(f"💓 HEARTBEAT | {state_text}")
-        sys.stdout.flush()
+    def write_health(self, states: dict[str, bool]) -> dict[str, Any]:
+        quality = read_json(self.quality_path)
+        process_details = {
+            name: {
+                "alive": bool(states.get(name)),
+                "pid": self.processes[name].pid if name in self.processes else None,
+                **self.metadata[name],
+            }
+            for name in self.specs
+        }
+        payload = {
+            "schema_version": RUNTIME_SCHEMA,
+            "generated_at": utc_now(),
+            "supervisor_started_at": self.started_at,
+            "supervisor_pid": os.getpid(),
+            "configuration_fingerprint": self.settings.fingerprint(),
+            "all_required_processes_alive": all(states.values()),
+            "single_retraining_owner": "quality_governance_v8",
+            "legacy_retraining_process_started": False,
+            "processes": process_details,
+            "quality_governance": quality,
+            "financial_execution": {
+                "betting_enabled": self.settings.betting_enabled,
+                "capital_real_enabled": self.settings.capital_real_enabled,
+            },
+            "contains_secrets": False,
+            "source_history_modified": False,
+        }
+        atomic_json(self.health_path, payload)
+        return payload
 
-        time.sleep(30)
+    def shutdown(self) -> None:
+        print("SHUTDOWN START", flush=True)
+        for name, process in list(self.processes.items()):
+            try:
+                print(f"TERMINATE {name}", flush=True)
+                process.terminate()
+            except Exception:
+                pass
+        print("SHUTDOWN COMPLETE", flush=True)
 
-    except Exception as exc:
-        print(f"❌ APP LAUNCHER ERROR: {exc}")
-        sys.stdout.flush()
-        time.sleep(15)
+
+def main() -> int:
+    settings = load_settings()
+    print("APP LAUNCHER v8.1 START", flush=True)
+    print(
+        f"CONFIG VALID schema={settings.schema_version} fingerprint={settings.fingerprint()}",
+        flush=True,
+    )
+    run_server_start_guard_once()
+    supervisor = ProcessSupervisor(settings)
+
+    def stop(*_: object) -> None:
+        supervisor.shutdown()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    supervisor.start_all()
+    while True:
+        try:
+            states = supervisor.tick()
+            supervisor.write_health(states)
+            state_text = " | ".join(f"{name}={alive}" for name, alive in states.items())
+            print(f"HEARTBEAT v8.1 | {state_text}", flush=True)
+            time.sleep(settings.heartbeat_seconds)
+        except Exception as exc:
+            print(f"APP LAUNCHER ERROR: {exc}", flush=True)
+            time.sleep(15)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

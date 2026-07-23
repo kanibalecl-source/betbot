@@ -1,0 +1,24 @@
+KANIBAL ARCHITECTURE HARDENING v8.1
+===================================
+
+Pliki paczki:
+- settings_v81.py
+- runtime_health_v81.py
+- app_launcher.py
+- quality_governance_v8_loop.py
+- statistical_evidence_scorecard.py
+- staged_capital_governor.py
+- execution_guard.py
+- .env.example
+- WDROZENIE_ARCHITECTURE_HARDENING_V8_1.md
+
+Paczka NIE zawiera:
+- katalogu data,
+- historii CSV/JSON/SQLite,
+- aktywnego modelu ani kandydatow,
+- users.json, plikow .env, tokenow i kluczy API,
+- banerow i innych duzych zasobow.
+
+Domyslny stan finansowy pozostaje FAIL-CLOSED.
+Zmiana nie modyfikuje logiki predykcji.
+Testy v8.1 pozostaja w repozytorium roboczym i nie sa wymagane w obrazie serwera.

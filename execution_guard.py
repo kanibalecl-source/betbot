@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from staged_capital_governor import REAL_STAGES, load_capital_policy
+from settings_v81 import load_settings
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,10 @@ def assert_execution_allowed(
         age = (datetime.now(timezone.utc) - updated.astimezone(timezone.utc)).total_seconds()
     except (TypeError, ValueError):
         age = float("inf")
-    maximum_age = max(60, int(os.getenv("BETBOT_CAPITAL_POLICY_MAX_AGE_SECONDS", "7200")))
+    # Cross-field configuration is validated once by the startup supervisor.
+    # The per-request guard reads its typed threshold without repeating startup
+    # validation, then independently enforces both BETTING_ENABLED and policy.
+    maximum_age = load_settings(validate_cross_fields=False).capital_policy_max_age_seconds
     if age < 0 or age > maximum_age:
         raise ExecutionBlocked("Capital policy is missing or stale")
     stage = policy.get("limits", {}) if isinstance(policy.get("limits"), Mapping) else {}
