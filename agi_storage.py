@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 import sqlite3
@@ -45,6 +46,11 @@ PICK_HISTORY_EXTRA_COLUMNS = {
     "strategy_version": "TEXT",
     "model_version": "TEXT",
     "prediction_snapshot_id": "TEXT",
+    "home_goals": "INTEGER",
+    "away_goals": "INTEGER",
+    "settlement_provider": "TEXT",
+    "settlement_payload_sha256": "TEXT",
+    "settlement_evidence_hash": "TEXT",
 }
 
 
@@ -120,6 +126,60 @@ def init_storage() -> None:
         event_type TEXT,
         payload_json TEXT
     )
+    """)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS settlement_evidence (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        evidence_key TEXT NOT NULL UNIQUE,
+        pick_id INTEGER NOT NULL,
+        pick_key TEXT NOT NULL,
+        fixture_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        settled_at TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        provider_status TEXT NOT NULL,
+        home_goals INTEGER NOT NULL,
+        away_goals INTEGER NOT NULL,
+        result TEXT NOT NULL,
+        payload_sha256 TEXT NOT NULL,
+        previous_evidence_hash TEXT NOT NULL,
+        evidence_hash TEXT NOT NULL UNIQUE,
+        payload_json TEXT NOT NULL,
+        FOREIGN KEY (pick_id) REFERENCES picks_history(id)
+    )
+    """)
+    # CLOSED rows and settlement evidence are append-only audit records.  The
+    # database triggers protect them even if a future caller forgets a status
+    # condition in its UPDATE or DELETE statement.
+    c.execute("""
+    CREATE TRIGGER IF NOT EXISTS protect_closed_pick_update
+    BEFORE UPDATE ON picks_history
+    WHEN OLD.status = 'CLOSED'
+    BEGIN
+        SELECT RAISE(ABORT, 'closed pick is immutable');
+    END
+    """)
+    c.execute("""
+    CREATE TRIGGER IF NOT EXISTS protect_closed_pick_delete
+    BEFORE DELETE ON picks_history
+    WHEN OLD.status = 'CLOSED'
+    BEGIN
+        SELECT RAISE(ABORT, 'closed pick is immutable');
+    END
+    """)
+    c.execute("""
+    CREATE TRIGGER IF NOT EXISTS protect_settlement_evidence_update
+    BEFORE UPDATE ON settlement_evidence
+    BEGIN
+        SELECT RAISE(ABORT, 'settlement evidence is append-only');
+    END
+    """)
+    c.execute("""
+    CREATE TRIGGER IF NOT EXISTS protect_settlement_evidence_delete
+    BEFORE DELETE ON settlement_evidence
+    BEGIN
+        SELECT RAISE(ABORT, 'settlement evidence is append-only');
+    END
     """)
     c.commit()
     c.close()
@@ -222,13 +282,19 @@ def sync_picks_from_csv() -> Dict[str, int]:
             pick = normalize_pick(raw, source)
             if not pick:
                 continue
-            exists = c.execute("SELECT id FROM picks_history WHERE pick_key=?", (pick["pick_key"],)).fetchone()
+            exists = c.execute(
+                "SELECT id, status FROM picks_history WHERE pick_key=?",
+                (pick["pick_key"],),
+            ).fetchone()
             if exists:
+                if str(exists["status"] or "").upper() == "CLOSED":
+                    continue
                 c.execute("""
                     UPDATE picks_history SET updated_at=?, confidence=?, edge=?, ev=?, odds=?,
                     odds_event_id=?, odds_api_market=?, closing_outcome_name=?, odds_observed_at=?,
                     feature_completeness=?, strategy_version=?, model_version=?,
-                    prediction_snapshot_id=?, raw_json=? WHERE pick_key=?
+                    prediction_snapshot_id=?, raw_json=?
+                    WHERE pick_key=? AND status='OPEN'
                 """, (
                     now_iso(), pick["confidence"], pick["edge"], pick["ev"], pick["odds"],
                     pick["odds_event_id"], pick["odds_api_market"], pick["closing_outcome_name"],
@@ -287,11 +353,16 @@ def upsert_gpt_analysis(item: Dict[str, Any]) -> None:
     c.close()
 
 
-def load_history_dataframe() -> pd.DataFrame:
+def load_history_dataframe(limit: Optional[int] = 5000) -> pd.DataFrame:
     init_storage()
     c = conn()
     try:
-        df = pd.read_sql_query("SELECT * FROM picks_history ORDER BY created_at DESC LIMIT 5000", c)
+        query = "SELECT * FROM picks_history ORDER BY created_at DESC"
+        params: tuple[Any, ...] = ()
+        if limit is not None:
+            query += " LIMIT ?"
+            params = (max(1, int(limit)),)
+        df = pd.read_sql_query(query, c, params=params)
     finally:
         c.close()
     if df.empty:
@@ -315,10 +386,81 @@ def load_gpt_dataframe() -> pd.DataFrame:
 
 
 def export_history_csv() -> None:
-    df = load_history_dataframe()
+    # The dashboard may page/limit its view, but the durable export must always
+    # contain the complete history.  Replace atomically to avoid a partial CSV.
+    df = load_history_dataframe(limit=None)
     HISTORY_EXPORT.parent.mkdir(exist_ok=True)
-    if not df.empty:
-        df.to_csv(HISTORY_EXPORT, index=False)
+    temporary = HISTORY_EXPORT.with_suffix(HISTORY_EXPORT.suffix + ".tmp")
+    df.to_csv(temporary, index=False)
+    os.replace(temporary, HISTORY_EXPORT)
+
+
+def append_settlement_evidence(
+    connection: sqlite3.Connection,
+    *,
+    pick: Any,
+    provider_result: Dict[str, Any],
+    result: str,
+    settled_at: str,
+    provider: str = "api-football",
+) -> Dict[str, str]:
+    """Append a tamper-evident settlement record inside the caller transaction."""
+    provider_payload = provider_result.get("provider_payload", provider_result)
+    canonical_payload = json.dumps(
+        provider_payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    payload_sha256 = hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest()
+    previous = connection.execute(
+        "SELECT evidence_hash FROM settlement_evidence ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    previous_hash = str(previous[0]) if previous else "GENESIS"
+    pick_id = int(pick["id"])
+    pick_key = str(pick["pick_key"] or pick_id)
+    fixture_id = str(pick["fixture_id"] or "")
+    home_goals = int(provider_result["home_goals"])
+    away_goals = int(provider_result["away_goals"])
+    provider_status = str(provider_result.get("status") or "")
+    evidence_body = {
+        "pick_id": pick_id,
+        "pick_key": pick_key,
+        "fixture_id": fixture_id,
+        "settled_at": settled_at,
+        "provider": provider,
+        "provider_status": provider_status,
+        "home_goals": home_goals,
+        "away_goals": away_goals,
+        "result": result,
+        "payload_sha256": payload_sha256,
+        "previous_evidence_hash": previous_hash,
+    }
+    canonical_evidence = json.dumps(
+        evidence_body,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    evidence_hash = hashlib.sha256(canonical_evidence.encode("utf-8")).hexdigest()
+    evidence_key = hashlib.sha256(
+        f"{pick_key}|{fixture_id}|{provider_status}|{home_goals}|{away_goals}".encode("utf-8")
+    ).hexdigest()
+    connection.execute("""
+        INSERT INTO settlement_evidence (
+            evidence_key, pick_id, pick_key, fixture_id, created_at, settled_at,
+            provider, provider_status, home_goals, away_goals, result,
+            payload_sha256, previous_evidence_hash, evidence_hash, payload_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        evidence_key, pick_id, pick_key, fixture_id, now_iso(), settled_at,
+        provider, provider_status, home_goals, away_goals, result,
+        payload_sha256, previous_hash, evidence_hash, canonical_payload,
+    ))
+    return {
+        "payload_sha256": payload_sha256,
+        "evidence_hash": evidence_hash,
+    }
 
 
 def log_event(event_type: str, payload: Dict[str, Any]) -> None:

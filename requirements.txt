@@ -1,10 +1,10 @@
-pandas
-requests
-python-dotenv
-streamlit
-numpy
-flask
-gunicorn
+pandas>=2.2
+requests>=2.32
+python-dotenv>=1.0
+streamlit>=1.36
+numpy>=1.26
+flask>=3.0
+gunicorn>=22.0
 openai>=1.0.0
 fastapi>=0.111
 uvicorn[standard]>=0.30

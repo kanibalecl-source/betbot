@@ -15,6 +15,8 @@ outputs
 *.db
 *.log
 users.json
+.admin_setup_token
+secure_admin_railway.env
 tests
 docs
 design_reference

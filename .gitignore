@@ -12,6 +12,8 @@ outputs/
 *.sqlite3
 *.db
 users.json
+.admin_setup_token
+secure_admin_railway.env
 secure_admin_railway.env
 quality_retraining/
 models/

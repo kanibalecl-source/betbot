@@ -10,7 +10,14 @@ try:
 except Exception:
     requests = None
 
-from agi_storage import conn, init_storage, now_iso, export_history_csv, log_event
+from agi_storage import (
+    append_settlement_evidence,
+    conn,
+    export_history_csv,
+    init_storage,
+    log_event,
+    now_iso,
+)
 
 try:
     from api_results import get_closing_odds_safe, get_odds_quote_safe
@@ -49,7 +56,12 @@ def fetch_result(fixture_id: str) -> Optional[Dict[str, Any]]:
     ag = g.get("goals", {}).get("away")
     if hg is None or ag is None:
         return None
-    return {"home_goals": int(hg), "away_goals": int(ag), "status": status}
+    return {
+        "home_goals": int(hg),
+        "away_goals": int(ag),
+        "status": status,
+        "provider_payload": g,
+    }
 
 
 def evaluate_market(market: str, hg: int, ag: int) -> Optional[bool]:
@@ -263,14 +275,19 @@ def settle_stored_picks(limit: int = 200) -> Dict[str, int]:
     """, (limit,)).fetchall()
     checked = 0
     settled = 0
+    errors = []
     for row in rows:
         checked += 1
+        savepoint = f"settle_{int(row['id'])}"
         try:
+            c.execute(f"SAVEPOINT {savepoint}")
             res = fetch_result(str(row["fixture_id"]))
             if not res:
+                c.execute(f"RELEASE SAVEPOINT {savepoint}")
                 continue
             won = evaluate_market(row["market"], res["home_goals"], res["away_goals"])
             if won is None:
+                c.execute(f"RELEASE SAVEPOINT {savepoint}")
                 continue
             stake = float(row["stake"] or 1)
             odds = float(row["odds"] or 0)
@@ -283,10 +300,27 @@ def settle_stored_picks(limit: int = 200) -> Dict[str, int]:
             closing = float(closing) if closing not in (None, "") else None
             clv = odds / closing - 1.0 if closing is not None and closing > 1.0 and odds > 1.0 else None
             settled_at = now_iso()
-            c.execute("""
+            evidence = append_settlement_evidence(
+                c,
+                pick=row,
+                provider_result=res,
+                result=result,
+                settled_at=settled_at,
+            )
+            update_cursor = c.execute("""
                 UPDATE picks_history SET updated_at=?, status='CLOSED', result=?, profit=?, roi=?,
-                    closing_odds=COALESCE(closing_odds, ?), clv=?, settled_at=? WHERE id=?
-            """, (settled_at, result, round(profit, 4), round(roi, 2), closing, clv, settled_at, row["id"]))
+                    closing_odds=COALESCE(closing_odds, ?), clv=?, settled_at=?,
+                    home_goals=?, away_goals=?, settlement_provider=?,
+                    settlement_payload_sha256=?, settlement_evidence_hash=?
+                WHERE id=? AND status='OPEN'
+            """, (
+                settled_at, result, round(profit, 4), round(roi, 2), closing, clv,
+                settled_at, int(res["home_goals"]), int(res["away_goals"]),
+                "api-football", evidence["payload_sha256"], evidence["evidence_hash"],
+                row["id"],
+            ))
+            if update_cursor.rowcount != 1:
+                raise RuntimeError("pick was not OPEN during atomic settlement")
             if closing is not None and record_closing_odds:
                 record_closing_odds({
                     "snapshot_id": row["prediction_snapshot_id"],
@@ -295,11 +329,19 @@ def settle_stored_picks(limit: int = 200) -> Dict[str, int]:
                     "odds_taken": odds, "closing_odds": closing,
                     "recorded_at": settled_at, "source": "settlement_fallback",
                 })
+            c.execute(f"RELEASE SAVEPOINT {savepoint}")
             settled += 1
         except Exception as exc:
-            log_event("settlement_error", {"id": row["id"], "error": str(exc)})
+            try:
+                c.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                c.execute(f"RELEASE SAVEPOINT {savepoint}")
+            except Exception:
+                pass
+            errors.append({"id": row["id"], "error": str(exc)})
     c.commit()
     c.close()
+    for error in errors:
+        log_event("settlement_error", error)
     export_history_csv()
     log_event("settlement_cycle", {"checked": checked, "settled": settled})
     return {"checked": checked, "settled": settled, "skipped": 0}
