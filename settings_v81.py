@@ -96,7 +96,7 @@ def load_settings(
         volleyball_enabled=_bool(source, "BETBOT_VOLLEYBALL_ENABLED", False),
         volleyball_shadow_only=_bool(source, "BETBOT_VOLLEYBALL_SHADOW_ONLY", True),
         volleyball_poll_minutes=_int(
-            source, "BETBOT_VOLLEYBALL_POLL_MINUTES", 15, 5, 1440
+            source, "BETBOT_VOLLEYBALL_POLL_MINUTES", 30, 5, 1440
         ),
         volleyball_backfill_days=_int(
             source, "BETBOT_VOLLEYBALL_BACKFILL_DAYS", 30, 0, 365

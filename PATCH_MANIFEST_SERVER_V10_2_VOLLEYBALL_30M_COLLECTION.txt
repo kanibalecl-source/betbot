@@ -1,0 +1,45 @@
+BETBOT SERVER PATCH - VOLLEYBALL v10.2 30-MINUTE COLLECTION
+==========================================================
+
+PURPOSE
+-------
+Increase autonomous volleyball data collection frequency from 120 minutes to
+30 minutes during the data-acquisition phase.
+
+CHANGES
+-------
+1. BETBOT_VOLLEYBALL_POLL_MINUTES defaults to 30.
+2. .env.example documents the production value:
+   BETBOT_VOLLEYBALL_POLL_MINUTES=30
+3. A regression test locks the 30-minute default and confirms that an explicit
+   environment override is still respected.
+
+PRODUCTION VARIABLE
+-------------------
+Railway must contain:
+BETBOT_VOLLEYBALL_POLL_MINUTES=30
+
+An existing Railway value of 120 overrides the application default and must be
+changed to 30. Saving the variable triggers a deployment. Do not change any
+other variable.
+
+SAFETY
+------
+- Volleyball remains shadow-only.
+- Real betting remains disabled.
+- Football configuration, logic, models and storage are unchanged.
+- No databases, histories, CSV files, model artifacts, secrets or .env files
+  are included in this patch.
+- Persistent /data content must not be deleted or overwritten.
+- The 150,000 request/day API allowance provides a very large reserve.
+
+EXPECTED LOG
+------------
+VOLLEYBALL v10.0 SHADOW START poll=30m
+
+PACKAGE FILES
+-------------
+- settings_v81.py
+- .env.example
+- tests/test_volleyball_v9.py
+- PATCH_MANIFEST_SERVER_V10_2_VOLLEYBALL_30M_COLLECTION.txt

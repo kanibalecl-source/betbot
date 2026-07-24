@@ -185,6 +185,12 @@ class VolleyballSettingsTests(unittest.TestCase):
         self.assertFalse(settings.volleyball_enabled)
         self.assertNotIn("volleyball_shadow", app_launcher.build_process_specs(settings))
 
+    def test_collection_poll_defaults_to_thirty_minutes(self):
+        settings = load_settings({})
+        self.assertEqual(settings.volleyball_poll_minutes, 30)
+        overridden = load_settings({"BETBOT_VOLLEYBALL_POLL_MINUTES": "45"})
+        self.assertEqual(overridden.volleyball_poll_minutes, 45)
+
     def test_enabled_adds_only_shadow_process(self):
         settings = load_settings(
             {
