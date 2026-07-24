@@ -1407,7 +1407,7 @@ def live_rows(live: pd.DataFrame) -> List[List[str]]:
 
 def pick_rows(picks: pd.DataFrame) -> List[List[str]]:
     rows = []
-    for _, row in picks.head(10).iterrows():
+    for _, row in picks.iterrows():
         odds_snapshot = extract_odds_snapshot(row)
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         rows.append([
@@ -1423,6 +1423,67 @@ def pick_rows(picks: pd.DataFrame) -> List[List[str]]:
             '<span class="pill pill-green">WARTO</span>' if conf >= 60 else '<span class="pill pill-yellow">OBSERWUJ</span>',
         ])
     return rows
+
+
+def paginate_frame(
+    frame: pd.DataFrame,
+    state_key: str,
+    page_size: int = 10,
+) -> tuple[pd.DataFrame, int, int, int]:
+    source = frame if frame is not None else pd.DataFrame()
+    total_items = int(len(source))
+    safe_page_size = max(1, int(page_size))
+    total_pages = max(1, (total_items + safe_page_size - 1) // safe_page_size)
+    try:
+        current_page = int(st.session_state.get(state_key, 1))
+    except (TypeError, ValueError):
+        current_page = 1
+    current_page = max(1, min(current_page, total_pages))
+    st.session_state[state_key] = current_page
+    start = (current_page - 1) * safe_page_size
+    end = start + safe_page_size
+    return (
+        source.iloc[start:end].copy().reset_index(drop=True),
+        current_page,
+        total_pages,
+        total_items,
+    )
+
+
+def render_pagination_controls(
+    state_key: str,
+    current_page: int,
+    total_pages: int,
+    total_items: int,
+) -> None:
+    previous_col, status_col, next_col = st.columns([1, 2.2, 1])
+    with previous_col:
+        if st.button(
+            "← Poprzednia",
+            key=f"{state_key}_previous",
+            disabled=current_page <= 1,
+            use_container_width=True,
+        ):
+            st.session_state[state_key] = current_page - 1
+            st.rerun()
+    with status_col:
+        st.markdown(
+            '<div style="text-align:center;padding:9px 4px;color:#64748b;'
+            'font-size:13px;font-weight:700;">'
+            f'Strona {current_page} z {total_pages} &nbsp;•&nbsp; '
+            f'Łącznie typów: {total_items}'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    with next_col:
+        if st.button(
+            "Następna →",
+            key=f"{state_key}_next",
+            disabled=current_page >= total_pages,
+            use_container_width=True,
+        ):
+            st.session_state[state_key] = current_page + 1
+            st.rerun()
 
 
 
@@ -1556,7 +1617,11 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         unsafe_allow_html=True
     )
 
-    shown = picks.head(10).reset_index(drop=True)
+    shown, current_page, total_pages, total_items = paginate_frame(
+        picks,
+        "ai_types_page",
+        page_size=10,
+    )
 
     for idx, row in shown.iterrows():
         odds_snapshot = extract_odds_snapshot(row)
@@ -1593,6 +1658,13 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
 
         with st.expander(f"{status_label} - szczegóły AI", expanded=False):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
+
+    render_pagination_controls(
+        "ai_types_page",
+        current_page,
+        total_pages,
+        total_items,
+    )
 
 
 def title(text: str) -> None:
@@ -1757,6 +1829,7 @@ def render_prematch(picks: pd.DataFrame) -> None:
         st.session_state["prematch_league_filter"] = "Wszystkie"
         st.session_state["prematch_market_filter"] = "Wszystkie"
         st.session_state["prematch_odds_filter"] = "Wszystkie"
+        st.session_state["prematch_types_page"] = 1
     with filter_cols[3]:
         st.markdown('<div style="height:25px"></div>', unsafe_allow_html=True)
         st.button("Wyczyść", key="prematch_clear_filters", on_click=clear_prematch_filters)
@@ -1782,12 +1855,27 @@ def render_prematch(picks: pd.DataFrame) -> None:
 
     headers = ["Liga", "Mecz", "Rynek", "Model", "Bot", "Buk", "Value", "Zamk./CLV", "Pewność", "Status"]
     df = apply_prematch_filters(picks)
+    filter_signature = (selected_league, selected_market, odds_range)
+    if st.session_state.get("prematch_filter_signature") != filter_signature:
+        st.session_state["prematch_filter_signature"] = filter_signature
+        st.session_state["prematch_types_page"] = 1
+    shown, current_page, total_pages, total_items = paginate_frame(
+        df,
+        "prematch_types_page",
+        page_size=10,
+    )
     label = "Najlepsze typy przedmeczowe"
     empty_msg = "Brak danych przedmeczowych."
     subpage_banner("Prematch table", label, empty_msg)
-    rows = pick_rows(df) if df is not None and not df.empty else []
+    rows = pick_rows(shown) if not shown.empty else []
     table = html_table(headers, rows) if rows else html_table(headers, [["-", empty_msg, "-", "-", "-", "-", "-", "-", "-", "-"]])
     st.markdown(f'<div class="ka-panel"><h3>{label}</h3>{table}</div>', unsafe_allow_html=True)
+    render_pagination_controls(
+        "prematch_types_page",
+        current_page,
+        total_pages,
+        total_items,
+    )
 
 
 def render_ai(picks: pd.DataFrame, results: pd.DataFrame) -> None:
