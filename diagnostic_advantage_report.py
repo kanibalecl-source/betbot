@@ -20,6 +20,7 @@ from statistics import NormalDist
 from typing import Any, Iterable, Mapping, Sequence
 
 from storage_paths import get_data_dir
+from quality_data_drift import distribution_drift_report
 
 
 def _number(value: Any) -> float | None:
@@ -159,6 +160,8 @@ def data_integrity_audit(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     populated_ids = [value for value in record_ids if value]
     duplicate_ids = sum(count - 1 for count in Counter(populated_ids).values() if count > 1)
     conflict_map: dict[str, set[int]] = defaultdict(set)
+    economic_targets: dict[tuple[str, str], set[int]] = defaultdict(set)
+    economic_counts: Counter[tuple[str, str]] = Counter()
     fixture_market_sources: dict[tuple[str, str], set[str]] = defaultdict(set)
     for row in normalized:
         record_id = str(row.get("record_id") or "")
@@ -167,6 +170,10 @@ def data_integrity_audit(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         fixture_id = str(row.get("fixture_id") or "")
         if fixture_id:
             fixture_market_sources[(fixture_id, row["_market"])].add(row["_source"])
+            economic_key = (fixture_id, row["_market"])
+            economic_counts[economic_key] += 1
+            if row["_target"] is not None:
+                economic_targets[economic_key].add(int(row["_target"]))
     missing = {
         "timestamp": sum(row["_time"] is None for row in normalized),
         "record_id": sum(not str(row.get("record_id") or "") for row in normalized),
@@ -180,12 +187,27 @@ def data_integrity_audit(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
     chronological = [row["_time"] for row in normalized if row["_time"] is not None]
     out_of_order = sum(current < previous for previous, current in zip(chronological, chronological[1:]))
-    critical = duplicate_ids > 0 or any(len(values) > 1 for values in conflict_map.values())
+    economic_duplicates = sum(
+        count - 1 for count in economic_counts.values() if count > 1
+    )
+    economic_conflicts = sum(
+        len(values) > 1 for values in economic_targets.values()
+    )
+    critical = (
+        duplicate_ids > 0
+        or any(len(values) > 1 for values in conflict_map.values())
+        or economic_duplicates > 0
+        or economic_conflicts > 0
+        or missing["timestamp"] > 0
+        or missing["fixture_id"] > 0
+    )
     return {
         "status": "FAIL" if critical else "PASS_WITH_WARNINGS" if any(missing.values()) else "PASS",
         "rows": len(normalized),
         "duplicate_record_ids": duplicate_ids,
         "conflicting_targets": sum(len(values) > 1 for values in conflict_map.values()),
+        "duplicate_economic_events": economic_duplicates,
+        "conflicting_economic_event_targets": economic_conflicts,
         "fixture_market_multi_source_groups": sum(len(values) > 1 for values in fixture_market_sources.values()),
         "out_of_order_timestamps": out_of_order,
         "missing_counts": missing,
@@ -426,12 +448,14 @@ def generate_report(
     *,
     minimum_segment_samples: int = 50,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    drift = distribution_drift_report(rows)
     report = {
         "status": "CREATED",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "report_kind": "DIAGNOSTIC_ADVANTAGE_REPORT",
         "methodology": "chronological_settled_predictions_only",
         "integrity": data_integrity_audit(rows),
+        "distribution_drift": drift,
         "global": performance_metrics(rows),
         "segments": {
             "market": segment_report(rows, "market", minimum_segment_samples),
@@ -451,7 +475,11 @@ def generate_report(
         "source_history_modified": False,
         "active_model_modified": False,
     }
-    return report, build_selection_policy(report, minimum_segment_samples)
+    policy = build_selection_policy(report, minimum_segment_samples)
+    if drift.get("status") == "DRIFT_ALERT":
+        policy["enforcement_ready"] = False
+        policy["drift_blocked"] = True
+    return report, policy
 
 
 def _atomic_json(path: Path, payload: Mapping[str, Any]) -> None:
@@ -476,6 +504,9 @@ def write_report(
     _atomic_json(policy_path, policy)
     return {
         "status": report["status"],
+        "integrity_status": report.get("integrity", {}).get("status", "FAIL"),
+        "integrity": report.get("integrity", {}),
+        "distribution_drift": report.get("distribution_drift", {}),
         "rows": len(rows),
         "report": str(report_path),
         "policy": str(policy_path),

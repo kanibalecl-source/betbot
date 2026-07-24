@@ -163,16 +163,40 @@ def record_live_shadow(
 ) -> dict[str, Any]:
     """Record frozen future predictions; never alter current_output or active state."""
     active_path, candidate_path = _candidate_paths(data_dir)
+    root = Path(data_dir or get_data_dir()).resolve()
     candidate = _read_json(candidate_path)
-    if not candidate:
-        return {"status": "NO_CANDIDATE"}
     active = _read_json(active_path)
+    governor = _read_json(
+        root / "quality_retraining" / "autonomous_governor_v7.json"
+    )
+    post_promotion = str(governor.get("phase", "")).startswith("ACTIVE")
+    if post_promotion:
+        backup_path = Path(str(governor.get("previous_champion_backup") or ""))
+        registry = (root / "quality_retraining" / "registry").resolve()
+        try:
+            backup_path = backup_path.resolve()
+        except OSError:
+            return {"status": "INVALID_PREVIOUS_CHAMPION_BACKUP"}
+        if registry not in backup_path.parents or not backup_path.is_file() or not active:
+            return {"status": "MISSING_PREVIOUS_CHAMPION_BACKUP"}
+        candidate = active
+        active = _read_json(backup_path)
+    if not candidate or not active:
+        return {"status": "NO_CANDIDATE"}
     identity = _identity(raw, current_output)
     if not identity["market"] or not (identity["fixture_id"] or identity["match_name"]):
         return {"status": "MISSING_IDENTITY"}
     champion = assess_quality(raw, current_output, state=active or {}).calibrated_probability
     challenger = assess_quality(raw, current_output, state=candidate).calibrated_probability
-    candidate_id = str(candidate.get("candidate_path") or candidate.get("created_at") or candidate_path.name)
+    candidate_id = (
+        f"postpromotion:{governor.get('promoted_active_sha256')}"
+        if post_promotion
+        else str(
+            candidate.get("candidate_path")
+            or candidate.get("created_at")
+            or candidate_path.name
+        )
+    )
     raw_key = "|".join((
         candidate_id,
         identity["fixture_id"] or identity["match_name"].lower(),
@@ -290,10 +314,14 @@ def reconcile_live_shadow(
         connection.close()
 
 
-def live_shadow_report(data_dir: str | Path | None = None) -> dict[str, Any]:
+def live_shadow_report(
+    data_dir: str | Path | None = None,
+    *,
+    candidate_id: str | None = None,
+) -> dict[str, Any]:
     _, candidate_path = _candidate_paths(data_dir)
     candidate = _read_json(candidate_path)
-    candidate_id = str(
+    candidate_id = candidate_id or str(
         candidate.get("candidate_path") or candidate.get("created_at") or candidate_path.name
     )
     connection = _connect(data_dir)

@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import os
 from collections import defaultdict
+from datetime import datetime, timezone
 from statistics import NormalDist
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -38,18 +39,34 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _timestamp(value: Any) -> tuple[str, float] | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    parsed = parsed.astimezone(timezone.utc)
+    return parsed.isoformat().replace("+00:00", "Z"), parsed.timestamp()
+
+
 def _clean_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     clean: list[dict[str, Any]] = []
     keys = ("current_probability", "dixon_coles_probability", "market_probability")
     for position, row in enumerate(rows):
         target = _target(row)
         values = [_number(row.get(key)) for key in keys]
-        if target is None or any(value is None for value in values):
+        timestamp = _timestamp(row.get("timestamp"))
+        if target is None or timestamp is None or any(value is None for value in values):
             continue
         clean.append({
             "position": position,
             "fixture_id": str(row.get("fixture_id", "") or ""),
-            "timestamp": str(row.get("timestamp", "")),
+            "timestamp": timestamp[0],
+            "time_order": timestamp[1],
             "market": str(row.get("market", "UNKNOWN") or "UNKNOWN"),
             "league": str(row.get("league", "UNKNOWN") or "UNKNOWN"),
             "source": str(row.get("source", "UNKNOWN") or "UNKNOWN"),
@@ -280,10 +297,23 @@ def walk_forward_validate(
     training_window_fraction: float = 1.0,
 ) -> dict[str, Any]:
     """Compare fold-trained challengers with a frozen champion on future rows."""
-    clean = sorted(
-        _clean_rows(rows),
-        key=lambda item: (item["timestamp"], item["position"]),
+    source_clean = _clean_rows(rows)
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in source_clean:
+        group_key = item["fixture_id"] or f"timestamp::{item['timestamp']}"
+        grouped[group_key].append(item)
+    ordered_groups = sorted(
+        grouped.values(),
+        key=lambda group: (
+            min(item["time_order"] for item in group),
+            min(item["position"] for item in group),
+        ),
     )
+    clean = [
+        item
+        for group in ordered_groups
+        for item in sorted(group, key=lambda value: (value["time_order"], value["position"]))
+    ]
     sample_count = len(clean)
     if sample_count < 60:
         return {
@@ -317,6 +347,14 @@ def walk_forward_validate(
         test_end = advance_timestamp_boundary(min(sample_count, test_start + test_size))
         fraction = max(0.40, min(1.0, float(training_window_fraction)))
         train_start = max(0, test_start - max(30, int(test_start * fraction)))
+        embargo_seconds = max(
+            0.0, float(os.getenv("BETBOT_QUALITY_WF_EMBARGO_HOURS", "1"))
+        ) * 3600.0
+        test_time = clean[test_start]["time_order"]
+        training_slice = [
+            item for item in clean[train_start:test_start]
+            if item["time_order"] < test_time - embargo_seconds
+        ]
         training_rows = [
             {
                 "timestamp": item["timestamp"],
@@ -328,7 +366,7 @@ def walk_forward_validate(
                 "market_probability": item["values"][2],
                 "target": item["target"],
             }
-            for item in clean[train_start:test_start]
+            for item in training_slice
         ]
         challenger = train_candidate_state(
             training_rows,
@@ -484,6 +522,11 @@ def walk_forward_validate(
     return {
         "status": "POSITIVE_VALIDATION_MANUAL_APPROVAL" if passed else "REJECTED_OR_REVIEW",
         "method": "expanding_window_walk_forward",
+        "fixture_grouped": True,
+        "timestamp_parsing": "strict_iso_utc",
+        "embargo_hours": max(
+            0.0, float(os.getenv("BETBOT_QUALITY_WF_EMBARGO_HOURS", "1"))
+        ),
         "training_window_fraction": max(0.40, min(1.0, float(training_window_fraction))),
         "chronological_order": True,
         "folds": len(folds),

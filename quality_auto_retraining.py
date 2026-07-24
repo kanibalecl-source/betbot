@@ -92,9 +92,14 @@ def _metrics(probabilities: list[float], targets: list[int]) -> dict[str, float]
     return {"brier_score": round(brier, 8), "log_loss": round(loss, 8)}
 
 
-def score_state(rows: Iterable[Mapping[str, Any]], state: Mapping[str, Any] | None) -> dict[str, Any]:
+def score_state(
+    rows: Iterable[Mapping[str, Any]],
+    state: Mapping[str, Any] | None,
+    *,
+    holdout_only: bool = True,
+) -> dict[str, Any]:
     clean = _clean_rows(rows)
-    holdout = clean[int(len(clean) * 0.82):]
+    holdout = clean[int(len(clean) * 0.82):] if holdout_only else clean
     if not holdout:
         return {"samples": 0, "brier_score": 1.0, "log_loss": 99.0}
     targets = [target for _, target in holdout]
@@ -202,7 +207,7 @@ class ControlledQualityRetrainer:
             return True
 
     def _candidate_factory(self, rows: list[dict[str, Any]]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-        """Train bounded history-window variants and select by untouched holdout."""
+        """Select a window on a past-only split, then refit on all admitted history."""
         raw = os.getenv("BETBOT_QUALITY_CANDIDATE_WINDOWS", "1.0,0.75,0.50")
         fractions: list[float] = []
         for token in raw.split(","):
@@ -214,10 +219,18 @@ class ControlledQualityRetrainer:
                 fractions.append(value)
         if not fractions:
             fractions = [1.0]
+        selection_start = max(30, int(len(rows) * 0.82))
+        if selection_start >= len(rows):
+            return {"status": "NO_ENOUGH_DATA", "samples": len(rows)}, []
+        training_pool = rows[:selection_start]
+        selection_rows = rows[selection_start:]
         variants: list[dict[str, Any]] = []
         for fraction in fractions[:5]:
-            start = max(0, len(rows) - max(30, int(len(rows) * fraction)))
-            subset = rows[start:]
+            start = max(
+                0,
+                len(training_pool) - max(30, int(len(training_pool) * fraction)),
+            )
+            subset = training_pool[start:]
             trained = train_candidate_state(
                 subset,
                 min_segment_samples=int(os.getenv("BETBOT_QUALITY_SEGMENT_MIN_SAMPLES", "500")),
@@ -235,7 +248,7 @@ class ControlledQualityRetrainer:
                 "training_window_fraction": fraction,
                 "candidate_variant": f"history_window_{int(fraction * 100)}pct",
             }
-            metrics = score_state(rows, trained)
+            metrics = score_state(selection_rows, trained, holdout_only=False)
             variants.append({
                 "training_window_fraction": fraction,
                 "training_rows": len(subset),
@@ -254,7 +267,26 @@ class ControlledQualityRetrainer:
                 -float(item.get("training_window_fraction", 0.0)),
             ),
         )
-        return dict(winner["state"]), variants
+        selected_fraction = float(winner["training_window_fraction"])
+        final_start = max(
+            0, len(rows) - max(30, int(len(rows) * selected_fraction))
+        )
+        final_state = train_candidate_state(
+            rows[final_start:],
+            min_segment_samples=int(
+                os.getenv("BETBOT_QUALITY_SEGMENT_MIN_SAMPLES", "500")
+            ),
+            max_segments=int(os.getenv("BETBOT_QUALITY_MAX_SEGMENTS", "12")),
+        )
+        if final_state.get("status") != "TRAINED_TIME_SAFE":
+            return {"status": "NO_ENOUGH_DATA", "samples": len(rows)}, variants
+        return {
+            **final_state,
+            "training_window_fraction": selected_fraction,
+            "candidate_variant": f"history_window_{int(selected_fraction * 100)}pct",
+            "variant_selection_method": "untouched_chronological_holdout",
+            "variant_selection_samples": len(selection_rows),
+        }, variants
 
     def run(self, *, force: bool = False) -> dict[str, Any]:
         if not self._acquire():
@@ -272,6 +304,34 @@ class ControlledQualityRetrainer:
                     os.getenv("BETBOT_QUALITY_DIAGNOSTIC_MIN_SEGMENT_SAMPLES", "50")
                 ),
             )
+            if (
+                diagnostic.get("integrity_status") == "FAIL"
+                or diagnostic.get("distribution_drift", {}).get("status") == "DRIFT_ALERT"
+                or int(metadata.get("quarantined_rows", 0)) > 0
+                or int(metadata.get("conflicting_event_keys", 0)) > 0
+                or int(metadata.get("immutable_admission_conflicts", 0)) > 0
+            ):
+                now = _utc_now().isoformat()
+                result = {
+                    "status": "TRAINING_BLOCKED_DATA_INTEGRITY",
+                    "checked_at": now,
+                    "training_rows": len(rows),
+                    "quarantined_rows": metadata.get("quarantined_rows", 0),
+                    "conflicting_event_keys": metadata.get("conflicting_event_keys", 0),
+                    "immutable_admission_conflicts": metadata.get(
+                        "immutable_admission_conflicts", 0
+                    ),
+                    "diagnostic_report": diagnostic,
+                    "active_model_modified": False,
+                }
+                _atomic_json(self.control_path, {
+                    **control,
+                    "last_check": now,
+                    "last_seen_rows": len(rows),
+                    "last_status": result["status"],
+                })
+                _append_event(self.events_path, result)
+                return result
             active = _read_json(self.active_path)
             baseline_rows = int(
                 control.get("last_trained_rows")
@@ -331,6 +391,14 @@ class ControlledQualityRetrainer:
                     "selection_metric": "minimum_holdout_brier_then_log_loss",
                 },
                 "diagnostic_report": diagnostic,
+                "dataset_admission": {
+                    "quarantined_rows": metadata.get("quarantined_rows", 0),
+                    "conflicting_event_keys": metadata.get("conflicting_event_keys", 0),
+                    "immutable_admission_conflicts": metadata.get(
+                        "immutable_admission_conflicts", 0
+                    ),
+                    "source_hashes_unchanged": metadata.get("source_hashes_unchanged"),
+                },
                 "candidate_path": str(version_path),
                 "active_model_was_not_modified": True,
             }

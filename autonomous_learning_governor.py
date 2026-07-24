@@ -119,10 +119,21 @@ class AutonomousLearningGovernor:
         current = _hash(self.active_path)
         if current != expected:
             return self._save({**state, "phase": "LOCKED_ACTIVE_CHANGED_EXTERNALLY"}, "LOCKED")
-        if guardian_ok:
+        monitor_id = f"postpromotion:{expected}"
+        performance = live_shadow_report(self.root, candidate_id=monitor_id)
+        minimum = max(
+            30, int(os.getenv("BETBOT_GOVERNOR_POST_PROMOTION_MIN_SAMPLES", "100"))
+        )
+        enough_performance = int(performance.get("settled_samples", 0)) >= minimum
+        performance_ok = (
+            performance.get("status") == "POSITIVE_LIVE_SHADOW_MANUAL_APPROVAL"
+        )
+        if guardian_ok and (not enough_performance or performance_ok):
             return self._save({
                 **state, "phase": "ACTIVE_MONITORING", "last_health": "PASS",
                 "consecutive_health_failures": 0,
+                "post_promotion_performance": performance,
+                "post_promotion_minimum_samples": minimum,
             }, "MONITOR")
         failures = int(state.get("consecutive_health_failures", 0)) + 1
         required = max(2, int(os.getenv("BETBOT_GOVERNOR_ROLLBACK_FAILURES", "3")))
@@ -137,7 +148,11 @@ class AutonomousLearningGovernor:
         rollback = rollback_automatic_promotion(
             expected,
             str(state.get("previous_champion_backup", "")),
-            "Data Quality Guardian became unhealthy after autonomous promotion",
+            (
+                "Post-promotion predictive quality degraded"
+                if guardian_ok and enough_performance and not performance_ok
+                else "Data Quality Guardian became unhealthy after autonomous promotion"
+            ),
             self.root,
         )
         return self._save({
@@ -235,6 +250,9 @@ class AutonomousLearningGovernor:
                 "promotion": promotion,
                 "promoted_active_sha256": promotion["active_sha256"],
                 "previous_champion_backup": promotion.get("previous_backup", ""),
+                "post_promotion_shadow_id": (
+                    f"postpromotion:{promotion['active_sha256']}"
+                ),
                 "automatic_model_change": True,
             }, "PROMOTED")
             return {"status": "PROMOTED_AUTONOMOUSLY", **promoted}

@@ -68,15 +68,30 @@ def evaluate_recommendation(
     policy = dict(policy or {})
     if not policy:
         return {
-            "accepted": True,
-            "status": "NO_VALIDATED_POLICY_FAIL_OPEN",
-            "enforced": False,
-            "reasons": ["selection_policy_missing"],
+            "accepted": False,
+            "status": "COLLECT_ONLY_QUARANTINE",
+            "enforced": True,
+            "reasons": ["selection_policy_missing_fail_closed"],
+            "training_eligible": False,
+            "display_eligible": False,
         }
     enforcement_requested = os.getenv(
         "BETBOT_QUALITY_SELECTION_GATE_ENFORCE", "true"
     ).strip().lower() in {"1", "true", "yes", "on"}
     enforced = bool(policy.get("enforcement_ready")) and enforcement_requested
+    if not enforced:
+        return {
+            "accepted": False,
+            "status": "COLLECT_ONLY_QUARANTINE",
+            "enforced": True,
+            "reasons": [
+                "selection_policy_not_ready"
+                if not policy.get("enforcement_ready")
+                else "selection_policy_enforcement_disabled"
+            ],
+            "training_eligible": False,
+            "display_eligible": False,
+        }
     market = str(observation.get("market") or "UNKNOWN")
     league = str(observation.get("league") or "UNKNOWN")
     odds = _number(observation.get("odds"))
@@ -149,7 +164,7 @@ def evaluate_recommendation(
         if isinstance(segment, Mapping) and segment.get("status") == "QUARANTINE":
             reasons.append(f"recently_degraded_{field}_segment")
     hard_reasons = {
-        "insufficient_data_completeness", "stale_odds",
+        "insufficient_data_completeness", "missing_odds_timestamp", "stale_odds",
         "excessive_model_disagreement", "edge_below_quality_threshold",
         "historically_negative_market_segment", "historically_negative_league_segment",
         "historically_negative_market_league_segment",
@@ -171,4 +186,6 @@ def evaluate_recommendation(
         "odds_age_seconds": round(age_seconds, 2) if age_seconds is not None else None,
         "segment_evidence": evidence,
         "probability_modified": False,
+        "training_eligible": not rejected,
+        "display_eligible": not rejected,
     }

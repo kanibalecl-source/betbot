@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable
 
 from agi_storage import DB_FILE, init_storage, log_event
 from prediction_quality_pipeline import _database
+from quality_data_admission import parse_utc, verify_settlement_evidence
 from storage_paths import get_data_dir
 
 
@@ -159,6 +160,29 @@ def run_guardian(data_dir: str | Path | None = None) -> Dict[str, Any]:
             "SELECT count(*) FROM picks_history WHERE status='CLOSED' AND closing_odds > 1 "
             "AND prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''"
         ).fetchone()[0]
+        verified_evidence, evidence_errors = verify_settlement_evidence(Path(DB_FILE))
+        closed_evidence_rows = history.execute(
+            "SELECT fixture_id, market, result, created_at, settlement_evidence_hash "
+            "FROM picks_history WHERE status='CLOSED' "
+            "AND prediction_snapshot_id IS NOT NULL AND prediction_snapshot_id != ''"
+        ).fetchall()
+        invalid_closed_evidence = sum(
+            str(row["settlement_evidence_hash"] or "") not in verified_evidence
+            for row in closed_evidence_rows
+        )
+        invalid_closed_timestamps = sum(
+            parse_utc(row["created_at"]) is None for row in closed_evidence_rows
+        )
+        target_groups: Dict[tuple[str, str], set[str]] = {}
+        for row in closed_evidence_rows:
+            key = (str(row["fixture_id"] or ""), str(row["market"] or ""))
+            if not all(key):
+                continue
+            target_groups.setdefault(key, set()).add(str(row["result"] or "").upper())
+        conflicting_settlements = sum(
+            len({value for value in values if value}) > 1
+            for values in target_groups.values()
+        )
         feature_rows = evidence.execute("SELECT completeness FROM shadow_feature_ledger").fetchall()
         odds_stages = {
             str(row[0]): int(row[1]) for row in evidence.execute(
@@ -183,6 +207,30 @@ def run_guardian(data_dir: str | Path | None = None) -> Dict[str, Any]:
             "maximum_api_errors_24h": int(os.getenv("BETBOT_GUARDIAN_MAX_API_ERRORS_24H", "5")),
         }
         alerts = []
+        if evidence_errors:
+            alerts.append({
+                "severity": "CRITICAL",
+                "code": "SETTLEMENT_EVIDENCE_CHAIN_INVALID",
+                "errors": evidence_errors[:20],
+            })
+        if invalid_closed_evidence:
+            alerts.append({
+                "severity": "CRITICAL",
+                "code": "UNVERIFIED_CLOSED_SETTLEMENTS",
+                "count": invalid_closed_evidence,
+            })
+        if invalid_closed_timestamps:
+            alerts.append({
+                "severity": "CRITICAL",
+                "code": "INVALID_CLOSED_TIMESTAMPS",
+                "count": invalid_closed_timestamps,
+            })
+        if conflicting_settlements:
+            alerts.append({
+                "severity": "CRITICAL",
+                "code": "CONFLICTING_SETTLEMENT_TARGETS",
+                "count": conflicting_settlements,
+            })
         for name, value in (("ledger_coverage", ledger_coverage),
                             ("settlement_coverage", settlement_coverage),
                             ("closing_coverage", closing_coverage)):
@@ -211,13 +259,21 @@ def run_guardian(data_dir: str | Path | None = None) -> Dict[str, Any]:
                 "odds_snapshot_stages": odds_stages,
                 "latest_prediction_snapshot": latest_prediction,
                 "latest_closing_snapshot": latest_closing,
+                "verified_settlement_evidence": len(verified_evidence),
+                "unverified_closed_settlements": invalid_closed_evidence,
+                "invalid_closed_timestamps": invalid_closed_timestamps,
+                "conflicting_settlement_targets": conflicting_settlements,
             },
             "thresholds": thresholds, "events_24h": event_counts, "alerts": alerts,
             "training_readiness": {
                 "minimum_settled": 300,
                 "settled": closed,
-                "ready_for_validation": closed >= 300 and closing_coverage >= thresholds["closing_coverage"]
-                    and settlement_coverage >= thresholds["settlement_coverage"],
+                "ready_for_validation": closed >= 300
+                    and closing_coverage >= thresholds["closing_coverage"]
+                    and settlement_coverage >= thresholds["settlement_coverage"]
+                    and not any(
+                        item.get("severity") == "CRITICAL" for item in alerts
+                    ),
                 "auto_promote": False,
             },
         }

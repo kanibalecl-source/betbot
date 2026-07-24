@@ -144,12 +144,27 @@ def promote_candidate_automatically(
     candidate = _read(candidate_path)
     if not candidate or candidate.get("active_model_was_not_modified") is not True:
         return {"status": "REFUSED_INVALID_CANDIDATE"}
+    diagnostic = candidate.get("diagnostic_report", {})
+    admission = candidate.get("dataset_admission", {})
+    if (
+        not isinstance(diagnostic, Mapping)
+        or diagnostic.get("integrity_status") == "FAIL"
+        or not isinstance(admission, Mapping)
+        or int(admission.get("quarantined_rows", 0)) > 0
+        or int(admission.get("conflicting_event_keys", 0)) > 0
+        or int(admission.get("immutable_admission_conflicts", 0)) > 0
+        or admission.get("source_hashes_unchanged") is not True
+    ):
+        return {"status": "REFUSED_DATA_ADMISSION_NOT_CLEAN"}
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
     registry = root / "quality_retraining" / "registry"
     registry.mkdir(parents=True, exist_ok=True)
     backup = registry / f"champion_before_auto_{stamp}.json"
-    if active_path.is_file():
-        shutil.copy2(active_path, backup)
+    if not active_path.is_file():
+        return {"status": "REFUSED_ACTIVE_CHAMPION_MISSING"}
+    shutil.copy2(active_path, backup)
+    if not backup.is_file() or _hash(backup) != _hash(active_path):
+        return {"status": "REFUSED_CHAMPION_BACKUP_FAILED"}
     promoted_at = datetime.now(timezone.utc).isoformat()
     promoted = {
         **candidate,

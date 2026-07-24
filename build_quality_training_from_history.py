@@ -17,6 +17,14 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from quality_upgrade_engine import DixonColesEngine, no_vig_probabilities
+from quality_data_admission import (
+    admission_reasons,
+    allowed_sqlite_tables,
+    canonical_event_key,
+    canonical_timestamp,
+    source_name_allowed,
+    verify_settlement_evidence,
+)
 from storage_paths import DATA_DIR
 
 try:
@@ -163,7 +171,13 @@ def _market_probability(row: Mapping[str, Any], market: str) -> tuple[float | No
     return None, "missing"
 
 
-def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
+def transform_row(
+    row: Mapping[str, Any],
+    source: str,
+    *,
+    verified_evidence_hashes: set[str] | None = None,
+    strict: bool = True,
+) -> dict[str, Any] | None:
     row = _merge_raw_json(row)
     target = _target(row)
     if target is None:
@@ -196,32 +210,22 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
         _first(row, ("league", "liga", "competition", "tournament")) or "UNKNOWN"
     )
     fixture_id = str(_first(row, ("fixture_id", "event_id", "match_id", "id")) or "")
-    timestamp = str(
+    timestamp = canonical_timestamp(
         _first(
             row,
             ("created_at", "timestamp", "date", "match_date", "kickoff", "updated_at"),
         )
-        or ""
     )
-    identity = "|".join(
-        str(_first(row, names) or "")
-        for names in (
-            ("pick_key", "ai_id", "fixture_id", "id"),
-            ("match", "mecz", "match_name"),
-            ("market", "typ", "signal"),
-            ("odds", "kurs_buk"),
-        )
-    )
-    fingerprint = hashlib.sha256(
-        f"{source}|{identity}".encode("utf-8", errors="ignore")
-    ).hexdigest()[:32]
-    return {
+    transformed = {
         "timestamp": timestamp,
+        "kickoff": canonical_timestamp(_first(row, ("match_date", "kickoff", "date"))),
         "source": source,
-        "record_id": fingerprint,
         "market": market,
         "league": league,
         "fixture_id": fixture_id,
+        "bookmaker": str(_first(row, ("bookmaker", "bukmacher")) or ""),
+        "selection": str(_first(row, ("selection", "outcome_name")) or market),
+        "sport": str(_first(row, ("sport", "discipline")) or "football").lower(),
         "current_probability": round(current, 8),
         "dixon_coles_probability": round(dixon, 8),
         "market_probability": round(market_probability, 8),
@@ -248,8 +252,20 @@ def transform_row(row: Mapping[str, Any], source: str) -> dict[str, Any] | None:
         "strategy_version": _first(row, ("strategy_version",)) or "",
         "model_version": _first(row, ("model_version",)) or "",
         "prediction_snapshot_id": _first(row, ("prediction_snapshot_id", "snapshot_id")) or "",
+        "settlement_payload_sha256": _first(
+            row, ("settlement_payload_sha256", "payload_sha256")
+        ) or "",
+        "settlement_evidence_hash": _first(
+            row, ("settlement_evidence_hash", "evidence_hash")
+        ) or "",
         "target": target,
     }
+    transformed["record_id"] = canonical_event_key(transformed)
+    if strict and admission_reasons(
+        transformed, verified_evidence_hashes=verified_evidence_hashes
+    ):
+        return None
+    return transformed
 
 
 def _csv_rows(path: Path) -> Iterable[dict[str, Any]]:
@@ -272,6 +288,7 @@ def _sqlite_rows(path: Path) -> Iterable[tuple[str, dict[str, Any]]]:
         )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA query_only=ON")
+        allowed = allowed_sqlite_tables()
         tables = [
             row[0]
             for row in connection.execute(
@@ -279,6 +296,8 @@ def _sqlite_rows(path: Path) -> Iterable[tuple[str, dict[str, Any]]]:
             )
         ]
         for table in tables:
+            if table not in allowed:
+                continue
             safe_table = table.replace('"', '""')
             try:
                 cursor = connection.execute(f'SELECT * FROM "{safe_table}"')
@@ -301,13 +320,97 @@ def source_files(data_dir: Path) -> list[Path]:
         if any(part in SKIP_PARTS for part in path.relative_to(data_dir).parts):
             continue
         suffix = path.suffix.lower()
-        if suffix in {".sqlite3", ".db"}:
+        if suffix in {".sqlite3", ".db"} and source_name_allowed(path):
             files.append(path)
         elif suffix == ".csv" and any(
             hint in path.name.lower() for hint in SETTLED_SOURCE_HINTS
         ):
             files.append(path)
     return sorted(files, key=lambda item: str(item).lower())
+
+
+def _enforce_admission_ledger(
+    ledger_path: Path,
+    records: list[dict[str, Any]],
+    quarantined: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    """Persist immutable admitted payload identities and reject later mutation."""
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(ledger_path, timeout=30)
+    connection.execute("PRAGMA journal_mode=WAL")
+    connection.execute("PRAGMA synchronous=FULL")
+    connection.executescript("""
+    CREATE TABLE IF NOT EXISTS training_admission_ledger (
+        record_id TEXT PRIMARY KEY,
+        payload_sha256 TEXT NOT NULL,
+        admitted_at TEXT NOT NULL,
+        payload_json TEXT NOT NULL
+    );
+    CREATE TRIGGER IF NOT EXISTS protect_training_admission_update
+    BEFORE UPDATE ON training_admission_ledger
+    BEGIN SELECT RAISE(ABORT, 'training admission is immutable'); END;
+    CREATE TRIGGER IF NOT EXISTS protect_training_admission_delete
+    BEFORE DELETE ON training_admission_ledger
+    BEGIN SELECT RAISE(ABORT, 'training admission is immutable'); END;
+    """)
+    accepted: list[dict[str, Any]] = []
+    immutable_conflicts = 0
+    try:
+        for row in records:
+            canonical = {
+                key: value for key, value in row.items() if key != "source"
+            }
+            payload = json.dumps(
+                canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
+            digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            existing = connection.execute(
+                "SELECT payload_sha256 FROM training_admission_ledger WHERE record_id=?",
+                (row["record_id"],),
+            ).fetchone()
+            if existing and str(existing[0]) != digest:
+                immutable_conflicts += 1
+                quarantined.append({
+                    "source": row.get("source", ""),
+                    "record_id": row["record_id"],
+                    "reasons": ["immutable_admission_payload_changed"],
+                })
+                continue
+            if not existing:
+                connection.execute(
+                    "INSERT INTO training_admission_ledger "
+                    "(record_id,payload_sha256,admitted_at,payload_json) VALUES (?,?,?,?)",
+                    (
+                        row["record_id"],
+                        digest,
+                        datetime.now(timezone.utc).isoformat(),
+                        payload,
+                    ),
+                )
+            accepted.append(row)
+        connection.commit()
+        return accepted, immutable_conflicts
+    finally:
+        connection.close()
+
+
+def _conflicting_observation(
+    existing: Mapping[str, Any], incoming: Mapping[str, Any]
+) -> bool:
+    if existing.get("target") != incoming.get("target"):
+        return True
+    exact = ("fixture_id", "market", "sport", "prediction_snapshot_id")
+    if any(str(existing.get(key)) != str(incoming.get(key)) for key in exact):
+        return True
+    numeric = (
+        "current_probability", "dixon_coles_probability", "market_probability",
+        "odds", "home_xg", "away_xg",
+    )
+    for key in numeric:
+        left, right = _num(existing.get(key)), _num(incoming.get(key))
+        if left is None or right is None or abs(left - right) > 1e-8:
+            return True
+    return False
 
 
 def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[str, Any]:
@@ -319,22 +422,87 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
         )
     sources = source_files(data_dir)
     hashes_before = {str(path): sha256_file(path) for path in sources}
+    verified_by_path: dict[Path, set[str]] = {}
+    evidence_errors_by_path: dict[Path, list[str]] = {}
+    globally_verified_hashes: set[str] = set()
+    for path in sources:
+        if path.suffix.lower() not in {".sqlite3", ".db"}:
+            continue
+        verified, errors = verify_settlement_evidence(path)
+        verified_by_path[path] = verified
+        evidence_errors_by_path[path] = errors
+        globally_verified_hashes.update(verified)
+    allow_unverified_csv = os.getenv(
+        "BETBOT_QUALITY_ALLOW_UNVERIFIED_CSV", "0"
+    ).strip().lower() in {"1", "true", "yes", "on"}
     records: dict[str, dict[str, Any]] = {}
+    quarantined: list[dict[str, Any]] = []
+    conflicts: set[str] = set()
     scanned = 0
     for path in sources:
         relative = path.relative_to(data_dir).as_posix()
+        verified_hashes = verified_by_path.get(path)
+        evidence_errors = evidence_errors_by_path.get(path, [])
         if path.suffix.lower() == ".csv":
             for row in _csv_rows(path):
                 scanned += 1
-                transformed = transform_row(row, relative)
+                transformed = transform_row(row, relative, strict=False)
                 if transformed:
-                    records[transformed["record_id"]] = transformed
+                    reasons = admission_reasons(
+                        transformed,
+                        verified_evidence_hashes=(
+                            None if allow_unverified_csv else globally_verified_hashes
+                        ),
+                    )
+                    if reasons:
+                        quarantined.append({
+                            "source": relative,
+                            "record_id": transformed["record_id"],
+                            "reasons": reasons,
+                        })
+                        continue
+                    existing = records.get(transformed["record_id"])
+                    if existing and _conflicting_observation(existing, transformed):
+                        conflicts.add(transformed["record_id"])
+                        records.pop(transformed["record_id"], None)
+                        quarantined.append({
+                            "source": relative,
+                            "record_id": transformed["record_id"],
+                            "reasons": ["conflicting_observation_across_sources"],
+                        })
+                    elif transformed["record_id"] not in conflicts:
+                        records[transformed["record_id"]] = transformed
         else:
             for table, row in _sqlite_rows(path):
                 scanned += 1
-                transformed = transform_row(row, f"{relative}::{table}")
+                source = f"{relative}::{table}"
+                transformed = transform_row(
+                    row, source, verified_evidence_hashes=verified_hashes, strict=False
+                )
                 if transformed:
-                    records[transformed["record_id"]] = transformed
+                    reasons = admission_reasons(
+                        transformed, verified_evidence_hashes=verified_hashes
+                    )
+                    if evidence_errors:
+                        reasons.append("settlement_evidence_chain_invalid")
+                    if reasons:
+                        quarantined.append({
+                            "source": source,
+                            "record_id": transformed["record_id"],
+                            "reasons": sorted(set(reasons)),
+                        })
+                        continue
+                    existing = records.get(transformed["record_id"])
+                    if existing and _conflicting_observation(existing, transformed):
+                        conflicts.add(transformed["record_id"])
+                        records.pop(transformed["record_id"], None)
+                        quarantined.append({
+                            "source": source,
+                            "record_id": transformed["record_id"],
+                            "reasons": ["conflicting_observation_across_sources"],
+                        })
+                    elif transformed["record_id"] not in conflicts:
+                        records[transformed["record_id"]] = transformed
     hashes_after = {str(path): sha256_file(path) for path in sources}
     if hashes_before != hashes_after:
         raise RuntimeError("A source history file changed during read-only extraction.")
@@ -342,16 +510,23 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
         records.values(),
         key=lambda row: (row["timestamp"], row["record_id"]),
     )
+    ordered, immutable_conflicts = _enforce_admission_ledger(
+        output.parent / "training_admission_ledger.sqlite3",
+        ordered,
+        quarantined,
+    )
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = output.with_suffix(output.suffix + ".tmp")
     fields = [
-        "timestamp", "source", "record_id", "fixture_id", "market", "league",
+        "timestamp", "kickoff", "source", "record_id", "fixture_id", "market",
+        "league", "bookmaker", "selection", "sport",
         "current_probability", "dixon_coles_probability",
         "market_probability", "market_probability_method", "target",
         "odds", "closing_odds", "home_xg", "away_xg", "data_quality",
         "lineup_available", "injuries_available", "home_rest_days", "away_rest_days",
         "home_form_home", "away_form_away", "coach_change", "odds_observed_at",
         "strategy_version", "model_version", "prediction_snapshot_id",
+        "settlement_payload_sha256", "settlement_evidence_hash",
     ]
     with temporary.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -368,6 +543,9 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
         "source_files": len(sources),
         "rows_scanned": scanned,
         "training_rows": len(ordered),
+        "quarantined_rows": len(quarantined),
+        "conflicting_event_keys": len(conflicts),
+        "immutable_admission_conflicts": immutable_conflicts,
         "source_hashes_unchanged": True,
         "source_hashes": hashes_after,
     }
@@ -381,6 +559,14 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
         json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     os.replace(metadata_temp, metadata_path)
+    quarantine_path = output.with_name("quality_training.quarantine.jsonl")
+    quarantine_temp = quarantine_path.with_suffix(".jsonl.tmp")
+    with quarantine_temp.open("w", encoding="utf-8") as handle:
+        for item in quarantined:
+            handle.write(json.dumps(item, ensure_ascii=False) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(quarantine_temp, quarantine_path)
     return metadata
 
 
