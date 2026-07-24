@@ -18,14 +18,10 @@ sys.stdout.flush()
 
 BOT_MODES = [
     ("main", "PREMATCH", False),
-    ("low", "PREMATCH LOW", True),
-    ("risk", "PREMATCH RISK", True),
 ]
 
 AI_MODES = [
     ("main", "AI"),
-    ("low", "AI LOW"),
-    ("risk", "AI RISK"),
 ]
 
 
@@ -63,7 +59,7 @@ def run_prematch():
     while True:
         try:
             print(f"{datetime.now()}")
-            print("FETCHING MATCHES: main + low + risk")
+            print("FETCHING MATCHES: main")
             sys.stdout.flush()
 
             for mode, label, include_all in BOT_MODES:

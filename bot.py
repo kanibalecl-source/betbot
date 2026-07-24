@@ -110,8 +110,6 @@ CONFIG_FILE = BASE_DIR / "config_strategy.json"
 
 BOT_MODE_SETTINGS = {
     "main": {"profile": None, "all_file": "auto_all_picks.csv", "history_file": "auto_all_picks_history.csv", "label": "PREMATCH"},
-    "low": {"profile": "medium", "all_file": "auto_low_picks.csv", "history_file": "auto_low_picks_history.csv", "label": "PREMATCH LOW"},
-    "risk": {"profile": "risk", "all_file": "auto_risk_picks.csv", "history_file": "auto_risk_picks_history.csv", "label": "PREMATCH RISK"},
 }
 
 TARGET_MARKETS = {
@@ -155,21 +153,7 @@ class MarketMargin:
 
 def load_config(profile_override=None):
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
-    apply_active_filter_profile(cfg, profile_override=profile_override)
-    return cfg
-
-
-def apply_active_filter_profile(cfg, profile_override=None):
-    profiles = cfg.get("filter_profiles", {}) or {}
-    active = str(profile_override or cfg.get("active_filter_profile", "medium")).lower()
-    profile = profiles.get(active) or profiles.get("medium") or {}
-    filters = cfg.setdefault("filters", {})
-    if "min_book_odds" in profile:
-        filters["min_book_odds"] = safe_float(profile.get("min_book_odds"), filters.get("min_book_odds", 1.0))
-    if "max_book_odds" in profile:
-        filters["max_book_odds"] = safe_float(profile.get("max_book_odds"), filters.get("max_book_odds", 3.5))
-    cfg["active_filter_profile"] = active if active in profiles else "medium"
+        return json.load(f)
 
 
 # =========================
@@ -688,11 +672,9 @@ def run_bot(mode="main"):
     active_markets = cfg["active_markets"]
     thresholds = cfg["risk_thresholds"]
     bankroll_size = safe_float(cfg.get("bankroll", 1000), 1000)
-    active_profile = str(cfg.get("active_filter_profile", "medium")).upper()
     print(
-        f"FILTER PROFILE: {active_profile} | odds "
-        f"{safe_float(filters.get('min_book_odds'), 1.0):.2f}-"
-        f"{safe_float(filters.get('max_book_odds'), 3.5):.2f}"
+        "FILTER PROFILE: MAIN ONLY | odds "
+        f">={safe_float(filters.get('min_book_odds'), 1.0):.2f} | no upper limit"
     )
 
     engines = build_stage_engines()
@@ -813,9 +795,8 @@ def run_bot(mode="main"):
             # ODDS RANGE FILTER
             # =========================
             min_book_odds = safe_float(filters.get("min_book_odds"), 1.00)
-            max_book_odds = safe_float(filters.get("max_book_odds"), 3.50)
 
-            if book_odds is None or book_odds < min_book_odds or book_odds > max_book_odds:
+            if book_odds is None or book_odds < min_book_odds:
                 skip_stats["odds_range"] += 1
                 continue
 

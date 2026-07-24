@@ -84,11 +84,7 @@ except Exception:
 DATA_DIR.mkdir(exist_ok=True)
 PICKS_FILE = DATA_DIR / "auto_all_picks.csv"
 AI_PICKS_FILE = DATA_DIR / "ai_picks.csv"
-LOW_AI_PICKS_FILE = DATA_DIR / "ai_low_picks.csv"
-RISK_AI_PICKS_FILE = DATA_DIR / "ai_risk_picks.csv"
 PICK_CANDIDATES = [DATA_DIR / "auto_all_picks.csv", BASE_DIR / "auto_all_picks.csv"]
-LOW_PICK_CANDIDATES = [DATA_DIR / "auto_low_picks.csv", BASE_DIR / "auto_low_picks.csv"]
-RISK_PICK_CANDIDATES = [DATA_DIR / "auto_risk_picks.csv", BASE_DIR / "auto_risk_picks.csv"]
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
@@ -251,7 +247,7 @@ def normalize_picks(df: pd.DataFrame) -> pd.DataFrame:
     if "kurs_buk" in out.columns:
         odds = pd.to_numeric(out["kurs_buk"], errors="coerce")
         if odds.notna().any():
-            out = out[(odds >= 1.00) & (odds <= 5.00)].copy()
+            out = out[odds >= 1.00].copy()
     return out.reset_index(drop=True)
 
 
@@ -264,25 +260,6 @@ def load_strategy_config() -> dict:
 
 def save_strategy_config(cfg: dict) -> None:
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def filter_profile_options(cfg: dict) -> dict:
-    profiles = cfg.get("filter_profiles") or {}
-    if profiles:
-        return profiles
-    return {
-        "safe": {"label": "Filtry Safe", "min_book_odds": 1.0, "max_book_odds": 2.5},
-        "medium": {"label": "Filtry Medium", "min_book_odds": 1.0, "max_book_odds": 3.5},
-        "risk": {"label": "Filtry ryzyka", "min_book_odds": 1.0, "max_book_odds": 5.0},
-    }
-
-
-def active_filter_profile(cfg: dict) -> str:
-    active = str(cfg.get("active_filter_profile", "medium")).lower()
-    profiles = filter_profile_options(cfg)
-    return active if active in profiles else "medium"
-
-
 
 
 def load_picks() -> pd.DataFrame:
@@ -1753,15 +1730,13 @@ def render_live(live: pd.DataFrame, picks: pd.DataFrame) -> None:
         st.markdown(ranked_bars("ROZKŁAD RYZYKA", risk_items, "Liczba aktywnych sygnałów"), unsafe_allow_html=True)
 
 
-def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:
-    low_picks = normalize_picks(low_picks) if low_picks is not None and not low_picks.empty else pd.DataFrame()
-    risk_picks = normalize_picks(risk_picks) if risk_picks is not None and not risk_picks.empty else pd.DataFrame()
-    page_banner("Typy przedmeczowe", "PRZEDMECZOWE", "Trzy czytelne tabele: główna, niskie ryzyko i podwyższone ryzyko.")
+def render_prematch(picks: pd.DataFrame) -> None:
+    page_banner("Typy przedmeczowe", "PRZEDMECZOWE", "Jeden główny profil rekomendacji bez górnego limitu kursu.")
     metrics([
         ("Mecze", str(len(picks)), "dzisiaj"),
         ("Średni kurs", f"{as_float(numeric_series(picks, 'kurs_buk').mean(), 0):.2f}", "główne"),
         ("Średnia pewność", pct(as_float(numeric_series(picks, "confidence").mean(), 0)), "model"),
-        ("Profile ryzyka", "3", f"low {len(low_picks)} / risk {len(risk_picks)}"),
+        ("Profil publikacji", "1", "główny"),
     ])
     filter_cols = st.columns([1.35, 1, 1, .8])
     league_col = "league" if "league" in picks.columns else "liga" if "liga" in picks.columns else None
@@ -1806,21 +1781,18 @@ def render_prematch(picks: pd.DataFrame, low_picks: pd.DataFrame | None = None, 
         return filtered
 
     headers = ["Liga", "Mecz", "Rynek", "Model", "Bot", "Buk", "Value", "Zamk./CLV", "Pewność", "Status"]
-    prematch_tabs = st.tabs(["Główne", "Niskie ryzyko", "Podwyższone ryzyko"])
-    datasets = [(apply_prematch_filters(picks), "Najlepsze typy przedmeczowe", "Brak danych przedmeczowych."), (apply_prematch_filters(low_picks), "Niskie ryzyko", "Brak danych niskiego ryzyka - bot nie zapisał jeszcze auto_low_picks.csv."), (apply_prematch_filters(risk_picks), "Podwyższone ryzyko", "Brak danych podwyższonego ryzyka - bot nie zapisał jeszcze auto_risk_picks.csv.")]
-    for tab, (df, label, empty_msg) in zip(prematch_tabs, datasets):
-        with tab:
-            subpage_banner("Prematch table", label, empty_msg)
-            rows = pick_rows(df) if df is not None and not df.empty else []
-            table = html_table(headers, rows) if rows else html_table(headers, [["-", empty_msg, "-", "-", "-", "-", "-", "-", "-", "-"]])
-            st.markdown(f'<div class="ka-panel"><h3>{label}</h3>{table}</div>', unsafe_allow_html=True)
+    df = apply_prematch_filters(picks)
+    label = "Najlepsze typy przedmeczowe"
+    empty_msg = "Brak danych przedmeczowych."
+    subpage_banner("Prematch table", label, empty_msg)
+    rows = pick_rows(df) if df is not None and not df.empty else []
+    table = html_table(headers, rows) if rows else html_table(headers, [["-", empty_msg, "-", "-", "-", "-", "-", "-", "-", "-"]])
+    st.markdown(f'<div class="ka-panel"><h3>{label}</h3>{table}</div>', unsafe_allow_html=True)
 
 
-def render_ai(picks: pd.DataFrame, results: pd.DataFrame, low_picks: pd.DataFrame | None = None, risk_picks: pd.DataFrame | None = None) -> None:
-    low_picks = low_picks if low_picks is not None else pd.DataFrame()
-    risk_picks = risk_picks if risk_picks is not None else pd.DataFrame()
-    all_ai = pd.concat([df for df in [picks, low_picks, risk_picks] if df is not None and not df.empty], ignore_index=True, sort=False) if any(df is not None and not df.empty for df in [picks, low_picks, risk_picks]) else pd.DataFrame()
-    page_banner("Typy AI", "AI", "Trzy niezależne tabele AI: główna, niskie ryzyko i podwyższone ryzyko.")
+def render_ai(picks: pd.DataFrame, results: pd.DataFrame) -> None:
+    all_ai = picks if picks is not None else pd.DataFrame()
+    page_banner("Typy AI", "AI", "Główny profil rekomendacji AI.")
     avg_ai = as_float(numeric_series(all_ai, 'ai_pick_score').mean(), as_float(numeric_series(all_ai, 'confidence').mean(), 0))
     perfect = int((numeric_series(all_ai, "confidence") >= 85).sum()) if not all_ai.empty else 0
     edge_values = real_values(all_ai, ["ev", "edge", "value"])
@@ -1831,18 +1803,12 @@ def render_ai(picks: pd.DataFrame, results: pd.DataFrame, low_picks: pd.DataFram
         ("Średnia pewność", f"{avg_ai:.0f}%", "model AI"),
         ("Przewaga", f"{avg_edge:+.1f}%", "średni edge"),
     ])
-    ai_tabs = st.tabs(["AI", "AI niskie ryzyko", "AI podwyższone ryzyko"])
-    datasets = [
-        (picks, "TYPY AI", "Brak danych AI - główny tryb nie ma jeszcze kandydatów."),
-        (low_picks, "AI NISKIE RYZYKO", "Brak danych AI niskiego ryzyka - poczekaj na cykl albo uruchom pełny launcher."),
-        (risk_picks, "AI PODWYŻSZONE RYZYKO", "Brak danych AI podwyższonego ryzyka - poczekaj na cykl albo uruchom pełny launcher."),
-    ]
-    for tab, (df, label, empty_msg) in zip(ai_tabs, datasets):
-        with tab:
-            subpage_banner("AI table", label, empty_msg)
-            if df is None or df.empty:
-                st.info(empty_msg)
-            render_ai_picks_interactive(df if df is not None else pd.DataFrame())
+    label = "TYPY AI"
+    empty_msg = "Brak danych AI - główny tryb nie ma jeszcze kandydatów."
+    subpage_banner("AI table", label, empty_msg)
+    if picks is None or picks.empty:
+        st.info(empty_msg)
+    render_ai_picks_interactive(picks if picks is not None else pd.DataFrame())
 
 
 def _render_quality_governance() -> None:
@@ -2160,17 +2126,9 @@ def render_ranking(picks: pd.DataFrame, results: pd.DataFrame) -> None:
             _smart_group_table(combo, "liga_typ", "Najmocniejsze połączenia")
 
 
-def render_gpt_professional(prematch_picks: pd.DataFrame, low_picks: pd.DataFrame, risk_picks: pd.DataFrame, live: pd.DataFrame, results: pd.DataFrame) -> None:
-    page_banner("Czat GPT", "CZAT GPT", "Profesjonalny ekran rozmowy z GPT podzielony na Prematch, Low i Risk.")
-    datasets = [
-        ("prematch", "Prematch", prematch_picks if prematch_picks is not None else pd.DataFrame(), PICK_CANDIDATES),
-        ("low", "Low", low_picks if low_picks is not None else pd.DataFrame(), LOW_PICK_CANDIDATES),
-        ("risk", "Risk", risk_picks if risk_picks is not None else pd.DataFrame(), RISK_PICK_CANDIDATES),
-    ]
-    profile_tabs = st.tabs([label for _, label, _, _ in datasets])
-    for tab, (profile_key, profile_label, profile_df, source_files) in zip(profile_tabs, datasets):
-        with tab:
-            render_gpt_tab(BASE_DIR, profile_name=profile_label, key_prefix=profile_key, source_files=source_files)
+def render_gpt_professional(prematch_picks: pd.DataFrame, live: pd.DataFrame, results: pd.DataFrame) -> None:
+    page_banner("Czat GPT", "CZAT GPT", "Profesjonalna analiza głównego profilu rekomendacji.")
+    render_gpt_tab(BASE_DIR, profile_name="Prematch", key_prefix="prematch", source_files=PICK_CANDIDATES)
 
 
 def _manual_pick_label(row, idx: int) -> str:
@@ -2380,8 +2338,8 @@ def _render_manual_profile(mode_key: str, mode_label: str, picks_source: pd.Data
             _decision_table(grouped_manual_stats(mode_manual_df, "manual_market_label"), ["manual_market_label", "bets", "wins", "winrate_%", "stake", "profit", "roi_%"], "Brak rozliczonych singli w tym profilu.")
 
 
-def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame | None = None, risk_source: pd.DataFrame | None = None) -> None:
-    page_banner("Moje zakłady", "MOJE ZAKŁADY", "Zakłady pojedyncze i multi w trzech profilach: Standard, Niskie ryzyko i Duże ryzyko.")
+def render_manual_betting(picks_source: pd.DataFrame) -> None:
+    page_banner("Moje zakłady", "MOJE ZAKŁADY", "Zakłady pojedyncze i multi w jednym profilu głównym.")
 
     required = [add_manual_bet, add_ako_coupon, manual_bets_dataframe, manual_summary, grouped_manual_stats]
     if not all(required):
@@ -2406,15 +2364,13 @@ def render_manual_betting(picks_source: pd.DataFrame, low_source: pd.DataFrame |
         ("Bieżący profit", money(summary["profit"] + ako_summary["profit"]), "zrealizowany"),
     ])
 
-    datasets = [
-        ("standard", "Standard", picks_source if picks_source is not None else pd.DataFrame()),
-        ("low", "Niskie ryzyko", low_source if low_source is not None else pd.DataFrame()),
-        ("risk", "Duże ryzyko", risk_source if risk_source is not None else pd.DataFrame()),
-    ]
-    profile_tabs = st.tabs([label for _, label, _ in datasets])
-    for tab, (mode_key, mode_label, source_df) in zip(profile_tabs, datasets):
-        with tab:
-            _render_manual_profile(mode_key, mode_label, source_df, manual_df, ako_df)
+    _render_manual_profile(
+        "standard",
+        "Standard",
+        picks_source if picks_source is not None else pd.DataFrame(),
+        manual_df,
+        ako_df,
+    )
 
 
 def _volleyball_datetime(value) -> str:
@@ -2622,28 +2578,20 @@ require_login()
 css()
 raw_picks = load_picks()
 picks = normalize_picks(raw_picks)
-low_picks = normalize_picks(load_pick_candidates(LOW_PICK_CANDIDATES))
-risk_picks = normalize_picks(load_pick_candidates(RISK_PICK_CANDIDATES))
 live = load_live_data(picks)
 results = load_results()
 ai_picks = load_ai_picks(picks)
-ai_low_picks = load_ai_picks(low_picks, LOW_AI_PICKS_FILE, "low")
-ai_risk_picks = load_ai_picks(risk_picks, RISK_AI_PICKS_FILE, "risk")
-ai_context = pd.concat(
-    [df for df in [ai_picks, ai_low_picks, ai_risk_picks] if df is not None and not df.empty],
-    ignore_index=True,
-    sort=False,
-) if any(df is not None and not df.empty for df in [ai_picks, ai_low_picks, ai_risk_picks]) else pd.DataFrame()
+ai_context = ai_picks.copy() if ai_picks is not None else pd.DataFrame()
 
 selected_page = render_navigation(BASE_DIR)
 render_workspace_bar(selected_page)
 if selected_page == "Na żywo": render_live(live, picks)
-elif selected_page == "Przedmeczowe": render_prematch(picks, low_picks, risk_picks)
-elif selected_page == "AI": render_ai(ai_picks, results, ai_low_picks, ai_risk_picks)
+elif selected_page == "Przedmeczowe": render_prematch(picks)
+elif selected_page == "AI": render_ai(ai_picks, results)
 elif selected_page == "Analityka": render_analytics(picks, results, "ANALITYKA")
 elif selected_page == "Historia": render_history(results)
-elif selected_page == "Moje zakłady": render_manual_betting(raw_picks, low_picks, risk_picks)
+elif selected_page == "Moje zakłady": render_manual_betting(raw_picks)
 elif selected_page == "Ranking": render_ranking(picks, results)
 elif selected_page == "Siatkówka": render_volleyball()
-elif selected_page == "Czat GPT": render_gpt_professional(picks, low_picks, risk_picks, live, results)
+elif selected_page == "Czat GPT": render_gpt_professional(picks, live, results)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)

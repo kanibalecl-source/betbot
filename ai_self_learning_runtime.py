@@ -22,7 +22,7 @@ except Exception:
         return 0
 
 BASE_DIR = Path(__file__).resolve().parent
-from storage_paths import DATA_DIR
+DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
@@ -47,27 +47,12 @@ AI_MODE_SETTINGS = {
         "label": "AI",
         "append_stream": "ai_picks",
     },
-    "low": {
-        "prematch_file": "auto_low_picks.csv",
-        "ai_file": "ai_low_picks.csv",
-        "model_dir": "ai_learning_low",
-        "label": "AI LOW",
-        "append_stream": "ai_low_picks",
-    },
-    "risk": {
-        "prematch_file": "auto_risk_picks.csv",
-        "ai_file": "ai_risk_picks.csv",
-        "model_dir": "ai_learning_risk",
-        "label": "AI RISK",
-        "append_stream": "ai_risk_picks",
-    },
 }
 
 AI_COLUMNS = [
-    "ai_id", "pick_id", "fixture_id", "created_at", "source", "ai_mode", "ai_label", "league", "match", "market", "odds",
-    "confidence", "edge", "ev", "stake", "ai_pick_score", "risk", "status",
-    "tempo", "pressure", "momentum", "learning_adjustment", "settled_samples",
-    "data_provenance", "model_reason", "ai_generated"
+    "ai_id", "created_at", "source", "ai_mode", "ai_label", "league", "match", "market", "odds",
+    "confidence", "edge", "ev", "ai_pick_score", "risk", "status",
+    "tempo", "pressure", "momentum", "model_reason", "ai_generated"
 ]
 
 FEATURE_COLUMNS = [
@@ -77,7 +62,7 @@ FEATURE_COLUMNS = [
 ]
 
 DEFAULT_STATE: Dict[str, Any] = {
-    "version": "self_learning_v2_verified_results_only",
+    "version": "self_learning_v1",
     "created_at": None,
     "updated_at": None,
     "cycles": 0,
@@ -135,15 +120,6 @@ def load_state() -> Dict[str, Any]:
     if MODEL_STATE_FILE.exists():
         try:
             state = json.loads(MODEL_STATE_FILE.read_text(encoding="utf-8"))
-            if state.get("version") != DEFAULT_STATE["version"]:
-                backup = MODEL_STATE_FILE.with_name("ai_model_state_legacy_unverified_v1.json")
-                if not backup.exists():
-                    write_json(backup, state)
-                state = {
-                    "created_at": now_iso(),
-                    "cycles": int(state.get("cycles", 0)),
-                    "legacy_state_backup": str(backup),
-                }
             merged = dict(DEFAULT_STATE)
             merged.update(state)
             return merged
@@ -190,37 +166,24 @@ def normalize_market(raw: Any) -> str:
         "X2": "DOUBLE_X2", "DOUBLE_X2": "DOUBLE_X2", "1X": "DOUBLE_1X", "DOUBLE_1X": "DOUBLE_1X",
         "UNDER_4.5": "UNDER_4.5", "UNDER_45": "UNDER_4.5",
     }
-    return aliases.get(s, s)
+    return aliases.get(s, s if s else "OVER_1.5")
 
 
 def combine_results() -> pd.DataFrame:
-    # results_history.csv jest eksportem kanonicznej bazy SQLite. history.csv
-    # zawiera także typy PENDING i nie może być materiałem uczącym.
-    df = read_csv(RESULTS_FILE)
-    if df.empty:
+    frames = [read_csv(RESULTS_FILE), read_csv(HISTORY_FILE)]
+    frames = [f for f in frames if not f.empty]
+    if not frames:
         return pd.DataFrame()
-    if "status" in df.columns:
-        df = df[df["status"].astype(str).str.upper().eq("CLOSED")]
-    result_col = "result" if "result" in df.columns else "settlement" if "settlement" in df.columns else None
-    if result_col is None:
-        return pd.DataFrame()
-    valid = {"WIN", "WON", "LOSE", "LOSS", "LOST", "PUSH", "VOID"}
-    df = df[df[result_col].astype(str).str.upper().isin(valid)].copy()
-    if df.empty:
-        return df
-    dedupe = [c for c in ("pick_key", "pick_id", "ai_id") if c in df.columns]
-    if dedupe:
-        df = df.drop_duplicates(subset=[dedupe[0]], keep="last")
-    return df
+    return pd.concat(frames, ignore_index=True, sort=False)
 
 
 def result_score(value: Any) -> float:
     s = str(value or "").strip().lower()
-    if s in {"win", "won", "wygrana", "trafiony", "1", "true"}:
+    if any(x in s for x in ["win", "won", "wygr", "traf", "1", "true"]):
         return 1.0
-    if s in {"loss", "lose", "lost", "przegrana", "0", "false"}:
+    if any(x in s for x in ["loss", "lose", "przeg", "lost", "0", "false"]):
         return -1.0
-    if s in {"push", "void", "zwrot"}:
+    if "push" in s or "void" in s or "zwrot" in s:
         return 0.0
     return 0.0
 
@@ -252,11 +215,8 @@ def compute_weights(results: pd.DataFrame) -> Tuple[Dict[str, float], Dict[str, 
         rs = pd.to_numeric(g.get("result_score", pd.Series([0]*n)), errors="coerce").fillna(0).mean()
         profit = pd.to_numeric(g.get("profit", pd.Series([0]*n)), errors="coerce").fillna(0).mean()
         roi = pd.to_numeric(g.get("roi", pd.Series([0]*n)), errors="coerce").fillna(0).mean()
-        # Większa liczba próbek zwiększa wiarygodność, ale sama w sobie nie
-        # dodaje dodatniej wagi. Brak wyników nie może wyglądać jak przewaga.
-        reliability = min(1.0, n / 50.0)
-        raw = rs * 12.0 + profit * 1.5 + roi * 0.18
-        return round(max(-18.0, min(22.0, raw * reliability)), 3)
+        sample_bonus = min(8.0, n * 0.25)
+        return round(max(-18.0, min(22.0, rs * 12.0 + profit * 1.5 + roi * 0.18 + sample_bonus)), 3)
 
     if "league" in df.columns:
         for league, g in df.groupby(df["league"].astype(str)):
@@ -300,6 +260,11 @@ def update_learning_state() -> Dict[str, Any]:
 
 def candidates(label: str = "AI") -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
+    live = read_csv(LIVE_FILE)
+    if not live.empty:
+        live = live.copy()
+        live["_source"] = "LIVE_FEED"
+        frames.append(live)
     pre = read_csv(PREMATCH_FILE)
     if not pre.empty:
         pre = pre.copy()
@@ -311,9 +276,24 @@ def candidates(label: str = "AI") -> pd.DataFrame:
 
 
 def choose_market(row: Any, idx: int, state: Dict[str, Any], seed: float) -> str:
-    # AI może oceniać wyłącznie rynek istniejącego typu z prawdziwym kursem.
-    # Nie wolno tworzyć innego marketu na podstawie tempa ani progów.
-    return normalize_market(first(row, ["market", "kod_rynku"], ""))
+    market_weights = state.get("market_weights", {}) or {}
+    tempo = num(first(row, ["tempo", "pace", "xg_pace"], 0), 0)
+    pressure = num(first(row, ["pressure", "momentum", "dangerous_attacks"], 0), 0)
+    base_market = normalize_market(first(row, ["market", "typ", "signal"], ""))
+    weighted = sorted(MARKETS, key=lambda m: market_weights.get(m, 0), reverse=True)
+    if pressure >= 78 or tempo >= 78:
+        pref = "OVER_1.5"
+    elif pressure >= 64 and tempo >= 55:
+        pref = "BTTS_YES"
+    elif seed >= 78:
+        pref = "OVER_2.5"
+    else:
+        pref = weighted[idx % len(weighted)] if weighted else MARKETS[idx % len(MARKETS)]
+    # This is an autonomous decision. It may use the fixture universe, but it does not blindly copy the prematch market.
+    if pref == base_market and len(weighted) > 1:
+        alt = weighted[(weighted.index(pref) + 1) % len(weighted)] if pref in weighted else MARKETS[(MARKETS.index(pref)+1) % len(MARKETS)]
+        return alt
+    return pref
 
 
 def risk_for(score: float, edge: float, odds: float) -> str:
@@ -365,52 +345,32 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
             continue
         seen.add(key)
 
-        fixture_id = str(first(row, ["fixture_id"], "")).strip()
-        market = choose_market(row, idx, state, 0)
-        raw_conf = first(row, ["confidence", "advanced_confidence", "ai_pick_score"], None)
-        raw_edge = first(row, ["edge"], None)
-        raw_ev = first(row, ["ev"], None)
-        raw_odds = first(row, ["odds", "kurs_buk"], None)
-        raw_stake = first(row, ["stake", "recommended_stake", "stawka_pln"], None)
-        if not fixture_id or not market or raw_conf is None or raw_odds is None or raw_stake is None or (raw_edge is None and raw_ev is None):
-            debug["rejected"].append({"match": match, "reason": "missing_verified_fields"})
-            continue
-        base_conf = num(raw_conf, -1)
-        base_edge = num(raw_edge if raw_edge is not None else raw_ev, -999)
-        base_ev = num(raw_ev if raw_ev is not None else raw_edge, -999)
-        odds = num(raw_odds, 0)
-        stake = num(raw_stake, 0)
-        if not (0 <= base_conf <= 100) or odds <= 1 or stake <= 0 or base_edge <= -999 or base_ev <= -999:
-            debug["rejected"].append({"match": match, "reason": "invalid_verified_fields"})
-            continue
-        tempo_raw = first(row, ["tempo", "tempo_score", "pace", "xg_pace"], None)
-        pressure_raw = first(row, ["pressure"], None)
-        momentum_raw = first(row, ["momentum"], None)
-        tempo = num(tempo_raw, float("nan")) if tempo_raw is not None else None
-        pressure = num(pressure_raw, float("nan")) if pressure_raw is not None else None
-        momentum = num(momentum_raw, float("nan")) if momentum_raw is not None else None
+        base_conf = num(first(row, ["confidence", "advanced_confidence", "score", "ai_pick_score"], 52), 52)
+        base_edge = num(first(row, ["edge", "ev", "value"], 0), 0)
+        odds = num(first(row, ["odds", "kurs_buk", "kurs"], 1.75), 1.75)
+        tempo = num(first(row, ["tempo", "pace", "xg_pace"], min(100, 35 + base_conf * 0.45)), 0)
+        pressure = num(first(row, ["pressure", "momentum", "dangerous_attacks"], min(100, 35 + base_conf * 0.42 + max(base_edge, 0))), 0)
+        momentum = num(first(row, ["momentum"], (tempo + pressure) / 2), 0)
         league_w = float(league_weights.get(league, 0.0))
+        seed = base_conf * 0.58 + max(base_edge, 0) * 1.45 + tempo * 0.13 + pressure * 0.18 + league_w
+        market = choose_market(row, idx, state, seed)
         market_w = float(market_weights.get(market, 0.0))
-        learned_adjustment = league_w + market_w
-        score = max(0.0, min(100.0, base_conf + learned_adjustment))
-        edge = base_edge
+        score = max(0.0, min(100.0, seed + market_w))
+        edge = max(0.0, min(40.0, base_edge + max(0, league_w) * 0.18 + max(0, market_w) * 0.22 + (score - 55) * 0.09))
         min_conf = float(state.get("min_confidence", 54))
         min_edge = float(state.get("min_edge", 0))
-        edge_for_threshold = edge * 100.0 if abs(edge) <= 1.0 else edge
-        if score < min_conf or edge_for_threshold < min_edge:
+        if score < min_conf or edge < min_edge:
             debug["rejected"].append({"match": match, "reason": "threshold", "score": round(score,2), "edge": round(edge,2)})
             continue
-        risk = risk_for(score, edge_for_threshold, odds)
+        risk = risk_for(score, edge, odds)
         status = "AI STRONG" if score >= 75 else "AI VALUE" if score >= 64 else "AI WATCH"
         reason = (
             f"Self-learning score={score:.1f}; mode={state.get('mode')}; market={market}; "
-            f"league_w={league_w:.1f}; market_w={market_w:.1f}; dane skopiowane z typu źródłowego"
+            f"league_w={league_w:.1f}; market_w={market_w:.1f}; tempo={tempo:.1f}; pressure={pressure:.1f}"
         )
         ai_id = f"AI-{abs(hash((league, match, market, ts[:10]))) % 10_000_000:07d}"
         item = {
             "ai_id": ai_id,
-            "pick_id": str(first(row, ["pick_id"], ai_id)),
-            "fixture_id": fixture_id,
             "created_at": ts,
             "source": first(row, ["_source"], "DATA_FEED"),
             "ai_mode": settings["mode"],
@@ -421,17 +381,13 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
             "odds": round(odds, 3),
             "confidence": round(score, 2),
             "edge": round(edge, 2),
-            "ev": round(base_ev, 4),
-            "stake": round(stake, 2),
+            "ev": round(edge, 2),
             "ai_pick_score": round(score, 2),
             "risk": risk,
             "status": status,
-            "tempo": round(tempo, 2) if tempo is not None else None,
-            "pressure": round(pressure, 2) if pressure is not None else None,
-            "momentum": round(momentum, 2) if momentum is not None else None,
-            "learning_adjustment": round(learned_adjustment, 3),
-            "settled_samples": int(state.get("settled_samples", 0)),
-            "data_provenance": "VERIFIED_PREMATCH_PICK+SETTLED_HISTORY",
+            "tempo": round(tempo, 2),
+            "pressure": round(pressure, 2),
+            "momentum": round(momentum, 2),
             "model_reason": reason,
             "ai_generated": True,
         }
@@ -481,7 +437,9 @@ def run_self_learning_cycle(limit: int = 12, mode: str = "main") -> Dict[str, An
     state_before = load_state()
     picks = build_ai_picks(limit=limit, mode=mode)
     AI_PICKS_FILE.parent.mkdir(exist_ok=True)
-    if not picks.empty:
+    if picks.empty:
+        pd.DataFrame(columns=AI_COLUMNS).to_csv(AI_PICKS_FILE, index=False)
+    else:
         picks.to_csv(AI_PICKS_FILE, index=False)
         append_records(settings["append_stream"], picks.to_dict("records"), source="ai_self_learning_runtime.py")
     state_after = update_learning_state()
