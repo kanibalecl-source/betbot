@@ -9,8 +9,8 @@ from typing import Any, Mapping
 
 from storage_paths import get_data_dir
 
-RUNTIME_SCHEMA = "betbot.runtime_health.v8.1"
-QUALITY_SCHEMA = "betbot.quality_governance_health.v8.1"
+RUNTIME_SCHEMA = "betbot.runtime_health.v11"
+QUALITY_SCHEMA = "betbot.autonomous_quality_health.v11"
 
 
 def utc_now() -> str:

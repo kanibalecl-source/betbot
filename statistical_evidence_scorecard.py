@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -38,6 +39,14 @@ def _atomic(path: Path, payload: Mapping[str, Any]) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(temporary, path)
+
+
+def _hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def build_scorecard(
@@ -155,6 +164,12 @@ class StatisticalEvidenceScorecard:
             minimum_clv_samples=settings.evidence_min_clv_samples,
             maximum_ece=settings.evidence_max_ece,
         )
+        scorecard["candidate_sha256"] = (
+            _hash(self.candidate_path) if self.candidate_path.is_file() else ""
+        )
+        scorecard["candidate_token"] = Path(
+            str(candidate.get("candidate_path") or self.candidate_path.name)
+        ).name
         _atomic(self.output_path, scorecard)
         return scorecard
 

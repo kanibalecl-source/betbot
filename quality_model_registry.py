@@ -132,6 +132,14 @@ def promote_candidate_automatically(
         return {"status": "REFUSED_WALK_FORWARD_NOT_POSITIVE"}
     if status.get("live_shadow", {}).get("status") != "POSITIVE_LIVE_SHADOW_MANUAL_APPROVAL":
         return {"status": "REFUSED_LIVE_SHADOW_NOT_POSITIVE"}
+    scorecard = _read(root / "quality_retraining" / "statistical_evidence_scorecard_v8.json")
+    if (
+        scorecard.get("status") != "STATISTICAL_EDGE_CONFIRMED"
+        or scorecard.get("confirmed_statistical_edge") is not True
+    ):
+        return {"status": "REFUSED_STATISTICAL_EDGE_NOT_CONFIRMED"}
+    if scorecard.get("candidate_sha256") != expected_candidate_sha256:
+        return {"status": "REFUSED_SCORECARD_CANDIDATE_MISMATCH"}
 
     candidate = _read(candidate_path)
     if not candidate or candidate.get("active_model_was_not_modified") is not True:

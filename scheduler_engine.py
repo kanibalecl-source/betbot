@@ -65,12 +65,7 @@ def run_prematch():
             for mode, label, include_all in BOT_MODES:
                 run_bot_mode(mode, label, include_all_leagues=include_all)
 
-            try:
-                from live_pipeline_runtime import run_once as run_live_pipeline_once
-                live_count = run_live_pipeline_once()
-                print(f"LIVE SCHEDULER PIPELINE OK | active={live_count}")
-            except Exception as live_error:
-                print(f"LIVE SCHEDULER PIPELINE ERROR: {live_error}")
+            print("LIVE PIPELINE OWNER | live_pipeline process")
 
             try:
                 from ai_self_learning_runtime import run_self_learning_cycle
@@ -85,19 +80,11 @@ def run_prematch():
             except Exception as ai_error:
                 print(f"AI SELF-LEARNING LOOP ERROR: {ai_error}")
 
-            try:
-                from auto_retraining_runtime import AutoRetrainingRuntime
-                retrain_result = AutoRetrainingRuntime().run_if_due()
-                print(f"AI RETRAINING CHECK | status={retrain_result.get('status')}")
-            except Exception as retrain_error:
-                print(f"AI RETRAINING CHECK ERROR: {retrain_error}")
+            # Retraining has one owner. The legacy runtime is intentionally
+            # not called because it bypassed the complete evidence chain.
+            print("AI RETRAINING OWNER | autonomous_quality_v11")
 
-            try:
-                from persistence_runtime import run_once as persistence_run_once
-                persistence_result = persistence_run_once()
-                print(f"PERSISTENCE/HISTORY OK | {persistence_result}")
-            except Exception as persistence_error:
-                print(f"PERSISTENCE/HISTORY ERROR: {persistence_error}")
+            print("PERSISTENCE OWNER | persistence process")
 
             print("SCHEDULER LOOP OK")
             sys.stdout.flush()

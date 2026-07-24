@@ -7,11 +7,13 @@ It does not place bets and it does not connect to bookmaker accounts.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
 import pandas as pd
+from storage_paths import get_data_dir
 
 try:
     from betbot.storage.append_only_history import append_event, append_records
@@ -210,45 +212,99 @@ def compute_weights(results: pd.DataFrame) -> Tuple[Dict[str, float], Dict[str, 
     if "roi" not in df.columns:
         df["roi"] = 0.0
 
-    def group_weight(g: pd.DataFrame) -> float:
+    minimum_segment = max(
+        20, int(os.getenv("BETBOT_AI_LEARNING_MIN_SEGMENT_SAMPLES", "50"))
+    )
+    prior_strength = max(
+        20.0, float(os.getenv("BETBOT_AI_LEARNING_PRIOR_STRENGTH", "100"))
+    )
+
+    def raw_group_weight(g: pd.DataFrame) -> float:
         n = len(g)
         rs = pd.to_numeric(g.get("result_score", pd.Series([0]*n)), errors="coerce").fillna(0).mean()
         profit = pd.to_numeric(g.get("profit", pd.Series([0]*n)), errors="coerce").fillna(0).mean()
         roi = pd.to_numeric(g.get("roi", pd.Series([0]*n)), errors="coerce").fillna(0).mean()
-        sample_bonus = min(8.0, n * 0.25)
-        return round(max(-18.0, min(22.0, rs * 12.0 + profit * 1.5 + roi * 0.18 + sample_bonus)), 3)
+        return max(-18.0, min(22.0, rs * 12.0 + profit * 1.5 + roi * 0.18))
+
+    global_weight = raw_group_weight(df)
+
+    def group_weight(g: pd.DataFrame) -> float | None:
+        n = len(g)
+        if n < minimum_segment:
+            return None
+        raw = raw_group_weight(g)
+        shrunk = (n * raw + prior_strength * global_weight) / (n + prior_strength)
+        return round(max(-18.0, min(22.0, shrunk)), 3)
 
     if "league" in df.columns:
         for league, g in df.groupby(df["league"].astype(str)):
             if league and league != "nan":
-                league_weights[league] = group_weight(g)
+                weight = group_weight(g)
+                if weight is not None:
+                    league_weights[league] = weight
     if "market" in df.columns:
         df["market_norm"] = df["market"].apply(normalize_market)
         for market, g in df.groupby("market_norm"):
             if market and market != "nan":
-                market_weights[market] = group_weight(g)
-    summary.update({"leagues": len(league_weights), "markets": len(market_weights)})
+                weight = group_weight(g)
+                if weight is not None:
+                    market_weights[market] = weight
+    summary.update({
+        "leagues": len(league_weights),
+        "markets": len(market_weights),
+        "minimum_segment_samples": minimum_segment,
+        "prior_strength": prior_strength,
+    })
     return league_weights, market_weights, summary
+
+
+def _quality_gate() -> Dict[str, Any]:
+    work = Path(get_data_dir()).resolve() / "quality_retraining"
+    try:
+        guardian = json.loads((work / "data_quality_guardian.json").read_text(encoding="utf-8"))
+    except Exception:
+        guardian = {}
+    try:
+        scorecard = json.loads(
+            (work / "statistical_evidence_scorecard_v8.json").read_text(encoding="utf-8")
+        )
+    except Exception:
+        scorecard = {}
+    readiness = guardian.get("training_readiness", {}) or {}
+    return {
+        "guardian_healthy": guardian.get("status") == "HEALTHY",
+        "training_ready": readiness.get("ready_for_validation") is True,
+        "statistical_edge_confirmed": scorecard.get("confirmed_statistical_edge") is True,
+        "scorecard_status": scorecard.get("status", "MISSING"),
+    }
 
 
 def update_learning_state() -> Dict[str, Any]:
     state = load_state()
     results = combine_results()
-    league_weights, market_weights, summary = compute_weights(results)
+    gate = _quality_gate()
+    permitted = gate["guardian_healthy"] and gate["training_ready"]
+    if permitted:
+        league_weights, market_weights, summary = compute_weights(results)
+    else:
+        league_weights, market_weights = {}, {}
+        summary = {"rows": int(len(results)), "leagues": 0, "markets": 0}
     state["cycles"] = int(state.get("cycles", 0)) + 1
     state["samples"] = int(len(read_csv(FEATURE_STORE_FILE))) if FEATURE_STORE_FILE.exists() else 0
     state["settled_samples"] = int(len(results))
     state["league_weights"] = league_weights
     state["market_weights"] = market_weights
-    # Bootstrap until enough settled samples exist. Then tighten thresholds automatically.
-    if len(results) < 30:
-        state["mode"] = "BOOTSTRAP"
+    state["learning_gate"] = gate
+    # No adaptive production weights are applied before authoritative data
+    # quality gates pass. Thresholds tighten only with independent evidence.
+    if len(results) < 300 or not permitted:
+        state["mode"] = "COLLECTING_QUALITY_DATA"
         state["min_confidence"] = 54.0
         state["min_edge"] = 0.0
-    elif len(results) < 100:
-        state["mode"] = "LEARNING"
+    elif not gate["statistical_edge_confirmed"]:
+        state["mode"] = "VALIDATED_SHADOW_LEARNING"
         state["min_confidence"] = 60.0
-        state["min_edge"] = 1.0
+        state["min_edge"] = 1.5
     else:
         state["mode"] = "PRODUCTION"
         state["min_confidence"] = 66.0

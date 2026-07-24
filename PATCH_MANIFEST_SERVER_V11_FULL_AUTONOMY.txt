@@ -1,0 +1,76 @@
+BETBOT SERVER v11 — FULL AUTONOMY, DATA-GATED LEARNING
+
+CEL
+---
+Jeden bezpieczny cykl 24/7:
+zbieranie -> rozliczanie -> Guardian -> jakościowy dataset -> Challenger
+-> walk-forward -> live shadow -> Scorecard -> canary -> promocja/rollback.
+
+NAJWAŻNIEJSZE ZMIANY
+--------------------
+1. Jeden właściciel retreningu: autonomous_quality_v11.
+2. Stary AutoRetrainingRuntime nie jest już uruchamiany przez scheduler.
+3. Scheduler nie duplikuje live pipeline ani persistence.
+4. Persistence nie duplikuje procesu settlement.
+5. Trening jest blokowany, dopóki Guardian nie potwierdzi:
+   - minimum 300 rozliczonych obserwacji,
+   - settlement coverage >= 95%,
+   - closing odds coverage >= 80%,
+   - brak krytycznych alertów.
+6. Produkcyjne wagi segmentów powstają dopiero po minimalnej próbie,
+   z regularizacją do wyniku globalnego.
+7. Automatyczna promocja wymaga jednocześnie:
+   - zdrowego Guardiana,
+   - pozytywnego walk-forward,
+   - pozytywnego live shadow,
+   - potwierdzonego Statistical Evidence Scorecard,
+   - identycznego SHA-256 kandydata w Scorecard,
+   - świeżych etapów canary 10% -> 25% -> 50% -> 100%.
+8. Po pogorszeniu jakości działa automatyczny rollback do poprzedniego Championa.
+9. Panel pokazuje fazę automatyzacji, następny krok i stan rollbacku.
+
+OCHRONA DANYCH
+--------------
+- Paczka NIE zawiera katalogu data ani żadnego pliku historii.
+- Paczka NIE zawiera modeli, baz SQLite, CSV ani sekretów.
+- Pliki na woluminie /data nie są usuwane ani zastępowane.
+- Dataset treningowy, raporty i kandydaci są artefaktami pochodnymi.
+- Historia źródłowa pozostaje append-only.
+- BETTING_ENABLED i BETBOT_CAPITAL_REAL_ENABLED nie są zmieniane.
+
+WYMAGANE ZMIENNE RAILWAY
+------------------------
+BETBOT_AUTONOMOUS_GOVERNOR_ENABLED=1
+BETBOT_AUTONOMOUS_PROMOTION_ENABLED=1
+BETBOT_AUTONOMOUS_ROLLBACK_ENABLED=1
+
+ZALECANE PROGI (domyślne w kodzie)
+----------------------------------
+BETBOT_AUTONOMY_MIN_SETTLED_FOR_TRAINING=300
+BETBOT_QUALITY_RETRAIN_MIN_NEW_ROWS=300
+BETBOT_QUALITY_RETRAIN_MIN_HOURS=24
+BETBOT_QUALITY_WF_MIN_TEST_SAMPLES=300
+BETBOT_QUALITY_WF_MIN_FOLDS=4
+BETBOT_LIVE_SHADOW_MIN_SAMPLES=300
+BETBOT_EVIDENCE_MIN_OOS_SAMPLES=1000
+BETBOT_EVIDENCE_MIN_CLV_SAMPLES=200
+BETBOT_AI_LEARNING_MIN_SEGMENT_SAMPLES=50
+BETBOT_AI_LEARNING_PRIOR_STRENGTH=100
+
+OCZEKIWANE LOGI PO WDROŻENIU
+----------------------------
+APP LAUNCHER v11.0 START
+AUTONOMOUS QUALITY v11 START
+AI RETRAINING OWNER | autonomous_quality_v11
+HEARTBEAT v11.0 | ... autonomous_quality_v11=True ...
+
+W fazie początkowej prawidłowy jest status:
+COLLECTING_QUALITY_DATA / WAITING_FOR_QUALITY_DATA.
+Nie jest to błąd — oznacza aktywne bramki bezpieczeństwa.
+
+WERYFIKACJA LOKALNA
+-------------------
+- py_compile: OK
+- 164 testy bez test_api: OK
+- test_api pominięty lokalnie wyłącznie z powodu braku pakietu fastapi
+  w narzędziowym interpreterze; nie wykryto błędu kodu aplikacji.

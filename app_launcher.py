@@ -33,7 +33,7 @@ def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, li
         "live_pipeline": [python, "live_pipeline_runtime.py"],
         "settlement": [python, "settle_loop.py"],
         "persistence": [python, "persistence_runtime.py"],
-        "quality_governance_v8": [python, "quality_governance_v8_loop.py"],
+        "autonomous_quality_v11": [python, "quality_governance_v8_loop.py"],
         "dashboard": [
             python, "-m", "streamlit", "run", "dashboard_streamlit.py",
             "--server.port", str(config.port),
@@ -126,7 +126,7 @@ class ProcessSupervisor:
             "supervisor_pid": os.getpid(),
             "configuration_fingerprint": self.settings.fingerprint(),
             "all_required_processes_alive": all(states.values()),
-            "single_retraining_owner": "quality_governance_v8",
+            "single_retraining_owner": "autonomous_quality_v11",
             "legacy_retraining_process_started": False,
             "processes": process_details,
             "quality_governance": quality,
@@ -162,7 +162,7 @@ class ProcessSupervisor:
 
 def main() -> int:
     settings = load_settings()
-    print("APP LAUNCHER v10.0 START", flush=True)
+    print("APP LAUNCHER v11.0 START", flush=True)
     print(
         f"CONFIG VALID schema={settings.schema_version} fingerprint={settings.fingerprint()}",
         flush=True,
@@ -182,7 +182,7 @@ def main() -> int:
             states = supervisor.tick()
             supervisor.write_health(states)
             state_text = " | ".join(f"{name}={alive}" for name, alive in states.items())
-            print(f"HEARTBEAT v10.0 | {state_text}", flush=True)
+            print(f"HEARTBEAT v11.0 | {state_text}", flush=True)
             time.sleep(settings.heartbeat_seconds)
         except Exception as exc:
             print(f"APP LAUNCHER ERROR: {exc}", flush=True)

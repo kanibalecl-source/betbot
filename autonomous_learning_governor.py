@@ -76,6 +76,7 @@ class AutonomousLearningGovernor:
         self.lock_path = self.work / "autonomous_governor.lock"
         self.candidate_path = self.work / "quality_shadow_state.candidate.latest.json"
         self.guardian_path = self.work / "data_quality_guardian.json"
+        self.scorecard_path = self.work / "statistical_evidence_scorecard_v8.json"
         self.active_path = Path(
             os.getenv("BETBOT_QUALITY_STATE", self.root / "quality_shadow_state.json")
         ).resolve()
@@ -159,6 +160,7 @@ class AutonomousLearningGovernor:
                 return {"status": "WAITING_FOR_CANDIDATE", **self._save({"phase": "WAITING_FOR_CANDIDATE"}, "WAIT")}
             candidate_hash = _hash(self.candidate_path)
             candidate = _read(self.candidate_path)
+            scorecard = _read(self.scorecard_path)
             if (
                 state.get("quarantined_candidate_sha256") == candidate_hash
                 and state.get("phase") == "ROLLED_BACK_AUTOMATICALLY"
@@ -177,6 +179,13 @@ class AutonomousLearningGovernor:
                 "walk_forward_positive": validation.get("status") == "POSITIVE_VALIDATION_MANUAL_APPROVAL",
                 "live_shadow_positive": live.get("status") == "POSITIVE_LIVE_SHADOW_MANUAL_APPROVAL",
                 "candidate_declares_no_active_mutation": candidate.get("active_model_was_not_modified") is True,
+                "statistical_edge_confirmed": (
+                    scorecard.get("status") == "STATISTICAL_EDGE_CONFIRMED"
+                    and scorecard.get("confirmed_statistical_edge") is True
+                ),
+                "scorecard_matches_candidate": (
+                    scorecard.get("candidate_sha256") == candidate_hash
+                ),
             }
             if not all(gates.values()):
                 waiting = {
@@ -185,6 +194,7 @@ class AutonomousLearningGovernor:
                     "gates": gates,
                     "live_status": live.get("status"),
                     "guardian_status": guardian.get("status", "MISSING"),
+                    "scorecard_status": scorecard.get("status", "MISSING"),
                     "automatic_model_change": False,
                 }
                 return {"status": "WAITING_FOR_ALL_GATES", **self._save(waiting, "GATES_BLOCKED")}

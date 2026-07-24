@@ -1917,7 +1917,20 @@ def _render_quality_governance() -> None:
         capital = json.loads((work / "staged_capital_governor_v8.json").read_text(encoding="utf-8"))
     except Exception:
         capital = {}
+    try:
+        autonomy = json.loads((work / "autonomy_v11_state.json").read_text(encoding="utf-8"))
+    except Exception:
+        autonomy = {}
     with st.expander("CHAMPION–CHALLENGER | AUDYT I RĘCZNA PROMOCJA", expanded=True):
+        metrics([
+            ("Automatyzacja v11", "AKTYWNA" if autonomy.get("fully_automatic_learning") else "OCZEKUJE",
+             str(autonomy.get("phase", "BRAK CYKLU"))),
+            ("Następny krok", str(autonomy.get("next_action", "Zbieranie danych")),
+             "wykonywany automatycznie"),
+            ("Historia", "CHRONIONA", "append-only · brak nadpisywania"),
+            ("Rollback", "AKTYWNY" if autonomy.get("automatic_rollback_enabled") else "WYŁĄCZONY",
+             "powrót po regresji jakości"),
+        ])
         metrics([
             ("Evidence v8", str(scorecard.get("status", "OCZEKUJE")), f"wynik: {scorecard.get('score', 0)}/{scorecard.get('maximum_score', 10)}"),
             ("Kapitał v8", str(capital.get("current_stage", "SHADOW")), str(capital.get("status", "FAIL_CLOSED"))),
@@ -1943,9 +1956,10 @@ def _render_quality_governance() -> None:
                 unsafe_allow_html=True,
             )
         st.caption(
-            "Ręczna promocja pozostaje dostępna wyłącznie po pozytywnym walk-forward i live shadow. "
-            "Scorecard v8 nie modyfikuje modelu, a Capital Governor bez osobnej zgody na realny "
-            "kapitał pozostaje w trybie SHADOW/PAPER."
+            "Autonomous Quality v11 sam tworzy i ocenia kandydata, lecz dopiero po spełnieniu "
+            "progów jakości. Promocja wymaga Guardian, walk-forward, live shadow, Scorecard "
+            "oraz świeżych etapów canary. Ręczna promocja pozostaje awaryjną alternatywą. "
+            "Capital Governor bez osobnej zgody na realny kapitał pozostaje SHADOW/PAPER."
         )
         token = str(status.get("candidate_token", ""))
         st.code(token or "Brak kandydata")
