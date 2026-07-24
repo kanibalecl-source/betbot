@@ -10,7 +10,7 @@ import streamlit as st
 
 NAV_ITEMS = (
     "Na żywo", "Przedmeczowe", "AI", "Analityka",
-    "Historia", "Moje zakłady", "Ranking", "Czat GPT",
+    "Historia", "Moje zakłady", "Ranking", "Siatkówka", "Czat GPT",
 )
 
 NAV_LABELS = {
@@ -21,6 +21,7 @@ NAV_LABELS = {
     "Historia": "◷   Historia",
     "Moje zakłady": "▤   Moje zakłady",
     "Ranking": "♜   Ranking",
+    "Siatkówka": "◆   Siatkówka",
     "Czat GPT": "◌   Czat GPT",
 }
 
@@ -32,6 +33,7 @@ PAGE_META = {
     "Historia": ("Historia wyników", "Rozliczone typy i pełna ścieżka audytowa"),
     "Moje zakłady": ("Moje zakłady", "Zarządzanie singlami, kuponami i stawkami"),
     "Ranking": ("Ranking skuteczności", "Najlepsze ligi, rynki i strategie"),
+    "Siatkówka": ("Centrum siatkówki", "Mecze, typy shadow i autonomiczne uczenie modelu"),
     "Czat GPT": ("Asystent analityczny", "Rozmowa z modelem na podstawie aktualnych danych"),
 }
 

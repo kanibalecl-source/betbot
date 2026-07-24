@@ -1,0 +1,57 @@
+BETBOT SERVER PATCH — VOLLEYBALL v10.1 WEB PANEL
+================================================
+
+CEL
+---
+Udostępnienie internetowego panelu siatkówki w istniejącym, uwierzytelnionym
+dashboardzie KANIBAL Analytics.
+
+ZAKRES PANELU
+-------------
+1. Stała pozycja „Siatkówka” w menu bocznym.
+2. Karty: zebrane mecze, postęp danych, aktywny model i Governor.
+3. Postęp autonomicznego uczenia, np. 4/100.
+4. Tabela zapisanych meczów, lig, drużyn, setów i statusów.
+5. Tabela rekomendacji shadow z kursem modelu, kursem bukmachera, pewnością
+   i value — zapełniana automatycznie, gdy powstaną rekomendacje.
+6. Widok statusu kandydata, walk-forward, live shadow i integralności rejestru.
+
+GRANICE BEZPIECZEŃSTWA
+----------------------
+- Panel jest wyłącznie do odczytu.
+- Odczytuje tylko /data/volleyball/volleyball_shadow.sqlite3.
+- Nie modyfikuje danych, modeli ani historii piłki nożnej.
+- Nie wyświetla raw_json, klucza API ani sekretów środowiskowych.
+- Nie uruchamia i nie autoryzuje zakładów realnym kapitałem.
+- Brak bazy siatkówki powoduje bezpieczny komunikat oczekiwania, nie błąd.
+- Paczka nie zawiera baz, historii, CSV, sekretów ani plików .env.
+
+OCZEKIWANY STAN PO WDROŻENIU
+----------------------------
+- nowe menu: Siatkówka
+- panel dostępny po zalogowaniu
+- przy aktualnej próbie: 4/100 i „Zbieranie danych”
+- aktywny model: Bazowy / BASELINE
+- Governor: Aktywny, oczekuje na reprodukowalnego kandydata
+- rekomendacje: komunikat oczekiwania do czasu spełnienia warunków
+- brak błędów aplikacji i brak zmian w piłce nożnej
+
+PLIKI PACZKI
+------------
+- app_launcher.py
+- dashboard_streamlit.py
+- executive_dashboard_theme.py
+- VOLLEYBALL_ROADMAP_V9_TO_V10.md
+- PATCH_MANIFEST_SERVER_V10_1_VOLLEYBALL_WEB_PANEL.txt
+- volleyball_v9/*.py
+- tests/test_volleyball_v9.py
+- tests/test_volleyball_dashboard.py
+
+KONTROLA WDROŻENIA
+------------------
+1. Wgrać zawartość ZIP jako nakładkę bez usuwania innych plików.
+2. Wykonać redeploy.
+3. Poczekać na zakończenie zabezpieczenia danych i HEARTBEAT v10.0.
+4. Zalogować się i otworzyć pozycję „Siatkówka”.
+5. Potwierdzić 4/100, BASELINE, aktywny Governor i brak błędów Railway.
+

@@ -1,4 +1,4 @@
-# Volleyball roadmap: v9.0 to v10.0
+# Volleyball roadmap: v9.0 to v10.1
 
 Every release is cumulative, shadow-only, isolated under `/data/volleyball`,
 backed up before startup, and deployed only after the previous gate passes.
@@ -16,6 +16,7 @@ backed up before startup, and deployed only after the previous gate passes.
 | v9.8 | Segment stability, drift detection and automatic rollback (integrated in v10) | no weak league/market slice breaches |
 | v9.9 | Autonomous learning governor; candidate creation only (integrated in v10) | repeated positive shadow validations |
 | v10.0 | Self-improving volleyball shadow system (implemented) | quality depends on new verified data; real betting remains disabled |
+| v10.1 | Read-only internet panel for matches, shadow picks and learning status (implemented) | no writes from UI; football data remains isolated |
 
 ## Non-negotiable rules
 
