@@ -1681,20 +1681,35 @@ def title(text: str) -> None:
 
 
 def page_banner(section: str, name: str, subtitle: str) -> None:
-    banner = b64_image(BANNER_FILE)
-    if banner:
-        st.markdown(
-            '<div class="ka-brand-banner ka-full-graphic-banner">'
-            f'<img src="data:image/png;base64,{banner}" alt="KANIBAL Analytics">'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        return
+    logo = b64_image(BASE_DIR / "kanibal_icon_512.png")
+    logo_html = (
+        f'<img class="ka-rb-logo" src="data:image/png;base64,{logo}" alt="Logo KANIBAL">'
+        if logo else '<div class="ka-rb-logo-fallback">K</div>'
+    )
     st.markdown(
-        '<div class="ka-brand-banner">'
-        '<div class="ka-brand-copy"><div class="ka-brand-name">KANIBAL</div>'
-        '<div class="ka-brand-analytics">ANALYTICS</div>'
-        '<div class="ka-brand-tagline">Analiza · Przewaga · Zysk</div></div>'
+        '<div class="ka-brand-banner ka-readable-banner">'
+        '<div class="ka-rb-brand">'
+        f'{logo_html}<div class="ka-rb-wordmark">'
+        '<strong>KANIBAL</strong><span>ANALYTICS</span>'
+        '<small>ANALIZA · PRZEWAGA · ZYSK</small></div></div>'
+        '<div class="ka-rb-benefit"><b>◎</b><span>ANALIZA</span></div>'
+        '<div class="ka-rb-benefit"><b>◆</b><span>PRZEWAGA</span></div>'
+        '<div class="ka-rb-benefit"><b>↗</b><span>ZYSK</span></div>'
+        '<div class="ka-rb-chart" aria-hidden="true">'
+        '<svg viewBox="0 0 520 104" preserveAspectRatio="none">'
+        '<defs><linearGradient id="rbFill" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0" stop-color="#168ff5" stop-opacity=".46"/>'
+        '<stop offset="1" stop-color="#168ff5" stop-opacity=".03"/>'
+        '</linearGradient></defs>'
+        '<g class="ka-rb-grid">'
+        '<path d="M35 0V104M105 0V104M175 0V104M245 0V104M315 0V104M385 0V104M455 0V104"/>'
+        '<path d="M0 25H520M0 52H520M0 79H520"/></g>'
+        '<path class="ka-rb-area" d="M0 91L55 78L102 82L150 66L197 70L244 46L291 57L340 31L385 40L430 19L480 27L520 6V104H0Z"/>'
+        '<polyline class="ka-rb-line" points="0,91 55,78 102,82 150,66 197,70 244,46 291,57 340,31 385,40 430,19 480,27 520,6"/>'
+        '<g class="ka-rb-dots"><circle cx="150" cy="66" r="3"/><circle cx="244" cy="46" r="3"/>'
+        '<circle cx="340" cy="31" r="3"/><circle cx="430" cy="19" r="3"/></g>'
+        '<path class="ka-rb-arrow" d="M505 5L520 6L514 20"/><text x="38" y="18">48.991</text>'
+        '<text x="402" y="92">WZROST</text></svg></div>'
         '</div>',
         unsafe_allow_html=True,
     )
