@@ -1,0 +1,26 @@
+KANIBAL Analytics — poprawka interfejsu V11.2 FULL BANNER
+
+Zakres:
+- nowy baner kanibal_banner_2026.png (oryginalne proporcje 662 x 280 px),
+- ten sam kompletny baner na każdej zakładce panelu,
+- ten sam kompletny baner w stałym menu bocznym,
+- brak kadrowania: object-fit: contain,
+- brak powiększania grafiki ponad jej natywną szerokość,
+- automatyczne proporcjonalne zmniejszanie na węższych ekranach.
+
+Pliki paczki:
+- dashboard_streamlit.py
+- executive_dashboard_theme.py
+- kanibal_banner_2026.png
+- PATCH_MANIFEST_SERVER_V11_2_FULL_BANNER.txt
+
+Paczka nie zawiera:
+- katalogu data,
+- historii typów,
+- modeli ani kandydatów,
+- danych treningowych,
+- ustawień Railway,
+- kluczy API ani danych logowania.
+
+Zmiana jest wyłącznie prezentacyjna i nie modyfikuje logiki typowania,
+rozliczania, uczenia ani mechanizmów autonomicznych.

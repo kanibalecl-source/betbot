@@ -72,8 +72,10 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 [data-testid="stSidebar"]>div:first-child{width:264px!important;padding:0!important}
 [data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:0!important}
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:0!important}
-.ui-side-brand{height:128px;padding:2px 24px 18px;border-bottom:1px solid #e2e8f0;box-sizing:border-box;background:#fff}
+.ui-side-brand{height:128px;padding:12px 24px 18px;border-bottom:1px solid #e2e8f0;box-sizing:border-box;background:#fff}
 .ui-side-logo{display:flex;align-items:center;gap:12px}.ui-side-logo img{width:54px;height:54px;object-fit:contain}
+.ui-side-logo.ui-side-banner{display:flex;width:100%;height:98px;align-items:center;justify-content:center}
+.ui-side-logo.ui-side-banner img{display:block;width:100%!important;height:auto!important;max-height:98px!important;object-fit:contain!important;object-position:center!important}
 .ui-side-word strong{display:block;color:#10243e;font-size:20px;letter-spacing:.045em;line-height:1}.ui-side-word span{display:block;color:#2979d8;font-size:8px;font-weight:800;letter-spacing:.28em;margin-top:7px}
 [data-testid="stSidebar"] .ui-nav-start+div{margin-top:40px!important}
 [data-testid="stSidebar"] .stButton{padding:0 10px 4px!important}
@@ -100,6 +102,8 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .ka-page-banner:after,.ka-page-banner-content{display:none!important}
 .ka-brand-banner{height:136px;width:100%;margin:0 0 18px;display:flex;align-items:center;justify-content:center;gap:22px;background:#fff;border-top:1px solid #eef2f6;border-bottom:1px solid #e1e7ee;box-sizing:border-box}
 .ka-brand-banner img{width:82px;height:82px;object-fit:contain;display:block}.ka-brand-copy{display:flex;flex-direction:column;align-items:flex-start}.ka-brand-name{color:#14283f;font-size:34px;line-height:1;font-weight:900;letter-spacing:.055em}.ka-brand-analytics{margin-top:8px;color:#2e73be;font-size:14px;font-weight:850;letter-spacing:.32em}.ka-brand-tagline{margin-top:9px;color:#738196;font-size:9px;font-weight:750;letter-spacing:.22em;text-transform:uppercase}
+.ka-brand-banner.ka-full-graphic-banner{height:auto!important;min-height:0!important;padding:0!important;overflow:visible!important;background:#fff!important;border-top:0!important;border-bottom:1px solid #e1e7ee!important}
+.ka-brand-banner.ka-full-graphic-banner img{display:block!important;width:100%!important;max-width:662px!important;height:auto!important;max-height:none!important;object-fit:contain!important;object-position:center!important;filter:none!important}
 
 /* Headings and KPI cards */
 .ka-title,.ka-section-heading{display:flex!important;align-items:center!important;justify-content:space-between!important;min-height:34px!important;margin:0 2px 12px!important;color:var(--ui-text)!important;font-size:18px!important;font-weight:800!important;text-transform:none!important;letter-spacing:-.01em!important;text-shadow:none!important}
@@ -146,8 +150,8 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .block-container{max-width:1740px!important;padding:0 36px 30px!important}
 [data-testid="stSidebar"],[data-testid="stSidebar"][aria-expanded="false"]{width:262px!important;min-width:262px!important;max-width:262px!important;flex-basis:262px!important;border-right:1px solid #dde5ee!important}
 [data-testid="stSidebar"]>div:first-child{width:262px!important}
-.ui-side-brand{height:110px!important;padding:24px 28px 14px!important;border-bottom:0!important}
-.ui-side-logo{gap:13px!important}.ui-side-logo img{width:58px!important;height:58px!important}.ui-side-word strong{font-size:20px!important;letter-spacing:.055em!important}.ui-side-word span{margin-top:7px!important;color:#086cff!important}
+.ui-side-brand{height:126px!important;padding:12px 24px 14px!important;border-bottom:0!important}
+.ui-side-logo{gap:13px!important}.ui-side-logo:not(.ui-side-banner) img{width:58px!important;height:58px!important}.ui-side-word strong{font-size:20px!important;letter-spacing:.055em!important}.ui-side-word span{margin-top:7px!important;color:#086cff!important}
 [data-testid="stSidebar"] .ui-nav-start+div{margin-top:8px!important}
 [data-testid="stSidebar"] .stButton{padding:0 20px 4px!important}
 [data-testid="stSidebar"] .stButton button{height:44px!important;min-height:44px!important;padding:0 18px!important;border-radius:9px!important;color:#183453!important;font-size:14px!important;font-weight:600!important}
@@ -158,7 +162,8 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .ui-topbar{height:92px!important;margin:0 -36px 0!important;padding:0 40px!important;border-bottom:1px solid #dfe6ef!important;box-shadow:none!important}
 .ui-heading h1{font-size:27px!important;font-weight:820!important;letter-spacing:-.025em!important}.ui-heading p{font-size:12px!important;color:#738298!important}
 .ui-top-tools{gap:13px!important}.ui-search{width:338px!important;height:44px!important}.ui-date{height:44px!important}.ui-tool{width:44px!important;height:44px!important}.ui-user-dot{width:42px!important;height:42px!important}
-.ka-page-banner,.ka-page-banner.ka-image-banner,.kanibal-hero,.ka-brand-banner{height:104px!important;margin:0 0 16px!important;border-top:0!important;border-bottom:1px solid #e2e8f0!important}
+.ka-page-banner,.ka-page-banner.ka-image-banner,.kanibal-hero,.ka-brand-banner:not(.ka-full-graphic-banner){height:104px!important;margin:0 0 16px!important;border-top:0!important;border-bottom:1px solid #e2e8f0!important}
+.ka-brand-banner.ka-full-graphic-banner{margin:0 0 16px!important}
 .ka-brand-banner{gap:19px!important}.ka-brand-banner img{width:72px!important;height:72px!important}.ka-brand-name{font-size:32px!important}.ka-brand-analytics{font-size:12px!important}.ka-brand-tagline{font-size:8px!important}
 .ka-grid{gap:16px!important;margin-bottom:16px!important}.ka-card{min-height:112px!important;padding:18px 20px!important;grid-template-columns:58px minmax(0,1fr)!important;border-color:#dfe7f0!important;box-shadow:0 7px 22px rgba(16,42,74,.055)!important}.ka-metric-icon{width:50px!important;height:50px!important;background:#edf4ff!important;color:#086cff!important}.ka-value{font-size:28px!important;color:#0b2342!important}.ka-value.positive{color:#086cff!important}.ka-label{color:#64768d!important}.ka-sub{color:#8291a4!important}
 .ka-panel,.ka-viz,.pro-chart-card,.ai-detail-final,div[data-testid="stDataFrame"],div[data-testid="stMetric"],.ai-insight-card{border-color:#dfe7f0!important;border-radius:12px!important;box-shadow:0 7px 22px rgba(16,42,74,.052)!important}
@@ -171,7 +176,7 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 @media(min-width:1500px){.ka-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}.ka-layout{grid-template-columns:1.45fr .95fr!important}.ka-bottom{grid-template-columns:1.45fr .95fr .95fr!important}}
 
 @media(max-width:1200px){[data-testid="stSidebar"]{width:220px!important;min-width:220px!important}[data-testid="stSidebar"]>div:first-child{width:220px!important}.ui-side-footer{width:220px}[data-testid="stSidebar"] .st-key-executive_logout{width:200px!important}.ka-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ui-search{display:none}.block-container{padding-left:18px!important;padding-right:18px!important}.ui-topbar{margin-left:-18px;margin-right:-18px}}
-@media(max-width:760px){[data-testid="stSidebar"],[data-testid="stSidebar"][aria-expanded="false"]{display:block!important;visibility:visible!important;transform:translateX(0)!important;width:220px!important;min-width:220px!important;max-width:220px!important;flex:0 0 220px!important}.block-container{padding:0 10px 18px!important}.ui-topbar{margin:0 -10px 14px;padding:0 14px;height:72px}.ui-heading h1{font-size:19px}.ui-heading p,.ui-date{display:none}.ka-grid{grid-template-columns:1fr!important}.ka-page-banner,.ka-page-banner.ka-image-banner{height:92px!important}}
+@media(max-width:760px){[data-testid="stSidebar"],[data-testid="stSidebar"][aria-expanded="false"]{display:block!important;visibility:visible!important;transform:translateX(0)!important;width:220px!important;min-width:220px!important;max-width:220px!important;flex:0 0 220px!important}.block-container{padding:0 10px 18px!important}.ui-topbar{margin:0 -10px 14px;padding:0 14px;height:72px}.ui-heading h1{font-size:19px}.ui-heading p,.ui-date{display:none}.ka-grid{grid-template-columns:1fr!important}.ka-page-banner,.ka-page-banner.ka-image-banner{height:92px!important}.ka-brand-banner.ka-full-graphic-banner{height:auto!important}}
 </style>
 """
 
@@ -186,12 +191,12 @@ def _select_navigation(item: str) -> None:
 
 
 def render_navigation(base_dir: Path) -> str:
-    logo = _image_uri(base_dir / "kanibal_logo.png")
+    logo = _image_uri(base_dir / "kanibal_banner_2026.png")
     image = f'<img src="{logo}" alt="KANIBAL">' if logo else ""
     with st.sidebar:
         st.markdown(
-            '<div class="ui-side-brand"><div class="ui-side-logo">'
-            f'{image}<div class="ui-side-word"><strong>KANIBAL</strong><span>ANALYTICS</span></div>'
+            '<div class="ui-side-brand"><div class="ui-side-logo ui-side-banner">'
+            f'{image}'
             '</div></div>',
             unsafe_allow_html=True,
         )

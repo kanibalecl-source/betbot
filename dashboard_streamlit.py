@@ -93,7 +93,7 @@ PICK_CANDIDATES = [DATA_DIR / "auto_all_picks.csv", BASE_DIR / "auto_all_picks.c
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
-BANNER_FILE = BASE_DIR / "kanibal_banner_pro.jpg"
+BANNER_FILE = BASE_DIR / "kanibal_banner_2026.png"
 CONFIG_FILE = BASE_DIR / "config_strategy.json"
 
 DISPLAY_MARKETS = {
@@ -1681,19 +1681,21 @@ def title(text: str) -> None:
 
 
 def page_banner(section: str, name: str, subtitle: str) -> None:
-    logo_file = BASE_DIR / "kanibal_logo.png"
-    logo = b64_image(logo_file)
-    logo_html = (
-        f'<img src="data:image/png;base64,{logo}" alt="Logo KANIBAL">'
-        if logo else '<div class="ka-brand-logo-fallback">K</div>'
-    )
+    banner = b64_image(BANNER_FILE)
+    if banner:
+        st.markdown(
+            '<div class="ka-brand-banner ka-full-graphic-banner">'
+            f'<img src="data:image/png;base64,{banner}" alt="KANIBAL Analytics">'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
     st.markdown(
         '<div class="ka-brand-banner">'
-        f'{logo_html}<div class="ka-brand-copy">'
-        '<div class="ka-brand-name">KANIBAL</div>'
+        '<div class="ka-brand-copy"><div class="ka-brand-name">KANIBAL</div>'
         '<div class="ka-brand-analytics">ANALYTICS</div>'
-        '<div class="ka-brand-tagline">Analiza · Przewaga · Zysk</div>'
-        '</div></div>',
+        '<div class="ka-brand-tagline">Analiza · Przewaga · Zysk</div></div>'
+        '</div>',
         unsafe_allow_html=True,
     )
 
