@@ -1,0 +1,18 @@
+KANIBAL Analytics — poprawka interfejsu V11.5 HQ BANNER
+
+Zakres:
+- nowy baner wysokiej jakości 3840 x 208 px,
+- docelowy wyświetlany rozmiar: pełna szerokość x 104 px,
+- wariant 2x dla ostrych napisów, ikon, logo i wykresu,
+- zachowana obecna wysokość i szerokość banera,
+- żaden element projektu nie jest ukrywany przez CSS,
+- menu boczne pozostaje bez zmian.
+
+Pliki paczki:
+- dashboard_streamlit.py
+- executive_dashboard_theme.py
+- kanibal_banner_hq_3840x208.png
+- PATCH_MANIFEST_SERVER_V11_5_HQ_BANNER.txt
+
+Paczka nie zawiera danych, historii, modeli, kluczy API ani ustawień Railway.
+Zmiana jest wyłącznie prezentacyjna.

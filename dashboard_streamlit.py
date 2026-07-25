@@ -93,7 +93,7 @@ PICK_CANDIDATES = [DATA_DIR / "auto_all_picks.csv", BASE_DIR / "auto_all_picks.c
 LIVE_FILE = DATA_DIR / "live_matches.csv"
 RESULTS_FILE = DATA_DIR / "results_history.csv"
 HISTORY_FILE = DATA_DIR / "history.csv"
-BANNER_FILE = BASE_DIR / "kanibal_banner_2026.png"
+BANNER_FILE = BASE_DIR / "kanibal_banner_hq_3840x208.png"
 CONFIG_FILE = BASE_DIR / "config_strategy.json"
 
 DISPLAY_MARKETS = {
