@@ -1,0 +1,15 @@
+KANIBAL Analytics — poprawka interfejsu V11.4 LOW FULL BANNER
+
+Zakres:
+- pełna szerokość banera na każdej zakładce,
+- wysokość 104 px na ekranie komputerowym,
+- wysokość 92 px na małym ekranie,
+- cały obraz pozostaje widoczny — bez kadrowania,
+- baner w menu bocznym pozostaje bez zmian.
+
+Pliki paczki:
+- executive_dashboard_theme.py
+- PATCH_MANIFEST_SERVER_V11_4_LOW_FULL_BANNER.txt
+
+Paczka nie zawiera danych, historii, modeli, kluczy API ani ustawień Railway.
+Zmiana jest wyłącznie prezentacyjna.
