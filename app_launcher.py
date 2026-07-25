@@ -43,6 +43,8 @@ def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, li
     }
     if config.volleyball_enabled:
         specs["volleyball_shadow"] = [python, "-m", "volleyball_v9.runtime"]
+    if config.handball_enabled:
+        specs["handball_shadow"] = [python, "-m", "handball_v11.runtime"]
     return specs
 
 
@@ -134,12 +136,18 @@ class ProcessSupervisor:
                 "betting_enabled": self.settings.betting_enabled,
                 "capital_real_enabled": self.settings.capital_real_enabled,
                 "volleyball_execution_enabled": False,
+                "handball_execution_enabled": False,
             },
             "sports": {
                 "football": {"enabled": True, "storage": "existing"},
                 "volleyball": {
                     "enabled": self.settings.volleyball_enabled,
                     "shadow_only": self.settings.volleyball_shadow_only,
+                    "storage": "isolated",
+                },
+                "handball": {
+                    "enabled": self.settings.handball_enabled,
+                    "shadow_only": self.settings.handball_shadow_only,
                     "storage": "isolated",
                 },
             },

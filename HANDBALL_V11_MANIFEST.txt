@@ -1,0 +1,27 @@
+HANDBALL v11 SERVER OVERLAY
+
+NEW DIRECTORY:
+handball_v11/*.py
+
+MODIFIED FILES:
+settings_v81.py
+app_launcher.py
+dashboard_streamlit.py
+executive_dashboard_theme.py
+.env.example
+
+DOCUMENTATION:
+WDROZENIE_HANDBALL_V11.md
+HANDBALL_V11_MANIFEST.txt
+
+EXCLUDED:
+data/
+reports/
+outputs/
+*.sqlite3
+*.db
+users.json
+.env
+API keys
+model artifacts
+history files

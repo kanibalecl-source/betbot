@@ -63,6 +63,10 @@ class RuntimeSettings:
     volleyball_shadow_only: bool
     volleyball_poll_minutes: int
     volleyball_backfill_days: int
+    handball_enabled: bool
+    handball_shadow_only: bool
+    handball_poll_minutes: int
+    handball_backfill_days: int
 
     def public_snapshot(self) -> dict[str, object]:
         return asdict(self)
@@ -101,6 +105,14 @@ def load_settings(
         volleyball_backfill_days=_int(
             source, "BETBOT_VOLLEYBALL_BACKFILL_DAYS", 30, 0, 365
         ),
+        handball_enabled=_bool(source, "BETBOT_HANDBALL_ENABLED", False),
+        handball_shadow_only=_bool(source, "BETBOT_HANDBALL_SHADOW_ONLY", True),
+        handball_poll_minutes=_int(
+            source, "BETBOT_HANDBALL_POLL_MINUTES", 30, 5, 1440
+        ),
+        handball_backfill_days=_int(
+            source, "BETBOT_HANDBALL_BACKFILL_DAYS", 30, 0, 365
+        ),
     )
     if validate_cross_fields and settings.betting_enabled and not settings.capital_real_enabled:
         raise ConfigurationError(
@@ -117,5 +129,9 @@ def load_settings(
     if validate_cross_fields and settings.volleyball_enabled and not settings.volleyball_shadow_only:
         raise ConfigurationError(
             "Volleyball v9.0 is shadow-only; BETBOT_VOLLEYBALL_SHADOW_ONLY must remain enabled"
+        )
+    if validate_cross_fields and settings.handball_enabled and not settings.handball_shadow_only:
+        raise ConfigurationError(
+            "Handball v11 is shadow-only; BETBOT_HANDBALL_SHADOW_ONLY must remain enabled"
         )
     return settings

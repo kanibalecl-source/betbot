@@ -53,6 +53,11 @@ try:
 except Exception:
     load_volleyball_dashboard = None
 
+try:
+    from handball_v11.dashboard import load_handball_dashboard
+except Exception:
+    load_handball_dashboard = None
+
 
 try:
     from manual_betting import (
@@ -2676,6 +2681,176 @@ def render_volleyball() -> None:
             )
 
 
+def render_handball() -> None:
+    page_banner(
+        "Piłka ręczna",
+        "PIŁKA RĘCZNA",
+        "Autonomiczny moduł piłki ręcznej w bezpiecznym trybie shadow.",
+    )
+    if load_handball_dashboard is None:
+        st.error("Panel piłki ręcznej nie został załadowany.")
+        return
+
+    snapshot = load_handball_dashboard()
+    coverage = snapshot.get("coverage", {})
+    candidate_rows = int(snapshot.get("candidate_rows", 0))
+    minimum_rows = max(1, int(snapshot.get("candidate_minimum_rows", 100)))
+    progress = min(100.0, 100.0 * candidate_rows / minimum_rows)
+    model_id = str(snapshot.get("active_model_id", "BASELINE"))
+    model_label = "Bazowy" if model_id == "BASELINE" else "Challenger"
+    governor_enabled = bool(snapshot.get("governor_enabled", False))
+
+    metrics([
+        ("Zebrane mecze", str(candidate_rows), f"minimum do nauki: {minimum_rows}"),
+        ("Postęp danych", f"{progress:.0f}%", "chronologiczne wyniki"),
+        ("Aktywny model", model_label, model_id[:18]),
+        (
+            "Governor",
+            "Aktywny" if governor_enabled else "Oczekuje",
+            _volleyball_status(snapshot.get("governor_status", "")),
+        ),
+    ])
+
+    if not snapshot.get("available"):
+        st.info(
+            "Moduł oczekuje na utworzenie izolowanej bazy piłki ręcznej. "
+            "Panel zapełni się automatycznie po pierwszym cyklu."
+        )
+        return
+
+    st.markdown(
+        '<div class="ka-panel"><h3>POSTĘP AUTONOMICZNEGO UCZENIA</h3>'
+        '<div style="display:flex;justify-content:space-between;gap:16px;'
+        'align-items:center;margin-bottom:10px;color:#5f7084;font-size:12px">'
+        f'<span>{candidate_rows} z {minimum_rows} rozliczonych meczów</span>'
+        f'<b style="color:#086cff">{progress:.0f}%</b></div>'
+        '<div class="progress" style="width:100%;height:10px">'
+        f'<span style="width:{progress:.2f}%"></span></div>'
+        '<div style="margin-top:12px;color:#718095;font-size:11px;line-height:1.55">'
+        'Model tworzy kandydatów dopiero po zebraniu wymaganej próby. '
+        'Akceptowane są wyłącznie zweryfikowane rynki dwudrożne bez remisu. '
+        'Promocja wymaga pozytywnego walk-forward oraz powtarzalnych raportów '
+        'live shadow.</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    games_tab, picks_tab, learning_tab = st.tabs(
+        ["Mecze", "Rekomendacje shadow", "Model i nauka"]
+    )
+    with games_tab:
+        games = snapshot.get("games", [])
+        if not games:
+            st.info("Brak zapisanych meczów piłki ręcznej.")
+        else:
+            rows = []
+            for game in games:
+                score = "-"
+                if (
+                    game.get("home_goals") is not None
+                    and game.get("away_goals") is not None
+                ):
+                    score = (
+                        f"{int(game['home_goals'])} : "
+                        f"{int(game['away_goals'])}"
+                    )
+                status = _volleyball_status(game.get("status", ""))
+                status_class = (
+                    "pill-green" if game.get("finished") else "pill-yellow"
+                )
+                rows.append([
+                    _volleyball_datetime(game.get("scheduled_at")),
+                    html.escape(str(game.get("country") or "-")),
+                    html.escape(str(game.get("league_name") or "-")),
+                    (
+                        f"<b>{html.escape(str(game.get('home_team') or '-'))}</b>"
+                        '<span class="ka-match-separator">–</span>'
+                        f"<b>{html.escape(str(game.get('away_team') or '-'))}</b>"
+                    ),
+                    f"<b>{html.escape(score)}</b>",
+                    (
+                        f'<span class="pill {status_class}">'
+                        f"{html.escape(status)}</span>"
+                    ),
+                ])
+            st.markdown(
+                '<div class="ka-table-scroll">'
+                + html_table(
+                    ["Data", "Kraj", "Liga", "Mecz", "Gole", "Status"],
+                    rows,
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+
+    with picks_tab:
+        picks = snapshot.get("picks", [])
+        if not picks:
+            st.info(
+                "Rekomendacje pojawią się automatycznie po zgromadzeniu "
+                "kompletnych kursów dwudrożnego rynku zwycięzcy."
+            )
+        else:
+            rows = []
+            for pick in picks:
+                confidence = float(pick.get("confidence", 0) or 0)
+                edge = 100.0 * float(pick.get("edge", 0) or 0)
+                rows.append([
+                    _volleyball_datetime(pick.get("created_at")),
+                    html.escape(str(pick.get("league_name") or "-")),
+                    html.escape(str(pick.get("match_name") or "-")),
+                    html.escape(str(pick.get("outcome") or "-")),
+                    f"{float(pick.get('model_fair_odds', 0) or 0):.2f}",
+                    f"{float(pick.get('bookmaker_odds', 0) or 0):.2f}",
+                    confidence_bar(confidence),
+                    f'<span class="green">{edge:+.1f}%</span>',
+                    html.escape(_volleyball_status(pick.get("status", ""))),
+                ])
+            st.markdown(
+                '<div class="ka-table-scroll">'
+                + html_table(
+                    [
+                        "Utworzono", "Liga", "Mecz", "Typ",
+                        "Kurs modelu", "Kurs buka", "Pewność",
+                        "Value", "Status",
+                    ],
+                    rows,
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+
+    with learning_tab:
+        health = snapshot.get("health", {})
+        learning_rows = [
+            ["Stan systemu", html.escape(_volleyball_status(snapshot.get("status", "")))],
+            ["Stan Governora", html.escape(_volleyball_status(snapshot.get("governor_status", "")))],
+            ["Kandydat", html.escape(_volleyball_status(health.get("candidate_training_status", "WAITING_MINIMUM_SAMPLE")))],
+            ["Walk-forward", html.escape(_volleyball_status(health.get("walk_forward_status", "WAITING_REPRODUCIBLE_CANDIDATE")))],
+            ["Raport live shadow", html.escape(_volleyball_status(health.get("live_shadow_report_status", "WAITING")))],
+            ["Rozliczone próbki live", str(int(health.get("live_shadow_settled_samples", 0) or 0))],
+            ["Modele kandydackie", str(int(coverage.get("model_candidates", 0) or 0))],
+            ["Walidacje walk-forward", str(int(coverage.get("model_validations", 0) or 0))],
+            ["Raporty live shadow", str(int(coverage.get("live_shadow_reports", 0) or 0))],
+            ["Integralność rejestru", "Poprawna" if coverage.get("live_registry_integrity", True) else "Wymaga kontroli"],
+            ["Rynek", "Zwycięzca dwudrożny — bez rynku remisowego"],
+            ["Tryb pracy", "Shadow — bez realnego kapitału"],
+        ]
+        st.markdown(
+            '<div class="ka-panel"><h3>STATUS MODELU</h3>'
+            '<div class="ka-table-scroll">'
+            + html_table(["Element", "Stan"], learning_rows)
+            + "</div></div>",
+            unsafe_allow_html=True,
+        )
+        if snapshot.get("real_execution_allowed"):
+            st.error("Wykryto niedozwolone wykonanie realne — wymagana kontrola.")
+        else:
+            st.success(
+                "Moduł działa wyłącznie w trybie shadow i nie wykonuje "
+                "zakładów realnym kapitałem."
+            )
+
+
 require_login()
 css()
 raw_picks = load_picks()
@@ -2695,5 +2870,6 @@ elif selected_page == "Historia": render_history(results)
 elif selected_page == "Moje zakłady": render_manual_betting(raw_picks)
 elif selected_page == "Ranking": render_ranking(picks, results)
 elif selected_page == "Siatkówka": render_volleyball()
+elif selected_page == "Piłka ręczna": render_handball()
 elif selected_page == "Czat GPT": render_gpt_professional(picks, live, results)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
