@@ -1,0 +1,13 @@
+KANIBAL Analytics - poprawka interfejsu V11.7 CLEAN CHART
+
+Zakres:
+- usunięto liczbę 48.991 z wykresu w banerze,
+- usunięto napis WZROST z wykresu w banerze,
+- linia, punkty, strzałka, jakość, rozmiar i układ banera pozostają bez zmian.
+
+Pliki paczki:
+- dashboard_streamlit.py
+- PATCH_MANIFEST_SERVER_V11_7_CLEAN_CHART.txt
+
+Paczka nie zawiera danych, historii, modeli, kluczy API ani ustawień Railway.
+Zmiana jest wyłącznie prezentacyjna.

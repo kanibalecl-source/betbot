@@ -1708,8 +1708,7 @@ def page_banner(section: str, name: str, subtitle: str) -> None:
         '<polyline class="ka-rb-line" points="0,91 55,78 102,82 150,66 197,70 244,46 291,57 340,31 385,40 430,19 480,27 520,6"/>'
         '<g class="ka-rb-dots"><circle cx="150" cy="66" r="3"/><circle cx="244" cy="46" r="3"/>'
         '<circle cx="340" cy="31" r="3"/><circle cx="430" cy="19" r="3"/></g>'
-        '<path class="ka-rb-arrow" d="M505 5L520 6L514 20"/><text x="38" y="18">48.991</text>'
-        '<text x="402" y="92">WZROST</text></svg></div>'
+        '<path class="ka-rb-arrow" d="M505 5L520 6L514 20"/></svg></div>'
         '</div>',
         unsafe_allow_html=True,
     )
