@@ -1,0 +1,15 @@
+KANIBAL Analytics — poprawka interfejsu V11.3 FULL WIDTH BANNER
+
+Zakres:
+- baner na każdej zakładce zajmuje 100% dostępnej szerokości treści,
+- zachowane są oryginalne proporcje obrazu,
+- wysokość jest obliczana automatycznie,
+- obraz nie jest kadrowany ani deformowany,
+- baner w menu bocznym pozostaje kompletny i proporcjonalny.
+
+Pliki paczki:
+- executive_dashboard_theme.py
+- PATCH_MANIFEST_SERVER_V11_3_FULL_WIDTH_BANNER.txt
+
+Paczka nie zawiera danych, historii, modeli, kluczy API ani ustawień Railway.
+Zmiana nie wpływa na logikę typowania, rozliczania ani uczenia.
