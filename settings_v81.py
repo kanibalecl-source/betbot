@@ -67,6 +67,8 @@ class RuntimeSettings:
     handball_shadow_only: bool
     handball_poll_minutes: int
     handball_backfill_days: int
+    sportradar_shadow_enabled: bool
+    sportradar_shadow_only: bool
 
     def public_snapshot(self) -> dict[str, object]:
         return asdict(self)
@@ -113,6 +115,12 @@ def load_settings(
         handball_backfill_days=_int(
             source, "BETBOT_HANDBALL_BACKFILL_DAYS", 30, 0, 365
         ),
+        sportradar_shadow_enabled=_bool(
+            source, "BETBOT_SPORTRADAR_SHADOW_ENABLED", False
+        ),
+        sportradar_shadow_only=_bool(
+            source, "BETBOT_SPORTRADAR_SHADOW_ONLY", True
+        ),
     )
     if validate_cross_fields and settings.betting_enabled and not settings.capital_real_enabled:
         raise ConfigurationError(
@@ -133,5 +141,21 @@ def load_settings(
     if validate_cross_fields and settings.handball_enabled and not settings.handball_shadow_only:
         raise ConfigurationError(
             "Handball v11 is shadow-only; BETBOT_HANDBALL_SHADOW_ONLY must remain enabled"
+        )
+    if (
+        validate_cross_fields
+        and settings.sportradar_shadow_enabled
+        and not settings.sportradar_shadow_only
+    ):
+        raise ConfigurationError(
+            "Sportradar adapters are shadow-only; BETBOT_SPORTRADAR_SHADOW_ONLY must remain enabled"
+        )
+    if (
+        validate_cross_fields
+        and settings.sportradar_shadow_enabled
+        and not str(source.get("SPORTRADAR_API_KEY", "")).strip()
+    ):
+        raise ConfigurationError(
+            "SPORTRADAR_API_KEY is required when Sportradar shadow is enabled"
         )
     return settings

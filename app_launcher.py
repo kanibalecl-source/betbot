@@ -45,6 +45,8 @@ def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, li
         specs["volleyball_shadow"] = [python, "-m", "volleyball_v9.runtime"]
     if config.handball_enabled:
         specs["handball_shadow"] = [python, "-m", "handball_v11.runtime"]
+    if config.sportradar_shadow_enabled:
+        specs["sportradar_shadow"] = [python, "-m", "sportradar_shadow.runtime"]
     if os.getenv("BETBOT_FASTAPI_SYNC_ENABLED", "0").strip().lower() in {
         "1", "true", "yes", "on"
     }:
@@ -148,6 +150,7 @@ class ProcessSupervisor:
                 "capital_real_enabled": self.settings.capital_real_enabled,
                 "volleyball_execution_enabled": False,
                 "handball_execution_enabled": False,
+                "sportradar_execution_enabled": False,
             },
             "sports": {
                 "football": {"enabled": True, "storage": "existing"},
@@ -160,6 +163,14 @@ class ProcessSupervisor:
                     "enabled": self.settings.handball_enabled,
                     "shadow_only": self.settings.handball_shadow_only,
                     "storage": "isolated",
+                },
+                "sportradar": {
+                    "enabled": self.settings.sportradar_shadow_enabled,
+                    "shadow_only": self.settings.sportradar_shadow_only,
+                    "storage": "isolated",
+                    "active_model_effect": False,
+                    "automatic_training_admission": False,
+                    "automatic_model_promotion_allowed": False,
                 },
             },
             "contains_secrets": False,

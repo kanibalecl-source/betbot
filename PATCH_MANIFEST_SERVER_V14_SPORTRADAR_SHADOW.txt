@@ -1,0 +1,40 @@
+BETBOT SERVER PATCH V14 - SPORTRADAR SHADOW
+============================================
+
+CHANGED
+-------
+.env.example
+app_launcher.py
+settings_v81.py
+
+ADDED
+-----
+sportradar_shadow/__init__.py
+sportradar_shadow/client.py
+sportradar_shadow/config.py
+sportradar_shadow/normalize.py
+sportradar_shadow/runtime.py
+sportradar_shadow/storage.py
+WDROZENIE_SPORTRADAR_SHADOW_V14.md
+
+SERVER DATA SAFETY
+------------------
+- No data, history, models, learning artifacts or credentials are included.
+- Existing /data is not deleted, overwritten or migrated.
+- New observations use /data/sportradar_shadow/sportradar_shadow.sqlite3.
+- The new SQLite database is covered by the existing **/*.sqlite3 backup rule.
+- Event, odds and quarantine observations are append-only.
+
+SHADOW SAFETY
+-------------
+- No active-model writes.
+- No automatic training admission.
+- No automatic model promotion.
+- No real-capital execution.
+- No provider key in logs, health files or this package.
+
+VALIDATION
+----------
+- Python compileall: PASS
+- Sportradar adapter tests: 7 PASS
+- Existing architecture/volleyball/handball regression tests: 103 PASS
