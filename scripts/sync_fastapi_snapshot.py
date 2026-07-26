@@ -69,6 +69,16 @@ def football_records(limit: int = 500) -> list[dict[str, Any]]:
                     "odds_bet_name": raw.get("odds_bet_name"),
                     "market_scope": raw.get("market_scope"),
                     "odds_observed_at": raw.get("odds_observed_at"),
+                    "market_integrity_schema": raw.get("market_integrity_schema"),
+                    "market_integrity_status": raw.get("market_integrity_status"),
+                    "market_consensus_id": raw.get("market_consensus_id"),
+                    "market_bookmaker_count": raw.get("market_bookmaker_count"),
+                    "market_probability": raw.get("market_probability"),
+                    "market_fair_odds": raw.get("market_fair_odds"),
+                    "market_probability_dispersion": raw.get(
+                        "market_probability_dispersion"
+                    ),
+                    "market_average_overround": raw.get("market_average_overround"),
                     "model_probability": raw.get(
                         "model_probability",
                         raw.get("probability", raw.get("confidence")),
@@ -112,6 +122,7 @@ def build_snapshot() -> dict[str, Any]:
     autonomy = _read_json(quality_root / "autonomy_v11_state.json")
     multisport = _read_json(quality_root / "multisport_v12_audit.json")
     guardian = _read_json(quality_root / "data_quality_guardian.json")
+    integrity = _read_json(quality_root / "market_integrity_v13.json")
     statuses: list[dict[str, Any]] = []
     for sport in ("football", "volleyball", "handball"):
         sport_quality = (
@@ -133,7 +144,14 @@ def build_snapshot() -> dict[str, Any]:
                 {
                     "sport": sport,
                     "kind": "data_quality",
-                    "payload": guardian if sport == "football" else sport_quality,
+                    "payload": {
+                        **(guardian if sport == "football" else sport_quality),
+                        "market_integrity_v13": (
+                            integrity.get("sports", {}).get(sport, {})
+                            if isinstance(integrity.get("sports"), dict)
+                            else {}
+                        ),
+                    },
                 },
                 {
                     "sport": sport,

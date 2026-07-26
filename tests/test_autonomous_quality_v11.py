@@ -30,6 +30,20 @@ class Component:
         return {"status": self.status}
 
 
+class Integrity:
+    def __init__(self, ready: bool):
+        self.ready = ready
+
+    def run(self):
+        return {
+            "status": "HEALTHY" if self.ready else "COLLECTING_OR_QUARANTINED",
+            "sports": {
+                sport: {"training_admission_ready": self.ready}
+                for sport in ("football", "volleyball", "handball")
+            },
+        }
+
+
 class AutonomousQualityV11Tests(unittest.TestCase):
     def test_readiness_requires_all_quality_gates(self):
         report = {
@@ -96,6 +110,7 @@ class AutonomousQualityV11Tests(unittest.TestCase):
                 scorecard=Component("SCORE"),
                 model_governor=Component("WAITING_FOR_ALL_GATES"),
                 capital_governor=Component("CAPITAL"),
+                market_integrity_audit=Integrity(False),
             )
             result = service.run()
             self.assertEqual(retrainer.calls, 0)
@@ -156,11 +171,18 @@ class AutonomousQualityV11Tests(unittest.TestCase):
                     "status": "FAIL_CLOSED",
                     "current_stage": "PAPER",
                 }),
+                market_integrity_audit=Ordered("integrity", {
+                    "status": "HEALTHY",
+                    "sports": {
+                        sport: {"training_admission_ready": True}
+                        for sport in ("football", "volleyball", "handball")
+                    },
+                }),
             )
             result = service.run()
             self.assertEqual(
                 calls,
-                ["guardian", "retrainer", "scorecard", "governor", "capital"],
+                ["guardian", "integrity", "retrainer", "scorecard", "governor", "capital"],
             )
             self.assertEqual(result["phase"], "AUTONOMOUS_CANARY")
             self.assertTrue(result["fully_automatic_learning"])

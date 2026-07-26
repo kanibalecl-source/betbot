@@ -23,6 +23,7 @@ from staged_capital_governor import StagedCapitalGovernor
 from statistical_evidence_scorecard import StatisticalEvidenceScorecard
 from storage_paths import get_data_dir
 from multisport_quality_audit_v12 import MultisportQualityAuditV12
+from market_integrity_audit_v13 import MarketIntegrityAuditV13
 
 
 SCHEMA = "betbot.autonomous_quality_orchestrator.v11"
@@ -136,6 +137,7 @@ class AutonomousQualityOrchestrator:
         model_governor=None,
         capital_governor=None,
         multisport_audit=None,
+        market_integrity_audit=None,
     ) -> None:
         self.root = Path(data_dir or get_data_dir()).resolve()
         self.work = self.root / "quality_retraining"
@@ -153,10 +155,14 @@ class AutonomousQualityOrchestrator:
         self.model_governor = model_governor or AutonomousLearningGovernor(self.root)
         self.capital_governor = capital_governor or StagedCapitalGovernor(self.root)
         self.multisport_audit = multisport_audit or MultisportQualityAuditV12(self.root)
+        self.market_integrity_audit = market_integrity_audit or MarketIntegrityAuditV13(
+            self.root
+        )
 
     def run(self) -> dict[str, Any]:
         started_at = _now()
         guardian_result = self.guardian_runner(self.root)
+        market_integrity = self.market_integrity_audit.run()
         guardian = _read(self.guardian_path)
         readiness = readiness_from_guardian(
             guardian,
@@ -171,6 +177,13 @@ class AutonomousQualityOrchestrator:
                 os.getenv("BETBOT_QUALITY_MIN_CLOSING_COVERAGE", "0.80")
             ),
         )
+        football_integrity_ready = bool(
+            market_integrity.get("sports", {})
+            .get("football", {})
+            .get("training_admission_ready")
+        )
+        readiness["gates"]["market_data_integrity_v13"] = football_integrity_ready
+        readiness["ready"] = all(readiness["gates"].values())
         retraining = (
             self.retrainer.run()
             if readiness["ready"]
@@ -203,6 +216,7 @@ class AutonomousQualityOrchestrator:
                 "model_governor": governor,
                 "capital_governor": capital,
                 "multisport_v12": multisport,
+                "market_integrity_v13": market_integrity,
             },
             "active_model_changed": governor.get("status") == "PROMOTED_AUTONOMOUSLY",
             "automatic_rollback_enabled": os.getenv(

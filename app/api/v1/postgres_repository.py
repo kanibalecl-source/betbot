@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Iterator
@@ -132,6 +133,14 @@ def _truthy(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_number(name: str, default: float) -> float:
+    try:
+        value = float(os.getenv(name, str(default)))
+        return value if math.isfinite(value) else default
+    except (TypeError, ValueError):
+        return default
+
+
 def _timestamp(value: Any, *, required: bool) -> str | None:
     text = str(value or "").strip()
     if not text:
@@ -159,6 +168,35 @@ def validate_pick(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, str | Non
         probability /= 100
     if not match_name or not market:
         return None, "missing_identity"
+    integrity_status = str(raw.get("market_integrity_status", "")).strip().upper()
+    integrity_schema = str(
+        raw.get("market_integrity_schema") or raw.get("market_schema") or ""
+    ).strip()
+    consensus_id = str(
+        raw.get("market_consensus_id") or raw.get("market_consensus_key") or ""
+    ).strip()
+    bookmaker_count = _number(
+        raw.get("market_bookmaker_count", raw.get("bookmaker_count"))
+    )
+    dispersion = _number(
+        raw.get("market_probability_dispersion", raw.get("probability_dispersion"))
+    )
+    minimum_bookmakers = max(
+        1, int(_env_number(f"BETBOT_V13_{sport.upper()}_MIN_BOOKMAKERS", 2))
+    )
+    maximum_dispersion = _env_number(
+        f"BETBOT_V13_{sport.upper()}_MAX_PROBABILITY_DISPERSION", 0.075
+    )
+    if integrity_status != "PASS":
+        return None, "market_integrity_not_pass"
+    if not integrity_schema.endswith(".v13"):
+        return None, "invalid_market_integrity_schema"
+    if not consensus_id:
+        return None, "missing_market_consensus"
+    if bookmaker_count is None or bookmaker_count < minimum_bookmakers:
+        return None, "insufficient_bookmaker_consensus"
+    if dispersion is None or dispersion > maximum_dispersion:
+        return None, "excessive_market_dispersion"
     if sport == "football":
         if not _truthy(raw.get("bookmaker_verified")):
             return None, "unverified_bookmaker_odds"
@@ -281,6 +319,10 @@ def list_picks(sport: str, page: int, page_size: int, status: str | None = None)
     offset = (page - 1) * page_size
     clauses = ["sport=%s"]
     params: list[Any] = [sport]
+    # Legacy rows remain queryable in PostgreSQL for auditability, but only
+    # verified v13 consensus records are exposed as current recommendations.
+    clauses.append("payload->>'market_integrity_status'='PASS'")
+    clauses.append("(payload->>'market_integrity_schema') LIKE '%.v13'")
     if sport == "football":
         # Historical snapshots created before strict bookmaker provenance are
         # retained for auditability, but never exposed as actionable picks.

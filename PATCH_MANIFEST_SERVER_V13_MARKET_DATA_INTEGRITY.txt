@@ -1,0 +1,77 @@
+BETBOT v13 - MARKET DATA INTEGRITY + AUTONOMOUS MULTISPORT QUALITY
+Data: 2026-07-26
+
+CEL
+- Jedna bezpieczna paczka dla pilki noznej, siatkowki i pilki recznej.
+- Do publikacji i nauki dopuszczac tylko kompletne, aktualne i zgodne rynki.
+- Nie pozwolic blednym danym pogorszyc ani automatycznie podmienic modelu.
+- Zachowac istniejaca historie, rozliczenia, modele i ustawienia serwera.
+
+CO WDRAZA v13
+1. Wspolny kontrakt integralnosci kursow dla trzech dyscyplin.
+2. Minimum dwa kompletne rynki bukmacherskie przed publikacja.
+3. Usuwanie marzy i konsensus liczony na prawdopodobienstwach no-vig.
+4. Kontrola czasu obserwacji i odrzucanie niezsynchronizowanych kursow.
+5. Automatyczna kwarantanna bukmachera odstajacego od konsensusu.
+6. Najlepszy kurs wybierany dopiero wsrod zaakceptowanych bukmacherow.
+7. Trwaly, deduplikowany rejestr dowodow v13 dla pilki noznej.
+8. Osobne progi i osobne bramki uczenia dla kazdej dyscypliny.
+9. Promocja modelu zablokowana do uzbierania wymaganej liczby danych v13.
+10. FastAPI przyjmuje i wyswietla tylko rekordy z poprawnym konsensusem v13.
+11. Panel Analityka pokazuje jakosc, kwarantanne, rozrzut i stan bramki.
+12. Istniejace Champion-Challenger, walk-forward, live shadow, kalibracja,
+    CLV, drift, rollback i izolacja modeli pozostaja aktywne.
+
+DOMYSLNE PROGI
+- Pilka nozna: 300 unikalnych konsensusow v13.
+- Siatkowka: 250 snapshotow konsensusu v13.
+- Pilka reczna: 300 snapshotow konsensusu v13.
+- Minimum bukmacherow: 2.
+- Maksymalny rozrzut prawdopodobienstwa: 0.075.
+- Minimalny pass rate do otwarcia uczenia: 95%.
+
+ZACHOWANIE FAIL-CLOSED
+- Brak pelnego rynku, zrodla, czasu, konsensusu lub przekroczony rozrzut:
+  rekord trafia do kwarantanny.
+- Kwarantanna nie modyfikuje aktywnego modelu.
+- Kandydat moze byc analizowany w shadow, ale nie moze zostac promowany,
+  dopoki sportowa bramka Market Data Integrity v13 jest zamknieta.
+- Stary aktywny model dziala dalej; v13 nie wlacza realnych zakladow.
+
+PLIKI PRODUKCYJNE W PACZCE
+- market_data_integrity_v13.py
+- market_integrity_audit_v13.py
+- data_api.py
+- bot.py
+- bot_launcher.py
+- autonomous_quality_orchestrator_v11.py
+- dashboard_streamlit.py
+- volleyball_v9/market.py
+- volleyball_v9/runtime.py
+- handball_v11/market.py
+- handball_v11/runtime.py
+- scripts/sync_fastapi_snapshot.py
+- app/api/v1/postgres_repository.py
+- .env.example
+
+WDROZENIE
+1. Rozpakuj paczke do katalogu glownego repozytorium, zachowujac podkatalogi.
+2. Wgraj wszystkie pliki z paczki w jednym commicie.
+3. Nie usuwaj woluminu Railway i nie kopiuj zadnego katalogu data/.
+4. Poczekaj na poprawny redeploy panelu glownego oraz FastAPI.
+5. Po wdrozeniu v13 zacznie zbierac nowe dowody. Zamknieta bramka uczenia
+   podczas fazy zbierania jest wynikiem prawidlowym, nie bledem.
+
+BEZPIECZENSTWO PACZKI
+- Brak data/, CSV historii, SQLite, modeli, users.json, .env i sekretow.
+- Brak operacji usuwania lub migracji historii.
+- Jedyny nowy zapis produkcyjny to raport pochodny i deduplikowany ledger
+  v13 w istniejacym katalogu quality_retraining na trwalym woluminie.
+- Zrodla, historia rozliczen i aktywne artefakty modeli sa tylko odczytywane.
+
+WERYFIKACJA LOKALNA
+- Kompilacja wszystkich zmienionych modulow: PASS.
+- Testy celowane v13 i bezpieczenstwa: 37/37 PASS.
+- Pelny discovery: 250 testow PASS; jedyny nieuruchomiony test wymaga
+  biblioteki FastAPI, ktora jest deklarowana w requirements.txt i instalowana
+  w obrazie Railway.

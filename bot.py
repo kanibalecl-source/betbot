@@ -1074,6 +1074,18 @@ def run_bot(mode="main"):
                 "odds_bet_name": data.get("bet_name", ""),
                 "market_scope": data.get("market_scope", ""),
                 "odds_observed_at": data.get("observed_at", ""),
+                "market_integrity_schema": data.get("market_integrity_schema", ""),
+                "market_integrity_status": data.get("market_integrity_status", ""),
+                "market_consensus_id": data.get("market_consensus_id", ""),
+                "market_bookmaker_count": data.get("market_bookmaker_count", 0),
+                "market_probability": data.get("market_probability", ""),
+                "market_fair_odds": data.get("market_fair_odds", ""),
+                "market_probability_dispersion": data.get(
+                    "market_probability_dispersion", ""
+                ),
+                "market_average_overround": data.get(
+                    "market_average_overround", ""
+                ),
 
                 "odds_api_market": market_to_odds_api(market),
                 "closing_outcome_name": outcome_name_for_closing(match, market),

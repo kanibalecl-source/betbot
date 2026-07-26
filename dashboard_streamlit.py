@@ -2177,6 +2177,65 @@ def _render_data_quality_guardian() -> None:
             pass
 
 
+def _render_market_integrity_v13() -> None:
+    report_path = DATA_DIR / "quality_retraining" / "market_integrity_v13.json"
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except Exception:
+        st.info(
+            "Market Data Integrity v13 utworzy raport po najbliższym cyklu. "
+            "Do tego czasu promocja modeli pozostaje zablokowana."
+        )
+        return
+    labels = {
+        "football": "Piłka nożna",
+        "volleyball": "Siatkówka",
+        "handball": "Piłka ręczna",
+    }
+    with st.expander("MARKET DATA INTEGRITY v13 | KURSY I KONSENSUS", expanded=True):
+        rows = []
+        for sport in ("football", "volleyball", "handball"):
+            item = report.get("sports", {}).get(sport, {})
+            admitted = int(item.get("admitted_observations", 0) or 0)
+            required = int(item.get("required_observations", 0) or 0)
+            pass_rate = as_float(item.get("pass_rate"), 0) * 100
+            dispersion = item.get("average_probability_dispersion")
+            dispersion_text = (
+                f"{as_float(dispersion, 0) * 100:.2f}%"
+                if dispersion is not None else "—"
+            )
+            rows.append([
+                labels[sport],
+                html.escape(str(item.get("status", "WAITING"))),
+                f"{admitted} / {required}",
+                f"{pass_rate:.1f}%",
+                str(item.get("quarantined_observations", 0)),
+                dispersion_text,
+                (
+                    "OTWARTA"
+                    if item.get("training_admission_ready") is True
+                    else "ZABLOKOWANA"
+                ),
+            ])
+        st.markdown(
+            '<div class="ka-table-scroll quality-gates-table">'
+            + html_table(
+                [
+                    "Dyscyplina", "Stan", "Dane jakościowe", "Pass rate",
+                    "Kwarantanna", "Rozrzut", "Bramka uczenia",
+                ],
+                rows,
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Do typów i uczenia trafiają wyłącznie pełne, czasowo zgodne rynki "
+            "z konsensusem co najmniej dwóch bukmacherów. Dane błędne lub "
+            "odstające są zachowane do audytu, ale nie mogą zmienić modelu."
+        )
+
+
 def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALITYKA") -> None:
     page_banner("Centrum decyzji", "ANALITYKA", "Centrum nauki bota: ligi, rynki, ryzyko, źródła, baza cech i wnioski z historii.")
     src = _result_source(results, picks)
@@ -2231,6 +2290,7 @@ def render_analytics(picks: pd.DataFrame, results: pd.DataFrame, heading="ANALIT
     _render_quality_governance()
     _render_advantage_diagnostic()
     _render_data_quality_guardian()
+    _render_market_integrity_v13()
 
 
 def render_history(results: pd.DataFrame) -> None:

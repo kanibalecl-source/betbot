@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import re
 
 from api_football_request_control import fetch_fixture_odds
+from market_data_integrity_v13 import build_market_consensus
 
 API_KEY = os.getenv("API_FOOTBALL_KEY", "")
 
@@ -428,42 +429,97 @@ def get_odds_market_data(match):
     try:
         rows = _iter_fixture_odds(match)
         markets = {}
-        observed_at = (
-            str(rows[0].get("observed_at") or "")
-            if rows
-            else datetime.now(timezone.utc).isoformat()
-        )
+        groups = {
+            "MATCH_WINNER": ("HOME_WIN", "DRAW", "AWAY_WIN"),
+            "BTTS": ("BTTS_YES", "BTTS_NO"),
+        }
+        for line in ("0.5", "1.5", "2.5", "3.5", "4.5"):
+            groups[f"TOTAL_{line}"] = (f"OVER_{line}", f"UNDER_{line}")
 
-        for row in rows:
-            key = row["market"]
-            bookmaker = str(row.get("bookmaker") or "").strip()
-            odd = row.get("odds")
-            if not bookmaker or not isinstance(odd, (int, float)) or odd <= 1:
+        allowlist = [
+            item.strip()
+            for item in os.getenv(
+                "BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST",
+                DEFAULT_POLISH_BOOKMAKERS,
+            ).split(",")
+            if item.strip() and item.strip() != "*"
+        ]
+        minimum_bookmakers = max(
+            1, int(os.getenv("BETBOT_V13_FOOTBALL_MIN_BOOKMAKERS", "2"))
+        )
+        for group_name, outcomes in groups.items():
+            group_rows = []
+            for row in rows:
+                original_market = str(row.get("market") or "").upper()
+                if original_market not in outcomes:
+                    continue
+                group_rows.append(
+                    {
+                        **row,
+                        "market": group_name,
+                        "outcome": original_market,
+                    }
+                )
+            if not group_rows:
                 continue
-            market = markets.setdefault(
-                key,
-                {
-                    "best_odds": odd,
-                    "bookmaker": bookmaker,
-                    "bookmaker_id": row.get("bookmaker_id"),
-                    "by_bookmaker": {},
-                    "bookmaker_scope": "POLAND_ALLOWLIST",
-                    "bet_id": row.get("bet_id"),
-                    "bet_name": row.get("bet_name"),
-                    "market_scope": row.get("market_scope"),
-                    "observed_at": observed_at,
-                },
+            consensus = build_market_consensus(
+                group_rows,
+                sport="football",
+                market=group_name,
+                required_outcomes=outcomes,
+                bookmaker_allowlist=allowlist or None,
+                minimum_bookmakers=minimum_bookmakers,
             )
-            previous = market["by_bookmaker"].get(bookmaker)
-            if previous is None or odd > previous:
-                market["by_bookmaker"][bookmaker] = odd
-            if odd > market["best_odds"]:
-                market["best_odds"] = odd
-                market["bookmaker"] = bookmaker
-                market["bookmaker_id"] = row.get("bookmaker_id")
-                market["bet_id"] = row.get("bet_id")
-                market["bet_name"] = row.get("bet_name")
-                market["market_scope"] = row.get("market_scope")
+            if consensus.get("status") != "PASS":
+                print(
+                    "ODDS V13 QUARANTINE: "
+                    f"{group_name} reason={consensus.get('reason')} "
+                    f"rejected={consensus.get('rejected', {})}"
+                )
+                continue
+            accepted = consensus.get("accepted_quotes", [])
+            for outcome in outcomes:
+                bookmaker = consensus["best_bookmakers"][outcome]
+                best_row = next(
+                    (
+                        item
+                        for item in accepted
+                        if str(item.get("outcome")) == outcome
+                        and str(item.get("bookmaker")) == bookmaker
+                        and float(item.get("odds")) == float(
+                            consensus["best_odds"][outcome]
+                        )
+                    ),
+                    {},
+                )
+                by_bookmaker = {
+                    name: float(values[outcome])
+                    for name, values in consensus["by_bookmaker"].items()
+                    if outcome in values
+                }
+                markets[outcome] = {
+                    "best_odds": float(consensus["best_odds"][outcome]),
+                    "bookmaker": bookmaker,
+                    "bookmaker_id": consensus["best_bookmaker_ids"].get(outcome, ""),
+                    "by_bookmaker": by_bookmaker,
+                    "bookmaker_scope": "POLAND_ALLOWLIST",
+                    "bookmaker_verified": True,
+                    "bet_id": best_row.get("bet_id"),
+                    "bet_name": best_row.get("bet_name"),
+                    "market_scope": "FULL_MATCH",
+                    "observed_at": consensus["observed_at"],
+                    "market_integrity_schema": consensus["schema_version"],
+                    "market_integrity_status": "PASS",
+                    "market_consensus_id": consensus["consensus_id"],
+                    "market_bookmaker_count": consensus["bookmaker_count"],
+                    "market_probability": consensus["probabilities"][outcome],
+                    "market_fair_odds": consensus["fair_odds"][outcome],
+                    "market_probability_dispersion": consensus[
+                        "probability_dispersion"
+                    ],
+                    "market_average_overround": consensus["average_overround"],
+                    "market_rejected_quotes": consensus["rejected"],
+                }
 
         if markets:
             print(f"ODDS MARKETS: {sorted(list(markets.keys()))}")

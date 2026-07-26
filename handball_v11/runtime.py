@@ -24,6 +24,7 @@ from .storage import HandballStorage
 from .training import DEFAULT_HYPERPARAMETERS, train_candidate
 from .validation import ValidationSettings, validate_candidate
 from multisport_quality_v12 import odds_snapshot_stage, policy_for
+from market_integrity_audit_v13 import sport_training_ready
 
 
 MODEL_VERSION = "handball-elo-shadow-baseline-v1"
@@ -55,6 +56,10 @@ def _best_quotes(quotes):
 
 def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, settings) -> dict:
     quality_policy = policy_for("handball")
+    integrity_training_ready = sport_training_ready(
+        storage.root.parent, "handball"
+    )
+    governor_enabled = settings.autonomous_governor_enabled and integrity_training_ready
     today = date.today()
     days = [today - timedelta(days=1), today, today + timedelta(days=1)]
     if storage.state("initial_backfill_complete") != "1" and settings.backfill_days:
@@ -139,7 +144,7 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
                 active_before_governor["candidate_id"]
             ),
             settings=GovernorSettings(
-                enabled=settings.autonomous_governor_enabled,
+                enabled=governor_enabled,
                 minimum_live_samples=max(
                     settings.live_shadow_min_samples,
                     quality_policy.live_shadow_minimum_rows,
@@ -157,7 +162,7 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
         registered_candidate,
         validation,
         settings=GovernorSettings(
-            enabled=settings.autonomous_governor_enabled,
+            enabled=governor_enabled,
             minimum_live_samples=max(
                 settings.live_shadow_min_samples,
                 quality_policy.live_shadow_minimum_rows,
@@ -288,6 +293,7 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
                 "feature_key": feature_key,
                 "feature_schema": FEATURE_SCHEMA_VERSION,
                 "market_schema": MARKET_SCHEMA_VERSION,
+                "market_integrity_status": "PASS",
                 "market_consensus_key": consensus_key,
                 "market_bookmaker_count": consensus.bookmaker_count,
                 "market_probability": (
@@ -307,6 +313,7 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
                     8,
                 ),
                 "market_probability_dispersion": consensus.probability_dispersion,
+                "market_average_overround": consensus.average_overround,
                 "home_rating": prediction.home_rating,
                 "away_rating": prediction.away_rating,
                 "home_matches": prediction.home_matches,
@@ -408,7 +415,9 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
         "active_shadow_monitor_status": str(
             (active_monitor or {}).get("status", "NOT_REQUIRED")
         ),
-        "autonomous_governor_enabled": settings.autonomous_governor_enabled,
+        "autonomous_governor_enabled": governor_enabled,
+        "autonomous_governor_configured": settings.autonomous_governor_enabled,
+        "market_integrity_v13_training_ready": integrity_training_ready,
         "live_shadow_report_status": str(
             governor.get("live_report_status", "WAITING")
         ),
@@ -425,7 +434,7 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
             or (active_monitor or {}).get("shadow_model_changed", False)
         ),
         "active_model_scope": "handball_shadow_only",
-        "automatic_model_promotion_allowed": True,
+        "automatic_model_promotion_allowed": integrity_training_ready,
         "automatic_model_promotion_scope": "handball_shadow_only",
         "automatic_rollback_enabled": True,
         "football_active_model_modified": False,

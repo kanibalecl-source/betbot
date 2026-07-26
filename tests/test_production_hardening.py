@@ -84,8 +84,14 @@ class OddsAggregationTests(unittest.TestCase):
         previous = os.environ.get("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST")
         os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = "*"
         data_api._iter_fixture_odds = lambda match: [
-            {"market": "BTTS_YES", "odds": 1.9, "bookmaker": "A"},
-            {"market": "BTTS_YES", "odds": 2.1, "bookmaker": "B"},
+            {"market": "BTTS_YES", "odds": 1.9, "bookmaker": "A",
+             "observed_at": "2026-07-22T12:00:00+00:00"},
+            {"market": "BTTS_NO", "odds": 1.9, "bookmaker": "A",
+             "observed_at": "2026-07-22T12:00:00+00:00"},
+            {"market": "BTTS_YES", "odds": 2.1, "bookmaker": "B",
+             "observed_at": "2026-07-22T12:00:00+00:00"},
+            {"market": "BTTS_NO", "odds": 1.8, "bookmaker": "B",
+             "observed_at": "2026-07-22T12:00:00+00:00"},
         ]
         try:
             result = data_api.get_odds_market_data({})
@@ -98,6 +104,7 @@ class OddsAggregationTests(unittest.TestCase):
         self.assertEqual(result["BTTS_YES"]["best_odds"], 2.1)
         self.assertEqual(result["BTTS_YES"]["by_bookmaker"], {"A": 1.9, "B": 2.1})
         self.assertIn("observed_at", result["BTTS_YES"])
+        self.assertEqual(result["BTTS_YES"]["market_integrity_status"], "PASS")
 
     def test_rejects_wrong_over_under_scope_and_non_allowlisted_bookmaker(self):
         original = data_api.fetch_fixture_odds
