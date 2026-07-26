@@ -1063,6 +1063,17 @@ def run_bot(mode="main"):
                 "signal": format_bet(market),
                 "typ": format_bet(market),
                 "bookmaker": bookmaker,
+                "bookmaker_id": data.get("bookmaker_id", ""),
+                "bookmaker_scope": data.get("bookmaker_scope", ""),
+                "bookmaker_verified": bool(
+                    data.get("bookmaker_scope") == "POLAND_ALLOWLIST"
+                    and data.get("market_scope") == "FULL_MATCH"
+                    and bookmaker
+                ),
+                "odds_bet_id": data.get("bet_id", ""),
+                "odds_bet_name": data.get("bet_name", ""),
+                "market_scope": data.get("market_scope", ""),
+                "odds_observed_at": data.get("observed_at", ""),
 
                 "odds_api_market": market_to_odds_api(market),
                 "closing_outcome_name": outcome_name_for_closing(match, market),

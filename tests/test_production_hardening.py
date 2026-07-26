@@ -81,6 +81,8 @@ class SameBookmakerMarginTests(unittest.TestCase):
 class OddsAggregationTests(unittest.TestCase):
     def test_preserves_prices_by_bookmaker(self):
         original = data_api._iter_fixture_odds
+        previous = os.environ.get("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST")
+        os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = "*"
         data_api._iter_fixture_odds = lambda match: [
             {"market": "BTTS_YES", "odds": 1.9, "bookmaker": "A"},
             {"market": "BTTS_YES", "odds": 2.1, "bookmaker": "B"},
@@ -89,9 +91,99 @@ class OddsAggregationTests(unittest.TestCase):
             result = data_api.get_odds_market_data({})
         finally:
             data_api._iter_fixture_odds = original
+            if previous is None:
+                os.environ.pop("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST", None)
+            else:
+                os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = previous
         self.assertEqual(result["BTTS_YES"]["best_odds"], 2.1)
         self.assertEqual(result["BTTS_YES"]["by_bookmaker"], {"A": 1.9, "B": 2.1})
         self.assertIn("observed_at", result["BTTS_YES"])
+
+    def test_rejects_wrong_over_under_scope_and_non_allowlisted_bookmaker(self):
+        original = data_api.fetch_fixture_odds
+        previous = os.environ.get("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST")
+        os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = "superbet,betclic"
+        data_api.fetch_fixture_odds = lambda **kwargs: {
+            "cached": False,
+            "status_code": 200,
+            "observed_at": "2026-07-26T12:00:00+00:00",
+            "payload": {
+                "response": [{
+                    "bookmakers": [
+                        {
+                            "id": 1,
+                            "name": "Superbet",
+                            "bets": [
+                                {
+                                    "id": 5,
+                                    "name": "Goals Over/Under",
+                                    "values": [
+                                        {"value": "Over 1.5", "odd": "1.45"},
+                                        {"value": "Under 1.5", "odd": "2.60"},
+                                        {"value": "Over 2.5", "odd": "9.50", "main": "false"},
+                                    ],
+                                },
+                                {
+                                    "id": 6,
+                                    "name": "Goals Over/Under - First Half",
+                                    "values": [
+                                        {"value": "Over 1.5", "odd": "4.89"},
+                                    ],
+                                },
+                                {
+                                    "id": 7,
+                                    "name": "Corners Over/Under",
+                                    "values": [
+                                        {"value": "Over 1.5", "odd": "2.85"},
+                                    ],
+                                },
+                            ],
+                        },
+                        {
+                            "id": 99,
+                            "name": "OffshoreMax",
+                            "bets": [{
+                                "id": 5,
+                                "name": "Goals Over/Under",
+                                "values": [{"value": "Over 1.5", "odd": "9.99"}],
+                            }],
+                        },
+                    ],
+                }]
+            },
+        }
+        try:
+            rows = data_api._iter_fixture_odds({"fixture_id": 123})
+        finally:
+            data_api.fetch_fixture_odds = original
+            if previous is None:
+                os.environ.pop("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST", None)
+            else:
+                os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = previous
+
+        self.assertEqual(
+            [(row["market"], row["odds"], row["bookmaker"]) for row in rows],
+            [
+                ("OVER_1.5", 1.45, "Superbet"),
+                ("UNDER_1.5", 2.60, "Superbet"),
+            ],
+        )
+        self.assertTrue(all(row["market_scope"] == "FULL_MATCH" for row in rows))
+
+    def test_requested_bookmaker_has_no_cross_bookmaker_fallback(self):
+        original = data_api._iter_fixture_odds
+        data_api._iter_fixture_odds = lambda match: [
+            {"market": "OVER_1.5", "odds": 1.91, "bookmaker": "Betclic"},
+        ]
+        try:
+            result = data_api.get_bookmaker_market_odds(
+                {"fixture_id": 123},
+                "OVER_1.5",
+                "superbet",
+            )
+        finally:
+            data_api._iter_fixture_odds = original
+        self.assertIsNone(result)
 
 
 class FinancialSafetyTests(unittest.TestCase):

@@ -1,6 +1,7 @@
 ﻿import os
 import requests
 from datetime import datetime, timedelta, timezone
+import re
 
 from api_football_request_control import fetch_fixture_odds
 
@@ -10,6 +11,21 @@ BASE_URL = "https://v3.football.api-sports.io"
 
 HEADERS = {
     "x-apisports-key": API_KEY
+}
+
+# Fail closed: football odds shown as "Buk" must come from a configured,
+# identifiable bookmaker accepted for the Polish-facing product.  The list is
+# deliberately configurable because provider coverage and licences can change.
+DEFAULT_POLISH_BOOKMAKERS = (
+    "superbet,sts,fortuna,betclic,etoto,forbet,totalbet,pzbuk"
+)
+
+# Only the full-match goals-total market is allowed to create OVER/UNDER keys.
+# Substring matching is forbidden because provider feeds also contain team,
+# half, corner and card totals with "Over/Under" in their names.
+FULL_MATCH_TOTAL_BET_NAMES = {
+    "goals over under",
+    "over under",
 }
 
 MAX_MATCHES = 100
@@ -236,6 +252,40 @@ def _normalize_total_line(value):
     return ""
 
 
+def _normalized_token(value):
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").strip().lower())
+
+
+def _normalized_bet_name(value):
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower()).strip()
+
+
+def _allowed_football_bookmakers():
+    configured = os.getenv(
+        "BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST",
+        DEFAULT_POLISH_BOOKMAKERS,
+    )
+    values = [item.strip() for item in str(configured or "").split(",") if item.strip()]
+    if any(item == "*" for item in values):
+        return None
+    return {_normalized_token(item) for item in values if _normalized_token(item)}
+
+
+def _bookmaker_is_allowed(bookmaker_name):
+    allowed = _allowed_football_bookmakers()
+    if allowed is None:
+        return True
+    return _normalized_token(bookmaker_name) in allowed
+
+
+def _is_full_match_total_bet(market_name):
+    return _normalized_bet_name(market_name) in FULL_MATCH_TOTAL_BET_NAMES
+
+
+def _is_explicit_false(value):
+    return value is False or str(value or "").strip().lower() in {"0", "false", "no", "off"}
+
+
 def _normalize_double_chance(value):
     text = str(value or "").strip().lower()
     text = (
@@ -283,7 +333,7 @@ def _iter_fixture_odds(match):
         fixture_id=fixture_id,
         url=url,
         headers=HEADERS,
-        requester=requests.get,
+        requester=getattr(requests, "get", None),
     )
     source = "CACHE" if result["cached"] else "API"
     print(
@@ -305,12 +355,22 @@ def _iter_fixture_odds(match):
     for bookmaker in response_data[0].get("bookmakers", []):
 
         bookmaker_name = str(bookmaker.get("name", "")).strip()
+        bookmaker_id = bookmaker.get("id")
+
+        if not bookmaker_name or not _bookmaker_is_allowed(bookmaker_name):
+            continue
 
         for bet in bookmaker.get("bets", []):
 
             market_name = str(bet.get("name") or "").strip()
+            bet_id = bet.get("id")
 
             for value in bet.get("values", []):
+
+                # Some feeds expose parallel variants and mark the primary
+                # quote explicitly.  Honour the marker when it is present.
+                if "main" in value and _is_explicit_false(value.get("main")):
+                    continue
 
                 try:
                     odd = float(value.get("odd", 0))
@@ -340,7 +400,7 @@ def _iter_fixture_odds(match):
                     elif outcome == "No":
                         key = "BTTS_NO"
 
-                elif market_name and "Over/Under" in market_name:
+                elif _is_full_match_total_bet(market_name):
                     line = _normalize_total_line(outcome)
                     if line in {"0.5", "1.5", "2.5", "3.5", "4.5"}:
                         if "Over" in outcome:
@@ -353,6 +413,10 @@ def _iter_fixture_odds(match):
                         "market": key,
                         "odds": odd,
                         "bookmaker": bookmaker_name,
+                        "bookmaker_id": bookmaker_id,
+                        "bet_id": bet_id,
+                        "bet_name": market_name,
+                        "market_scope": "FULL_MATCH",
                         "observed_at": result["observed_at"],
                     })
 
@@ -381,7 +445,12 @@ def get_odds_market_data(match):
                 {
                     "best_odds": odd,
                     "bookmaker": bookmaker,
+                    "bookmaker_id": row.get("bookmaker_id"),
                     "by_bookmaker": {},
+                    "bookmaker_scope": "POLAND_ALLOWLIST",
+                    "bet_id": row.get("bet_id"),
+                    "bet_name": row.get("bet_name"),
+                    "market_scope": row.get("market_scope"),
                     "observed_at": observed_at,
                 },
             )
@@ -391,6 +460,10 @@ def get_odds_market_data(match):
             if odd > market["best_odds"]:
                 market["best_odds"] = odd
                 market["bookmaker"] = bookmaker
+                market["bookmaker_id"] = row.get("bookmaker_id")
+                market["bet_id"] = row.get("bet_id")
+                market["bet_name"] = row.get("bet_name")
+                market["market_scope"] = row.get("market_scope")
 
         if markets:
             print(f"ODDS MARKETS: {sorted(list(markets.keys()))}")
@@ -411,19 +484,17 @@ def get_bookmaker_market_odds(match, market_key, bookmaker_query="superbet"):
         return None
 
     try:
-        best_fallback = None
-
         for row in _iter_fixture_odds(match):
             if row["market"] != target_market:
                 continue
 
             if wanted and wanted in str(row["bookmaker"]).lower():
                 return row
+            if not wanted:
+                return row
 
-            if best_fallback is None or row["odds"] > best_fallback["odds"]:
-                best_fallback = row
-
-        return best_fallback
+        # Never label a price from a different bookmaker as the requested one.
+        return None
 
     except Exception as e:
         print("BOOKMAKER ODDS ERROR:", e)

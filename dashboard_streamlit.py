@@ -254,6 +254,40 @@ def normalize_picks(df: pd.DataFrame) -> pd.DataFrame:
         odds = pd.to_numeric(out["kurs_buk"], errors="coerce")
         if odds.notna().any():
             out = out[odds >= 1.00].copy()
+    verified = (
+        out["bookmaker_verified"].map(
+            lambda value: value is True
+            or str(value).strip().lower() in {"1", "true", "yes", "on"}
+        )
+        if "bookmaker_verified" in out.columns
+        else pd.Series(False, index=out.index)
+    )
+    valid_scope = (
+        out.get("bookmaker_scope", pd.Series("", index=out.index))
+        .astype(str)
+        .eq("POLAND_ALLOWLIST")
+    )
+    valid_market = (
+        out.get("market_scope", pd.Series("", index=out.index))
+        .astype(str)
+        .eq("FULL_MATCH")
+    )
+    trusted = verified & valid_scope & valid_market
+    out["bookmaker_verified"] = trusted
+    # Fail closed: old or incomplete snapshots may remain available for
+    # historical audit, but their bookmaker odds and derived value are not
+    # presented as a current betting signal.
+    for column in (
+        "kurs_buk",
+        "bookmaker_odds",
+        "book_odds",
+        "odds",
+        "value",
+        "value_percent",
+        "edge",
+    ):
+        if column in out.columns:
+            out.loc[~trusted, column] = pd.NA
     return out.reset_index(drop=True)
 
 
@@ -1435,15 +1469,28 @@ def pick_rows(picks: pd.DataFrame) -> List[List[str]]:
     rows = []
     for _, row in picks.iterrows():
         odds_snapshot = extract_odds_snapshot(row)
+        bookmaker_verified = bool(row.get("bookmaker_verified", False))
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
+        bookmaker_label = html.escape(odds_snapshot.bookmaker_name or "zweryfikowany PL")
+        observed_label = html.escape(odds_snapshot.observed_at or "czas zapisany przy decyzji")
+        bookmaker_cell = (
+            f'<span title="{bookmaker_label} · {observed_label}">'
+            f'{format_odds(odds_snapshot.bookmaker)}<br><small>{bookmaker_label}</small></span>'
+            if bookmaker_verified and odds_snapshot.bookmaker is not None
+            else "-"
+        )
         rows.append([
             league_html(row),
             match_html(row),
             fmt_market(first_existing(row, ["typ", "market"], "-")),
             format_odds(odds_snapshot.model),
             format_odds(odds_snapshot.bot),
-            format_odds(odds_snapshot.bookmaker),
-            f'<span class="green">{format_percent(odds_snapshot.value_percent)}</span>',
+            bookmaker_cell,
+            (
+                f'<span class="green">{format_percent(odds_snapshot.value_percent)}</span>'
+                if bookmaker_verified
+                else "-"
+            ),
             format_closing_clv(odds_snapshot),
             confidence_bar(conf),
             '<span class="pill pill-green">WARTO</span>' if conf >= 60 else '<span class="pill pill-yellow">OBSERWUJ</span>',
@@ -1895,7 +1942,7 @@ def render_prematch(picks: pd.DataFrame) -> None:
         elif odds_range == "3.51+": filtered = filtered[odds > 3.50]
         return filtered
 
-    headers = ["Liga", "Mecz", "Rynek", "Model", "Bot", "Buk", "Value", "Zamk./CLV", "Pewność", "Status"]
+    headers = ["Liga", "Mecz", "Rynek", "Model", "Bot", "Buk PL", "Value", "Zamk./CLV", "Pewność", "Status"]
     df = apply_prematch_filters(picks)
     filter_signature = (selected_league, selected_market, odds_range)
     if st.session_state.get("prematch_filter_signature") != filter_signature:

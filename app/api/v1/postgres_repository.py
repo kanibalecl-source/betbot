@@ -126,6 +126,12 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _timestamp(value: Any, *, required: bool) -> str | None:
     text = str(value or "").strip()
     if not text:
@@ -153,6 +159,15 @@ def validate_pick(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, str | Non
         probability /= 100
     if not match_name or not market:
         return None, "missing_identity"
+    if sport == "football":
+        if not _truthy(raw.get("bookmaker_verified")):
+            return None, "unverified_bookmaker_odds"
+        if str(raw.get("bookmaker_scope", "")).strip() != "POLAND_ALLOWLIST":
+            return None, "invalid_bookmaker_scope"
+        if str(raw.get("market_scope", "")).strip() != "FULL_MATCH":
+            return None, "invalid_market_scope"
+        if not str(raw.get("bookmaker") or raw.get("bookmaker_name") or "").strip():
+            return None, "missing_bookmaker"
     if odds is None or odds <= 1 or odds > 100:
         return None, "invalid_odds"
     if probability is None or not 0 < probability < 1:
@@ -266,6 +281,12 @@ def list_picks(sport: str, page: int, page_size: int, status: str | None = None)
     offset = (page - 1) * page_size
     clauses = ["sport=%s"]
     params: list[Any] = [sport]
+    if sport == "football":
+        # Historical snapshots created before strict bookmaker provenance are
+        # retained for auditability, but never exposed as actionable picks.
+        clauses.append("payload->>'bookmaker_verified'='true'")
+        clauses.append("payload->>'bookmaker_scope'='POLAND_ALLOWLIST'")
+        clauses.append("payload->>'market_scope'='FULL_MATCH'")
     if status:
         clauses.append("status=%s")
         params.append(status.upper())

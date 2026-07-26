@@ -109,6 +109,18 @@ def run_bot():
                 "liga": league_full,
                 "mecz": match["match"],
                 "typ": format_bet(market),
+                "bookmaker": data.get("bookmaker", ""),
+                "bookmaker_id": data.get("bookmaker_id", ""),
+                "bookmaker_scope": data.get("bookmaker_scope", ""),
+                "bookmaker_verified": bool(
+                    data.get("bookmaker_scope") == "POLAND_ALLOWLIST"
+                    and data.get("market_scope") == "FULL_MATCH"
+                    and data.get("bookmaker")
+                ),
+                "odds_bet_id": data.get("bet_id", ""),
+                "odds_bet_name": data.get("bet_name", ""),
+                "market_scope": data.get("market_scope", ""),
+                "odds_observed_at": data.get("observed_at", ""),
 
                 "kurs_buk": round(book_odds, 2),
                 "kurs_bota": round(fair_odds, 2),

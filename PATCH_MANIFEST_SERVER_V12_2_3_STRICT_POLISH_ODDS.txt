@@ -1,0 +1,52 @@
+BETBOT V12.2.3 - STRICT POLISH BOOKMAKER ODDS
+Data: 2026-07-26
+
+CEL
+- Nie przypisywać kursów z zagranicznego lub innego bukmachera do pola "Buk PL".
+- Nie mieszać zakładów na gole całego meczu z połowami, rogami, kartkami
+  ani sumami drużynowymi.
+- Nie obliczać i nie publikować Value na niezweryfikowanym kursie.
+- Zachować stare rekordy wyłącznie do audytu, bez ich prezentowania jako
+  aktualnych sygnałów.
+
+ZASADY PO WDROŻENIU
+- Kurs jest przyjmowany wyłącznie z listy:
+  Superbet, STS, Fortuna, Betclic, eTOTO, forBET, Totalbet, PZBuk.
+- Rynek Over/Under musi być rynkiem goli całego meczu.
+- Brak zgodnego kursu oznacza brak typu/znak "-", a nie kurs zastępczy.
+- FastAPI odrzuca nowe rekordy piłkarskie bez pełnej proweniencji kursu.
+- FastAPI nie zwraca dawnych rekordów bez potwierdzonej proweniencji.
+
+PLIKI PRODUKCYJNE
+- data_api.py
+- bot.py
+- bot_launcher.py
+- dashboard_streamlit.py
+- odds_display.py
+- scripts/sync_fastapi_snapshot.py
+- app/api/v1/postgres_repository.py
+- .env.example
+
+TESTY
+- tests/test_production_hardening.py
+- tests/test_fastapi_quality_platform_v12_2.py
+- tests/test_odds_display.py
+- Wynik lokalny: 33/33 PASS oraz poprawna kompilacja wszystkich zmienionych
+  modułów.
+
+WDROŻENIE
+1. Wgraj zawartość paczki do katalogu głównego repozytorium, zachowując
+   podkatalogi app/api/v1, scripts i tests.
+2. Nie kopiuj żadnych plików data/, historii, modeli ani sekretów.
+3. W Railway można opcjonalnie ustawić:
+   BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST=superbet,sts,fortuna,betclic,etoto,forbet,totalbet,pzbuk
+   Brak zmiennej używa dokładnie tej samej wartości domyślnej.
+4. Zatwierdź zmiany. Powinny zredeployować się oba serwisy:
+   główny panel oraz FastAPI.
+
+BEZPIECZEŃSTWO DANYCH
+- Paczka nie zawiera data/, historii, rozliczeń, modeli, baz danych,
+  users.json, plików .env, kluczy API ani haseł.
+- Migracja nie usuwa i nie nadpisuje historii.
+- Stare kursy bez potwierdzonego źródła pozostają w bazie do audytu,
+  ale są ukryte przed warstwą decyzyjną i panelem.
