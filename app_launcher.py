@@ -45,6 +45,10 @@ def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, li
         specs["volleyball_shadow"] = [python, "-m", "volleyball_v9.runtime"]
     if config.handball_enabled:
         specs["handball_shadow"] = [python, "-m", "handball_v11.runtime"]
+    if os.getenv("BETBOT_FASTAPI_SYNC_ENABLED", "0").strip().lower() in {
+        "1", "true", "yes", "on"
+    }:
+        specs["fastapi_snapshot_sync"] = [python, "scripts/sync_fastapi_snapshot.py"]
     return specs
 
 

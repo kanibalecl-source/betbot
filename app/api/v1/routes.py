@@ -4,9 +4,11 @@ from app.core.security import require_api_key
 from app.domain.schemas import HealthResponse, PredictionInput, PredictionOutput
 from app.services.prediction_service import PredictionService
 from app.realtime.routes import router as realtime_router
+from app.api.v1.observability import router as observability_router
 
 router = APIRouter(prefix="/api/v1", tags=["v1"])
 router.include_router(realtime_router)
+router.include_router(observability_router)
 
 @router.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:

@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.realtime.worker import realtime_loop
 from app.core.security import validate_security_configuration
+from app.data.postgres_repository import DatabaseUnavailable, initialize_schema
 import asyncio
 
 configure_logging()
@@ -17,6 +18,11 @@ validate_security_configuration()
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     task = None
+    try:
+        initialize_schema()
+    except DatabaseUnavailable:
+        # Health stays available while Railway provisions or reconnects the DB.
+        pass
     if settings.realtime_enabled:
         task = asyncio.create_task(realtime_loop(settings.realtime_tick_seconds))
     try:

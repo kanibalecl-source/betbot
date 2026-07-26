@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterable, List
 
 import pandas as pd
+import requests
 import streamlit as st
 
 from country_flags import league_html, match_html
@@ -268,6 +269,26 @@ def save_strategy_config(cfg: dict) -> None:
 
 
 def load_picks() -> pd.DataFrame:
+    if os.getenv("BETBOT_FASTAPI_READ_ENABLED", "0").strip().lower() in {
+        "1", "true", "yes", "on"
+    }:
+        api_url = os.getenv("BETBOT_FASTAPI_URL", "").strip().rstrip("/")
+        api_key = os.getenv("BETBOT_FASTAPI_API_KEY", "").strip()
+        if api_url and len(api_key) >= 32:
+            try:
+                response = requests.get(
+                    f"{api_url}/api/v1/picks",
+                    params={"discipline": "football", "page": 1, "page_size": 100},
+                    headers={"x-api-key": api_key},
+                    timeout=8,
+                )
+                response.raise_for_status()
+                items = response.json().get("items", [])
+                if items:
+                    return pd.DataFrame(items)
+            except Exception:
+                # Fail safely to the authoritative local volume.
+                pass
     for path in PICK_CANDIDATES:
         df = read_csv_safe(path)
         if not df.empty:

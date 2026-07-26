@@ -11,3 +11,4 @@ uvicorn[standard]>=0.30
 pydantic>=2.7
 pydantic-settings>=2.3
 cryptography>=44.0.0,<47
+psycopg[binary]>=3.2,<4

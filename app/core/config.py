@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = ""
     max_stake_pct: float = 0.0025
     min_edge: float = 0.03
-    model_version: str = "12.1.0"
+    model_version: str = "12.2.0"
     realtime_enabled: bool = False
     realtime_tick_seconds: float = 1.0
     realtime_cache_ttl_seconds: int = 30
@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     realtime_max_payload_bytes: int = 65536
     redis_url: str | None = None
     postgres_dsn: str | None = None
+    database_connect_timeout_seconds: int = 5
+    api_max_page_size: int = 100
+    api_sync_enabled: bool = False
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

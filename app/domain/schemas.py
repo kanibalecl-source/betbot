@@ -1,5 +1,6 @@
 import math
 from datetime import datetime
+from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 class PredictionInput(BaseModel):
@@ -63,3 +64,20 @@ class RealtimeSnapshot(BaseModel):
     events: list[RealtimeEvent]
     cache_size: int
     mode: str
+
+
+Discipline = Literal["football", "volleyball", "handball"]
+
+
+class SyncEnvelope(BaseModel):
+    records: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
+    statuses: list[dict[str, Any]] = Field(default_factory=list, max_length=30)
+    source: str = Field(default="betbot-main", min_length=1, max_length=80)
+
+
+class SyncResult(BaseModel):
+    accepted: int
+    rejected: int
+    statuses_saved: int
+    rejection_reasons: dict[str, int]
+    source_history_modified: bool = False

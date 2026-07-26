@@ -1,0 +1,28 @@
+BETBOT SERVER V12.2 FASTAPI QUALITY PLATFORM
+
+NOWE:
+app/data/__init__.py
+app/data/postgres_repository.py
+app/api/v1/observability.py
+scripts/sync_fastapi_snapshot.py
+tests/test_fastapi_quality_platform_v12_2.py
+WDROZENIE_FASTAPI_QUALITY_PLATFORM_V12_2.md
+
+ZMIENIONE:
+requirements.txt
+app/core/config.py
+app/domain/schemas.py
+app/api/v1/routes.py
+app/main.py
+app_launcher.py
+dashboard_streamlit.py
+.env.example
+
+BEZ ZMIAN:
+Dockerfile
+Procfile
+start.sh
+pliki historii
+bazy SQLite
+modele i kandydaci
+raporty zebrane na Volume
