@@ -1,0 +1,17 @@
+BETBOT v12.2.1 - FASTAPI SYNC LAUNCHER HOTFIX
+
+Zakres:
+- app_launcher.py
+
+Poprawka:
+- proces synchronizacji jest uruchamiany jako modul:
+  python -m scripts.sync_fastapi_snapshot
+- dzieki temu katalog glowny aplikacji pozostaje na sys.path i import
+  storage_paths dziala w procesie nadzorowanym.
+
+Bezpieczenstwo:
+- brak zmian w historii, rozliczeniach, modelach i danych treningowych;
+- brak zmian w logice typowania;
+- odczyt panelu z FastAPI pozostaje wylaczony do czasu pozytywnej walidacji;
+- test jednorazowej synchronizacji: accepted=2, rejected=7,
+  statuses_saved=12, source_history_modified=false.

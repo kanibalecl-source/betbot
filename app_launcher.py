@@ -48,7 +48,14 @@ def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, li
     if os.getenv("BETBOT_FASTAPI_SYNC_ENABLED", "0").strip().lower() in {
         "1", "true", "yes", "on"
     }:
-        specs["fastapi_snapshot_sync"] = [python, "scripts/sync_fastapi_snapshot.py"]
+        # Run as a module so the repository root remains on sys.path.
+        # Executing the file path directly makes Python use ``scripts/`` as
+        # sys.path[0], which breaks imports such as ``storage_paths``.
+        specs["fastapi_snapshot_sync"] = [
+            python,
+            "-m",
+            "scripts.sync_fastapi_snapshot",
+        ]
     return specs
 
 
