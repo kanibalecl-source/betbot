@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.config import get_settings
 from app.core.security import require_api_key
-from app.data.postgres_repository import (
+from app.api.v1.postgres_repository import (
     DatabaseUnavailable,
     health,
     initialize_schema,

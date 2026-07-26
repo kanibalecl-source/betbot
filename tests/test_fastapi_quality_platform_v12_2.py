@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from app.data.postgres_repository import validate_pick
+from app.api.v1.postgres_repository import validate_pick
 from scripts.sync_fastapi_snapshot import build_snapshot
 
 

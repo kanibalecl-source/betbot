@@ -7,7 +7,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.realtime.worker import realtime_loop
 from app.core.security import validate_security_configuration
-from app.data.postgres_repository import DatabaseUnavailable, initialize_schema
+from app.api.v1.postgres_repository import DatabaseUnavailable, initialize_schema
 import asyncio
 
 configure_logging()
