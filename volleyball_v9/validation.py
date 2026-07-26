@@ -26,6 +26,7 @@ class ValidationSettings:
     calibration_bins: int = 10
     segment_minimum_samples: int = 15
     segment_maximum_loss_degradation: float = 0.01
+    minimum_segment_coverage: float = 0.50
 
 
 def _game_from_row(row: dict) -> VolleyballGame:
@@ -362,6 +363,8 @@ def validate_candidate(
             ),
         }
     segment_stability = all(item["stable"] for item in segments.values())
+    segment_samples = sum(int(item["samples"]) for item in segments.values())
+    segment_coverage = segment_samples / len(targets) if targets else 0.0
     gates = {
         "enough_out_of_sample_folds": enough_data,
         "chronological_no_leakage": all_time_safe,
@@ -370,6 +373,10 @@ def validate_candidate(
         "calibration_not_degraded": challenger_ece <= champion_ece,
         "candidate_reproducible": True,
         "segment_stability": segment_stability,
+        "segment_coverage": (
+            bool(segments)
+            and segment_coverage >= selected.minimum_segment_coverage
+        ),
     }
     positive = all(gates.values())
     status = (
@@ -433,6 +440,7 @@ def validate_candidate(
         "log_loss_improvement_ci95": log_ci,
         "calibration_improvement": round(champion_ece - challenger_ece, 10),
         "league_segments": segments,
+        "segment_coverage": round(segment_coverage, 8),
         "segment_minimum_samples": selected.segment_minimum_samples,
         "fold_details": public_folds,
         "gates": gates,

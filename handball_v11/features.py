@@ -8,7 +8,7 @@ from .domain import ModelPrediction, HandballGame
 from .model import HandballEloModel
 
 
-FEATURE_SCHEMA_VERSION = "handball.point_in_time.v1"
+FEATURE_SCHEMA_VERSION = "handball.point_in_time.v12"
 
 
 class FeatureLeakageError(ValueError):
@@ -69,6 +69,16 @@ def build_point_in_time_features(
         "home_fair_odds": prediction.home_fair_odds,
         "away_fair_odds": prediction.away_fair_odds,
         "confidence": prediction.confidence,
+        "elo_probability": prediction.elo_probability,
+        "goal_form_probability": prediction.goal_form_probability,
+        "draw_probability": prediction.draw_probability,
+        "home_1x2_probability": prediction.home_1x2_probability,
+        "away_1x2_probability": prediction.away_1x2_probability,
+        "feature_quality": prediction.feature_quality,
+        "home_goals_for": model.goals_for.get(target.home_team_id, 0),
+        "home_goals_against": model.goals_against.get(target.home_team_id, 0),
+        "away_goals_for": model.goals_for.get(target.away_team_id, 0),
+        "away_goals_against": model.goals_against.get(target.away_team_id, 0),
         "source_games": int(source_metadata.get("source_games", len(eligible))),
         "source_max_scheduled_at": source_metadata.get("source_max_scheduled_at"),
         "source_max_observed_at": source_metadata.get("source_max_observed_at"),

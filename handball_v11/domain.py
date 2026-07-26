@@ -98,5 +98,11 @@ class ModelPrediction:
     home_matches: int
     away_matches: int
     confidence: float
+    elo_probability: float = 0.5
+    goal_form_probability: float = 0.5
+    draw_probability: float = 0.08
+    home_1x2_probability: float = 0.46
+    away_1x2_probability: float = 0.46
+    feature_quality: float = 0.0
 
 

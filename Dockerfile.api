@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+RUN useradd --create-home --uid 10002 betbot-api \
+    && mkdir -p /app/data \
+    && chown -R betbot-api:betbot-api /app \
+    && chmod 0755 /app/scripts/start_fastapi.sh
+
+ENV ENVIRONMENT=production \
+    BETTING_ENABLED=false \
+    REALTIME_ENABLED=false \
+    API_WORKERS=1 \
+    PYTHONUNBUFFERED=1
+
+USER betbot-api
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('PORT','8000')+'/api/v1/health', timeout=3)"
+
+CMD ["sh", "scripts/start_fastapi.sh"]

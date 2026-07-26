@@ -8,7 +8,7 @@ from .domain import ModelPrediction, VolleyballGame
 from .model import VolleyballEloModel
 
 
-FEATURE_SCHEMA_VERSION = "volleyball.point_in_time.v1"
+FEATURE_SCHEMA_VERSION = "volleyball.point_in_time.v12"
 
 
 class FeatureLeakageError(ValueError):
@@ -69,6 +69,13 @@ def build_point_in_time_features(
         "home_fair_odds": prediction.home_fair_odds,
         "away_fair_odds": prediction.away_fair_odds,
         "confidence": prediction.confidence,
+        "elo_probability": prediction.elo_probability,
+        "set_form_probability": prediction.form_probability,
+        "feature_quality": prediction.feature_quality,
+        "home_sets_for": model.sets_for.get(target.home_team_id, 0),
+        "home_sets_against": model.sets_against.get(target.home_team_id, 0),
+        "away_sets_for": model.sets_for.get(target.away_team_id, 0),
+        "away_sets_against": model.sets_against.get(target.away_team_id, 0),
         "source_games": int(source_metadata.get("source_games", len(eligible))),
         "source_max_scheduled_at": source_metadata.get("source_max_scheduled_at"),
         "source_max_observed_at": source_metadata.get("source_max_observed_at"),

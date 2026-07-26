@@ -38,3 +38,9 @@ def test_predict_requires_api_key():
         'probability': 0.55
     })
     assert r.status_code == 401
+
+
+def test_realtime_route_has_single_api_prefix():
+    paths = {route.path for route in app.routes}
+    assert "/api/v1/realtime/health" in paths
+    assert not any("/api/v1/api/v1/" in path for path in paths)

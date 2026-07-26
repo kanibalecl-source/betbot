@@ -22,6 +22,7 @@ from settings_v81 import RuntimeSettings, load_settings
 from staged_capital_governor import StagedCapitalGovernor
 from statistical_evidence_scorecard import StatisticalEvidenceScorecard
 from storage_paths import get_data_dir
+from multisport_quality_audit_v12 import MultisportQualityAuditV12
 
 
 SCHEMA = "betbot.autonomous_quality_orchestrator.v11"
@@ -134,6 +135,7 @@ class AutonomousQualityOrchestrator:
         scorecard=None,
         model_governor=None,
         capital_governor=None,
+        multisport_audit=None,
     ) -> None:
         self.root = Path(data_dir or get_data_dir()).resolve()
         self.work = self.root / "quality_retraining"
@@ -150,6 +152,7 @@ class AutonomousQualityOrchestrator:
         self.scorecard = scorecard or StatisticalEvidenceScorecard(self.root)
         self.model_governor = model_governor or AutonomousLearningGovernor(self.root)
         self.capital_governor = capital_governor or StagedCapitalGovernor(self.root)
+        self.multisport_audit = multisport_audit or MultisportQualityAuditV12(self.root)
 
     def run(self) -> dict[str, Any]:
         started_at = _now()
@@ -179,6 +182,7 @@ class AutonomousQualityOrchestrator:
         scorecard = self.scorecard.run()
         governor = self.model_governor.run()
         capital = self.capital_governor.run()
+        multisport = self.multisport_audit.run()
         phase, next_action = _phase(readiness, retraining, scorecard, governor)
         payload = {
             "schema_version": SCHEMA,
@@ -198,6 +202,7 @@ class AutonomousQualityOrchestrator:
                 "scorecard": scorecard,
                 "model_governor": governor,
                 "capital_governor": capital,
+                "multisport_v12": multisport,
             },
             "active_model_changed": governor.get("status") == "PROMOTED_AUTONOMOUSLY",
             "automatic_rollback_enabled": os.getenv(

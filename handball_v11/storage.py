@@ -1861,13 +1861,28 @@ class HandballStorage:
         if not latest:
             return True
         from datetime import datetime, timedelta, timezone
+        from multisport_quality_v12 import odds_snapshot_stage
         try:
             observed = datetime.fromisoformat(str(latest).replace("Z", "+00:00"))
             if observed.tzinfo is None:
                 observed = observed.replace(tzinfo=timezone.utc)
             effective_hours = int(refresh_hours)
             if scheduled_at:
+                current_stage = odds_snapshot_stage(
+                    scheduled_at,
+                    datetime.now(timezone.utc).isoformat(),
+                )
+                previous_stage = odds_snapshot_stage(scheduled_at, latest)
+                if (
+                    current_stage not in {"INVALID_TIME", "POST_KICKOFF_REJECT"}
+                    and current_stage != previous_stage
+                ):
+                    return True
                 starts_in = parse_utc(scheduled_at) - datetime.now(timezone.utc)
+                if timedelta(0) < starts_in <= timedelta(hours=1):
+                    return datetime.now(timezone.utc) - observed >= timedelta(
+                        minutes=15
+                    )
                 if timedelta(0) < starts_in <= timedelta(hours=6):
                     effective_hours = 1
                 elif timedelta(0) < starts_in <= timedelta(hours=24):

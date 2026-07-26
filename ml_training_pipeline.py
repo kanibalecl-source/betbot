@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from advanced_calibration_analytics import AdvancedCalibrationAnalytics
-from storage_paths import DATA_DIR
 
 
 def _num(v: Any, default: float = 0.0) -> float:
@@ -46,9 +45,11 @@ class MLTrainingPipeline:
     performs real optimization, stores weights and serves inference.
     """
 
-    # Pola dostępne w kanonicznej, rozliczonej historii. Nie uczymy modelu na
-    # sztucznie uzupełnianym xG, formie, tempie ani jakości danych.
-    DEFAULT_FEATURES = ["probability", "odds", "edge", "ev", "confidence"]
+    DEFAULT_FEATURES = [
+        "probability", "home_xg", "away_xg", "xg_diff", "total_xg",
+        "data_quality", "tempo", "home_form", "away_form", "confidence",
+        "home_rest_days", "away_rest_days",
+    ]
 
     def __init__(self, data_dir: str | Path = "data/enterprise", model_name: str = "v7_logistic"):
         self.data_dir = Path(data_dir)
@@ -60,22 +61,15 @@ class MLTrainingPipeline:
 
     def _load_state(self) -> Dict[str, Any]:
         if self.model_path.exists():
-            try:
-                state = json.loads(self.model_path.read_text(encoding="utf-8"))
-                if state.get("version") == 2 and state.get("features") == self.DEFAULT_FEATURES:
-                    return state
-                backup = self.model_path.with_name(f"{self.model_path.stem}_legacy_unverified_v1.json")
-                if not backup.exists():
-                    backup.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-            except Exception:
-                pass
-        return {"features": self.DEFAULT_FEATURES, "weights": {f: 0.0 for f in self.DEFAULT_FEATURES}, "bias": 0.0, "trained_samples": 0, "version": 2}
+            try: return json.loads(self.model_path.read_text(encoding="utf-8"))
+            except Exception: pass
+        return {"features": self.DEFAULT_FEATURES, "weights": {f: 0.0 for f in self.DEFAULT_FEATURES}, "bias": 0.0, "trained_samples": 0, "version": 1}
 
     def _save(self) -> None:
         self.model_path.write_text(json.dumps(self.state, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def load_rows_from_csv(self, paths: Optional[List[str | Path]] = None) -> List[Dict[str, Any]]:
-        paths = paths or [DATA_DIR / "results_history.csv"]
+        paths = paths or ["data/settled_bets.csv", "data/prediction_history.csv", "data/auto_all_picks.csv"]
         rows: List[Dict[str, Any]] = []
         for path in paths:
             p = Path(path)
@@ -90,7 +84,7 @@ class MLTrainingPipeline:
 
     def train(self, rows: Optional[Iterable[Dict[str, Any]]] = None, epochs: int = 8, lr: float = 0.018) -> Dict[str, Any]:
         rows = list(rows) if rows is not None else self.load_rows_from_csv()
-        clean = [self._normalize_row(r) for r in rows if self._has_target(r) and self._has_features(r)]
+        clean = [self._normalize_row(r) for r in rows if self._has_target(r)]
         if not clean:
             report = TrainingReport("NO_SETTLED_DATA", 0, self.state["features"], str(self.model_path), {}, {"note": "Add settled bets with won/result/outcome field."})
             self.report_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -110,8 +104,7 @@ class MLTrainingPipeline:
                     weights[f] = _num(weights.get(f), 0.0) + lr * (err * _num(r.get(f), 0.0) - 0.0008 * _num(weights.get(f), 0.0))
         self.state["bias"] = bias
         self.state["trained_samples"] = int(self.state.get("trained_samples", 0)) + len(clean)
-        self.state["version"] = 2
-        self.state["training_runs"] = int(self.state.get("training_runs", 0)) + 1
+        self.state["version"] = int(self.state.get("version", 1)) + 1
         self._save()
         preds = [self.predict_proba(r) for r in clean]
         brier = sum((p-r["target"])**2 for p,r in zip(preds, clean))/len(clean)
@@ -127,25 +120,31 @@ class MLTrainingPipeline:
         return round(max(0.01, min(0.99, _sigmoid(z))), 6)
 
     def _has_target(self, r: Dict[str, Any]) -> bool:
-        val = r.get("won", r.get("result", r.get("outcome")))
-        return str(val).strip().upper() in {"1", "0", "TRUE", "FALSE", "WIN", "WON", "LOSE", "LOSS", "LOST"}
-
-    def _has_features(self, r: Dict[str, Any]) -> bool:
-        probability = r.get("probability", r.get("model_prob", r.get("predicted_prob")))
-        odds = r.get("odds", r.get("bookmaker_odds"))
-        try:
-            return probability not in (None, "") and odds not in (None, "") and float(odds) > 1
-        except Exception:
-            return False
+        return any(k in r for k in ("won", "result", "outcome", "status"))
 
     def _normalize_row(self, r: Dict[str, Any], require_target: bool = True) -> Dict[str, Any]:
-        probability = _num(r.get("probability", r.get("model_prob", r.get("predicted_prob"))), 0.0)
+        probability = _num(r.get("probability", r.get("model_prob", r.get("predicted_prob"))), 0.5)
+        home_xg = _num(r.get("home_xg", r.get("xg_home")), 1.25)
+        away_xg = _num(r.get("away_xg", r.get("xg_away")), 1.05)
         out = {
             "probability": probability,
-            "odds": _num(r.get("odds", r.get("bookmaker_odds")), 0.0),
+            "home_xg": home_xg,
+            "away_xg": away_xg,
+            "xg_diff": home_xg-away_xg,
+            "total_xg": home_xg+away_xg,
+            "odds": _num(r.get("odds", r.get("bookmaker_odds")), 2.0),
             "edge": _num(r.get("edge", r.get("model_edge")), 0.0),
             "ev": _num(r.get("ev", r.get("expected_value")), 0.0),
+            "data_quality": _num(r.get("data_quality"), 0.6),
+            "tempo": _num(r.get("tempo", r.get("pace")), 1.0),
+            "home_form": _num(r.get("home_form"), 0.0),
+            "away_form": _num(r.get("away_form"), 0.0),
             "confidence": _num(r.get("confidence"), probability),
+            "home_rest_days": _num(r.get("home_rest_days"), 0.0),
+            "away_rest_days": _num(r.get("away_rest_days"), 0.0),
+            # Market fields remain available for diagnostics, never as model
+            # inputs in the V12 feature list.
+            "closing_line_value": _num(r.get("closing_line_value", r.get("clv")), 0.0),
             "market": str(r.get("market", "ALL")),
             "league": str(r.get("league", "ALL")),
         }

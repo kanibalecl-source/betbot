@@ -26,7 +26,7 @@ from app.realtime.cache import live_cache
 from app.realtime.event_bus import bus
 from app.realtime.storage import load_recent_events, save_event
 
-router = APIRouter(prefix="/api/v1/realtime", tags=["realtime"])
+router = APIRouter(prefix="/realtime", tags=["realtime"])
 _publish_windows: dict[str, deque[float]] = defaultdict(deque)
 _connection_counts: dict[str, int] = defaultdict(int)
 _guard_lock = asyncio.Lock()

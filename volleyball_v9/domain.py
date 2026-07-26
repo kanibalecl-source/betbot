@@ -95,4 +95,6 @@ class ModelPrediction:
     home_matches: int
     away_matches: int
     confidence: float
-
+    elo_probability: float = 0.5
+    form_probability: float = 0.5
+    feature_quality: float = 0.0

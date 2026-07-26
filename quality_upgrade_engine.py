@@ -278,7 +278,10 @@ def assess_quality(
             market, home_xg, away_xg
         )
     market_probability = _extract_market_probability(raw, market)
-    sources = {"current": current, "dixon_coles": dc_probability, "market": market_probability}
+    # V12 contract: bookmaker consensus is a benchmark for value/CLV, never a
+    # probability-model input.  This keeps the football model independent from
+    # the price it is supposed to challenge.
+    sources = {"current": current, "dixon_coles": dc_probability}
     available = {key: value for key, value in sources.items() if value is not None}
     state = dict(state or _load_state())
     segment_models = state.get("segment_models", {})
@@ -293,7 +296,7 @@ def assess_quality(
             state = dict(selected)
     configured = state.get("stacking_weights", {})
     configured = configured if isinstance(configured, Mapping) else {}
-    default_weights = {"current": 0.45, "dixon_coles": 0.35, "market": 0.20}
+    default_weights = {"current": 0.55, "dixon_coles": 0.45}
     raw_weights = {
         key: max(0.0, _num(configured.get(key), default_weights[key]) or 0.0)
         for key in available
@@ -381,7 +384,7 @@ def train_time_safe_state(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         target = _target(row)
         predictions = [
             _prob(row.get(key))
-            for key in ("current_probability", "dixon_coles_probability", "market_probability")
+            for key in ("current_probability", "dixon_coles_probability")
         ]
         if target is not None and all(value is not None for value in predictions):
             clean.append((predictions, target))
@@ -421,9 +424,12 @@ def train_time_safe_state(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             "calibration": len(calibration),
             "holdout": len(holdout),
         },
-        "stacking_weights": dict(
-            zip(("current", "dixon_coles", "market"), weights)
-        ),
+        "stacking_weights": {
+            **dict(zip(("current", "dixon_coles"), weights)),
+            "market": 0.0,
+        },
+        "bookmaker_used_as_model_input": False,
+        "market_used_only_as_benchmark": True,
         "beta_calibration": calibrator.to_dict(),
         "holdout_metrics": {
             "brier_score": round(brier, 8),

@@ -11,20 +11,26 @@ from .model import VolleyballEloModel
 
 
 TRAINING_SCHEMA_VERSION = "volleyball.training_dataset.v1"
-CANDIDATE_SCHEMA_VERSION = "volleyball.elo_candidate.v2"
+CANDIDATE_SCHEMA_VERSION = "volleyball.sport_ensemble_candidate.v12"
 DEFAULT_HYPERPARAMETERS = {
     "base_rating": 1500.0,
     "home_advantage": 35.0,
     "k_factor": 24.0,
+    "form_weight": 0.0,
+    "calibration_temperature": 1.0,
 }
 HYPERPARAMETER_GRID = tuple(
     {
         "base_rating": 1500.0,
         "home_advantage": home_advantage,
         "k_factor": k_factor,
+        "form_weight": form_weight,
+        "calibration_temperature": calibration_temperature,
     }
-    for home_advantage in (0.0, 20.0, 35.0, 50.0, 70.0)
-    for k_factor in (12.0, 18.0, 24.0, 32.0, 40.0)
+    for home_advantage in (20.0, 35.0, 50.0)
+    for k_factor in (18.0, 24.0, 32.0)
+    for form_weight in (0.0, 0.15, 0.30)
+    for calibration_temperature in (0.90, 1.0, 1.10)
 )
 
 
@@ -224,6 +230,8 @@ def _artifact(dataset: dict, games: list[VolleyballGame]) -> dict:
         "real_execution_allowed": False,
         "active_model_modified": False,
         "algorithm": "tuned_chronological_elo",
+        "algorithm_v12": "elo_set_strength_temperature_ensemble",
+        "components": ["elo", "set_strength", "temperature_calibration"],
         "dataset": {
             "schema_version": TRAINING_SCHEMA_VERSION,
             "sha256": dataset["sha256"],

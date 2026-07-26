@@ -25,8 +25,10 @@ class GovernorSettings:
     rollback_negative_reports: int = 3
     segment_minimum_samples: int = 10
     segment_maximum_loss_degradation: float = 0.015
+    minimum_segment_coverage: float = 0.50
     drift_psi_limit: float = 0.25
     bootstrap_samples: int = 1000
+    minimum_training_samples: int = 0
 
 
 def _mean(values: list[float]) -> float:
@@ -239,6 +241,8 @@ def build_live_shadow_report(
             "stable": stable,
         }
     segment_stability = all(item["stable"] for item in segments.values())
+    segment_samples = sum(int(item["samples"]) for item in segments.values())
+    segment_coverage = segment_samples / samples if samples else 0.0
     training_probabilities = _training_probabilities(candidate)
     psi = (
         _psi(training_probabilities, challenger_probabilities)
@@ -260,6 +264,10 @@ def build_live_shadow_report(
         ),
         "calibration_not_degraded": challenger_ece <= champion_ece,
         "segment_stability": segment_stability,
+        "segment_coverage": (
+            bool(segments)
+            and segment_coverage >= settings.minimum_segment_coverage
+        ),
         "no_critical_probability_drift": drift_status != "CRITICAL",
     }
     positive = all(gates.values())
@@ -295,6 +303,7 @@ def build_live_shadow_report(
         "challenger_calibration_error": round(challenger_ece, 10),
         "calibration_improvement": round(champion_ece - challenger_ece, 10),
         "league_segments": segments,
+        "segment_coverage": round(segment_coverage, 8),
         "probability_drift_psi": round(psi, 10),
         "drift_status": drift_status,
         "gates": gates,
@@ -335,6 +344,20 @@ def run_autonomous_governor(
             "real_execution_allowed": False,
         }
     candidate_id = str(candidate["candidate_id"])
+    training_samples = int(
+        candidate.get("dataset_document", {}).get("row_count", 0)
+        if isinstance(candidate.get("dataset_document"), dict)
+        else 0
+    )
+    if training_samples < selected.minimum_training_samples:
+        return {
+            "status": "WAITING_V12_PROMOTION_SAMPLE",
+            "candidate_id": candidate_id,
+            "training_samples": training_samples,
+            "required_training_samples": selected.minimum_training_samples,
+            "shadow_model_changed": False,
+            "real_execution_allowed": False,
+        }
     if not validation or validation.get("status") != (
         "POSITIVE_VALIDATION_MANUAL_APPROVAL"
     ):

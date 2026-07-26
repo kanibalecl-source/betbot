@@ -10,21 +10,30 @@ from .domain import HandballGame
 from .model import HandballEloModel
 
 
-TRAINING_SCHEMA_VERSION = "handball.training_dataset.v1"
-CANDIDATE_SCHEMA_VERSION = "handball.elo_candidate.v2"
+TRAINING_SCHEMA_VERSION = "handball.training_dataset.v12"
+CANDIDATE_SCHEMA_VERSION = "handball.sport_ensemble_candidate.v12"
 DEFAULT_HYPERPARAMETERS = {
     "base_rating": 1500.0,
     "home_advantage": 35.0,
     "k_factor": 24.0,
+    "form_weight": 0.0,
+    "draw_prior": 0.08,
+    "calibration_temperature": 1.0,
 }
 HYPERPARAMETER_GRID = tuple(
     {
         "base_rating": 1500.0,
         "home_advantage": home_advantage,
         "k_factor": k_factor,
+        "form_weight": form_weight,
+        "draw_prior": draw_prior,
+        "calibration_temperature": calibration_temperature,
     }
-    for home_advantage in (0.0, 20.0, 35.0, 50.0, 70.0)
-    for k_factor in (12.0, 18.0, 24.0, 32.0, 40.0)
+    for home_advantage in (20.0, 35.0, 50.0)
+    for k_factor in (18.0, 24.0, 32.0)
+    for form_weight in (0.0, 0.15, 0.30)
+    for draw_prior in (0.05, 0.08, 0.12)
+    for calibration_temperature in (0.90, 1.0, 1.10)
 )
 
 
@@ -49,7 +58,6 @@ def _eligible_games(games: Iterable[HandballGame]) -> list[HandballGame]:
             if game.finished
             and game.home_goals is not None
             and game.away_goals is not None
-            and game.home_goals != game.away_goals
             and game.home_team_id
             and game.away_team_id
             and game.home_team_id != game.away_team_id
@@ -77,7 +85,7 @@ def build_training_dataset(games: Iterable[HandballGame]) -> dict:
     document = {
         "schema_version": TRAINING_SCHEMA_VERSION,
         "sport": "handball",
-        "label": "home_goals_gt_away_goals",
+        "label": "three_way_result_with_two_way_conditional_evaluation",
         "bookmaker_data_used": False,
         "post_match_fields": ["home_goals", "away_goals"],
         "row_count": len(rows),
@@ -136,6 +144,12 @@ def _score_parameters(
     brier: list[float] = []
     log_loss: list[float] = []
     for game in validation:
+        if int(game.home_goals or 0) == int(game.away_goals or 0):
+            # Two-way no-draw probabilities are conditional on a non-draw
+            # result.  Draws still update team strength but are not false
+            # away-win labels.
+            model.fit([game])
+            continue
         probability = _clip(
             model.predict(game.home_team_id, game.away_team_id).home_probability
         )
@@ -145,6 +159,12 @@ def _score_parameters(
             -(target * math.log(probability) + (1 - target) * math.log(1 - probability))
         )
         model.fit([game])
+    if not brier:
+        return {
+            "brier": 1.0,
+            "log_loss": 10.0,
+            "objective": 3.5,
+        }
     mean_brier = sum(brier) / len(brier)
     mean_log = sum(log_loss) / len(log_loss)
     return {
@@ -224,6 +244,13 @@ def _artifact(dataset: dict, games: list[HandballGame]) -> dict:
         "real_execution_allowed": False,
         "active_model_modified": False,
         "algorithm": "tuned_chronological_elo",
+        "algorithm_v12": "elo_goal_strength_draw_temperature_ensemble",
+        "components": [
+            "elo",
+            "goal_strength",
+            "draw_estimation",
+            "temperature_calibration",
+        ],
         "dataset": {
             "schema_version": TRAINING_SCHEMA_VERSION,
             "sha256": dataset["sha256"],

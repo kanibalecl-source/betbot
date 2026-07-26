@@ -1,0 +1,23 @@
+KANIBAL Analytics - BetBot V12 MULTISPORT QUALITY
+
+Zakres:
+- osobny model jakości dla piłki nożnej, siatkówki i piłki ręcznej,
+- niezależność modelu piłkarskiego od kursu bukmachera,
+- ensemble Elo + siła setowa w siatkówce,
+- ensemble Elo + siła bramkowa + obsługa remisów w piłce ręcznej,
+- kalibracja temperatury wybierana chronologicznie,
+- wieloetapowe snapshoty kursów i kontrola post-kickoff,
+- klasy jakości lig A/B/C/QUARANTINE,
+- sportowo odseparowane progi kandydatów i promocji,
+- wspólny audyt V12 bez łączenia danych między sportami,
+- kompatybilność wsteczna z aktywnymi modelami i bazami.
+
+Ważne:
+- instalacja nie promuje żadnego modelu,
+- nowe modele pracują jako kandydaci/shadow do czasu pozytywnej walidacji,
+- siatkówka i piłka ręczna pozostają shadow-only,
+- paczka nie zawiera danych, historii, baz SQLite, modeli ani sekretów,
+- paczka nie uruchamia gry realnym kapitałem.
+
+Instrukcja:
+- WDROZENIE_MULTISPORT_QUALITY_V12.md

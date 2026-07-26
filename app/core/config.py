@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     cors_origins: str = ""
     max_stake_pct: float = 0.0025
     min_edge: float = 0.03
-    model_version: str = "10.0.0"
-    realtime_enabled: bool = True
+    model_version: str = "12.1.0"
+    realtime_enabled: bool = False
     realtime_tick_seconds: float = 1.0
     realtime_cache_ttl_seconds: int = 30
     realtime_max_events: int = 500

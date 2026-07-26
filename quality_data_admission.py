@@ -153,6 +153,7 @@ def admission_reasons(
     row: Mapping[str, Any],
     *,
     verified_evidence_hashes: set[str] | None = None,
+    expected_sport: str | None = None,
 ) -> list[str]:
     reasons: list[str] = []
     if parse_utc(row.get("timestamp")) is None:
@@ -192,7 +193,12 @@ def admission_reasons(
     if verified_evidence_hashes is not None and evidence_hash not in verified_evidence_hashes:
         reasons.append("settlement_evidence_not_verified")
     sport = str(row.get("sport") or "football").strip().lower()
-    expected_sport = os.getenv("BETBOT_QUALITY_EXPECTED_SPORT", "football").strip().lower()
-    if sport != expected_sport:
+    required_sport = str(
+        expected_sport
+        or os.getenv("BETBOT_QUALITY_EXPECTED_SPORT", "football")
+    ).strip().lower()
+    if required_sport not in {"football", "volleyball", "handball"}:
+        reasons.append("unsupported_expected_sport")
+    elif sport != required_sport:
         reasons.append("sport_dataset_contamination")
     return sorted(set(reasons))

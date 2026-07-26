@@ -23,10 +23,11 @@ from .settlement import profit_for_result, settle_match_winner
 from .storage import VolleyballStorage
 from .training import DEFAULT_HYPERPARAMETERS, train_candidate
 from .validation import ValidationSettings, validate_candidate
+from multisport_quality_v12 import odds_snapshot_stage, policy_for
 
 
 MODEL_VERSION = "volleyball-elo-shadow-baseline-v1"
-RUNTIME_VERSION = "10.0"
+RUNTIME_VERSION = "12.0"
 
 
 def _fetch_days(client: ApiSportsVolleyballClient, days: list[date]):
@@ -53,6 +54,7 @@ def _best_quotes(quotes):
 
 
 def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, settings) -> dict:
+    quality_policy = policy_for("volleyball")
     today = date.today()
     days = [today - timedelta(days=1), today, today + timedelta(days=1)]
     if storage.state("initial_backfill_complete") != "1" and settings.backfill_days:
@@ -74,9 +76,9 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
 
     previous_candidate_rows = storage.latest_candidate_dataset_rows()
     candidate_required_rows = (
-        settings.training_min_games
+        max(settings.training_min_games, quality_policy.candidate_minimum_rows)
         if previous_candidate_rows == 0
-        else previous_candidate_rows + settings.training_min_new_games
+        else previous_candidate_rows + max(settings.training_min_new_games, 50)
     )
     candidate = train_candidate(
         storage.load_games(),
@@ -102,7 +104,11 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         registered_candidate,
         settings=ValidationSettings(
             minimum_train_rows=settings.validation_min_train_games,
-            minimum_test_rows=settings.validation_min_test_games,
+            minimum_test_rows=max(
+                settings.validation_min_test_games,
+                quality_policy.out_of_time_minimum_rows
+                // max(1, settings.validation_min_folds),
+            ),
             minimum_folds=settings.validation_min_folds,
             maximum_folds=settings.validation_max_folds,
         ),
@@ -134,7 +140,11 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             ),
             settings=GovernorSettings(
                 enabled=settings.autonomous_governor_enabled,
-                minimum_live_samples=settings.live_shadow_min_samples,
+                minimum_live_samples=max(
+                    settings.live_shadow_min_samples,
+                    quality_policy.live_shadow_minimum_rows,
+                ),
+                minimum_training_samples=quality_policy.promotion_minimum_rows,
                 report_step_samples=settings.live_shadow_report_step,
                 required_positive_reports=settings.live_shadow_positive_reports,
                 rollback_negative_reports=settings.live_shadow_rollback_reports,
@@ -148,7 +158,11 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         validation,
         settings=GovernorSettings(
             enabled=settings.autonomous_governor_enabled,
-            minimum_live_samples=settings.live_shadow_min_samples,
+            minimum_live_samples=max(
+                settings.live_shadow_min_samples,
+                quality_policy.live_shadow_minimum_rows,
+            ),
+            minimum_training_samples=quality_policy.promotion_minimum_rows,
             report_step_samples=settings.live_shadow_report_step,
             required_positive_reports=settings.live_shadow_positive_reports,
             rollback_negative_reports=settings.live_shadow_rollback_reports,
@@ -265,6 +279,12 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
                 "edge": round(edge, 8),
                 "confidence": prediction.confidence,
                 "model_version": active_model_version,
+                "runtime_version": RUNTIME_VERSION,
+                "quality_policy": "volleyball_v12",
+                "odds_snapshot_stage": odds_snapshot_stage(
+                    game.scheduled_at,
+                    quote.observed_at,
+                ),
                 "feature_key": feature_key,
                 "feature_schema": FEATURE_SCHEMA_VERSION,
                 "market_schema": MARKET_SCHEMA_VERSION,
@@ -291,6 +311,9 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
                 "away_rating": prediction.away_rating,
                 "home_matches": prediction.home_matches,
                 "away_matches": prediction.away_matches,
+                "elo_probability": prediction.elo_probability,
+                "set_form_probability": prediction.form_probability,
+                "feature_quality": prediction.feature_quality,
                 "generated_at": utc_now(),
                 "real_execution_allowed": False,
             }
@@ -334,6 +357,8 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "schema_version": SCHEMA_VERSION,
         "status": "HEALTHY",
         "shadow_only": True,
+        "runtime_version": RUNTIME_VERSION,
+        "sport_quality_policy": quality_policy.__dict__,
         "games_received": len(games),
         "quotes_saved": quotes_saved,
         "picks_created": picks_created,

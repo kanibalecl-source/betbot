@@ -1,0 +1,11 @@
+# Required. Generate a unique secret with at least 32 characters.
+API_KEY=REPLACE_WITH_A_UNIQUE_SECRET_OF_AT_LEAST_32_CHARACTERS
+
+# Production-safe defaults.
+ENVIRONMENT=production
+BETTING_ENABLED=false
+REALTIME_ENABLED=false
+API_WORKERS=1
+
+# Optional. Comma-separated list, without a trailing slash.
+# CORS_ORIGINS=https://panel.example.com

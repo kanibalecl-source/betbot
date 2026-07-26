@@ -1,0 +1,27 @@
+KANIBAL Analytics - BetBot V12.1 MULTISPORT QUALITY + FASTAPI
+
+Zakres bazowy:
+- pełna zawartość paczki V12 MULTISPORT QUALITY,
+- osobne modele jakości dla piłki nożnej, siatkówki i piłki ręcznej,
+- sportowo odseparowana walidacja, trening i promocja kandydatów.
+
+Rozszerzenie FastAPI:
+- kompletny, wersjonowany interfejs `/api/v1`,
+- osobny obraz `Dockerfile.api`,
+- osobna konfiguracja `railway-api.toml`,
+- healthcheck `/api/v1/health`,
+- chroniony kluczem API endpoint `/api/v1/predict`,
+- produkcyjnie wyłączone `/docs`,
+- domyślnie wyłączone obstawianie i worker realtime,
+- uruchomienie jako drugi serwis bez zastępowania głównego launchera.
+
+Gwarancje paczki:
+- nie zawiera danych, historii, baz SQLite, modeli ani sekretów,
+- nie podmienia aktywnego modelu,
+- nie zmienia `Procfile`, `start.sh`, `Dockerfile` ani procesu głównego bota,
+- nie uruchamia obstawiania realnym kapitałem,
+- nie współdzieli plikowej bazy SQLite między serwisami.
+
+Instrukcje:
+- WDROZENIE_MULTISPORT_QUALITY_V12.md
+- WDROZENIE_FASTAPI_V12_1.md
