@@ -44,6 +44,16 @@ def football_records(limit: int = 500) -> list[dict[str, Any]]:
             raw = {str(key): _clean(value) for key, value in row.to_dict().items()}
             home = str(raw.get("home_team") or raw.get("home") or "").strip()
             away = str(raw.get("away_team") or raw.get("away") or "").strip()
+            source_match_status = str(raw.get("status") or "").strip().upper()
+            source_result = str(raw.get("result") or "").strip().upper()
+            if source_result in {"WON", "LOST", "VOID", "PUSH"}:
+                api_status = "CLOSED"
+                api_result = source_result
+            else:
+                # Football history uses status for the match phase (NS/1H/2H),
+                # while FastAPI status describes the lifecycle of a pick.
+                api_status = "OPEN"
+                api_result = "PENDING"
             raw.update(
                 {
                     "sport": "football",
@@ -55,6 +65,9 @@ def football_records(limit: int = 500) -> list[dict[str, Any]]:
                         "model_probability",
                         raw.get("probability", raw.get("confidence")),
                     ),
+                    "status": api_status,
+                    "result": api_result,
+                    "source_match_status": source_match_status,
                 }
             )
             rows.append(raw)

@@ -1,0 +1,19 @@
+BETBOT v12.2.2 - FASTAPI FOOTBALL STATE MAPPING HOTFIX
+
+Zakres:
+- scripts/sync_fastapi_snapshot.py
+
+Poprawka:
+- NS, 1H i 2H pozostaja zachowane jako source_match_status;
+- aktywne typy sa mapowane na status=OPEN oraz result=PENDING;
+- rozliczone WON/LOST/VOID/PUSH sa mapowane na status=CLOSED;
+- zrodłowy plik CSV nie jest modyfikowany.
+
+Powod:
+- w danych pilkarskich pole status oznacza faze meczu;
+- w API pole status oznacza cykl zycia typu;
+- poprzednia wersja bezpiecznie odrzucala te rekordy jako invalid_state.
+
+Walidacja:
+- 10/10 testow modulu FastAPI Quality Platform zakonczonych powodzeniem;
+- brak zmian w logice typowania, historii, rozliczeniach i modelach.
