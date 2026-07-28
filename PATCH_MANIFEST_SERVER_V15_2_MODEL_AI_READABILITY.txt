@@ -1,0 +1,32 @@
+BETBOT SERVER V15.2 - MODEL AI READABILITY
+============================================================
+
+Zakres:
+- czytelniejsza hierarchia zakladki Model AI,
+- trzy kroki obslugi widoczne nad metrykami,
+- wieksza i czytelniejsza tabela rekomendacji,
+- szczegoly silnikow w dwoch kolumnach z wyrownanymi wartosciami,
+- wyrazna karta werdyktu GPT,
+- osobne metryki pewnosci, jakosci danych i ryzyka,
+- dlugi raport GPT podzielony na rozwijane sekcje,
+- klikalne linki do zrodel,
+- poprawiony uklad responsywny.
+
+Bezpieczenstwo:
+- brak zmian w logice typowania,
+- brak zmian progow jakosci,
+- brak zmian modeli i wag,
+- brak zmian w automatycznym uczeniu,
+- brak zmian w danych oraz historii,
+- brak plikow data/, cache/, modeli i konfiguracji sekretow.
+
+Pliki do nadpisania:
+- dashboard_streamlit.py
+- executive_dashboard_theme.py
+
+Plik testowy:
+- tests/test_model_ai_unified_ui.py
+
+Walidacja:
+- Python syntax: OK
+- Model AI + GPT resilience tests: 11/11 OK

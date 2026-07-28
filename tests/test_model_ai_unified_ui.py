@@ -34,6 +34,17 @@ class UnifiedModelAiUiTests(unittest.TestCase):
         self.assertNotIn("quality_training.csv", helper)
         self.assertNotIn("active_model", helper)
 
+    def test_model_ai_report_has_readable_progressive_disclosure(self) -> None:
+        dashboard = (ROOT / "dashboard_streamlit.py").read_text(encoding="utf-8")
+        theme = (ROOT / "executive_dashboard_theme.py").read_text(encoding="utf-8")
+
+        self.assertIn("model-ai-readability-guide", dashboard)
+        self.assertIn("model-ai-verdict-metrics", dashboard)
+        self.assertIn("model-ai-report-section", dashboard)
+        self.assertIn("Źródła i jakość danych", dashboard)
+        self.assertIn("model-ai-report-section[open]", theme)
+        self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", theme)
+
     def test_full_approved_prompt_is_packaged(self) -> None:
         prompt = (ROOT / "model_ai_analysis_prompt_v2.txt").read_text(encoding="utf-8")
         self.assertIn("ostatnie 10 spotkań", prompt)

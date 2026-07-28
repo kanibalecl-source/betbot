@@ -3,6 +3,7 @@ import html
 import json
 import math
 import os
+import re
 from pathlib import Path
 from typing import Iterable, List
 
@@ -1753,6 +1754,27 @@ def _model_ai_analysis_failed(analysis: dict | None) -> bool:
     return "brak pełnej analizy gpt" in summary
 
 
+def _model_ai_report_html(value) -> str:
+    """Render GPT report text safely while keeping cited URLs clickable."""
+    escaped = html.escape(str(value or "")).strip()
+
+    def _link(match) -> str:
+        raw_url = match.group(0)
+        url = raw_url
+        suffix = ""
+        while url and url[-1] in ".,;:)":
+            suffix = url[-1] + suffix
+            url = url[:-1]
+        return (
+            f'<a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>'
+            f"{suffix}"
+        )
+
+    linked = re.sub(r"https?://[^\s<]+", _link, escaped)
+    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", linked) if part.strip()]
+    return "".join(f"<p>{part.replace(chr(10), '<br>')}</p>" for part in paragraphs)
+
+
 def _render_model_ai_gpt(row, idx: int) -> None:
     candidate = _model_ai_candidate(row)
     try:
@@ -1799,34 +1821,61 @@ def _render_model_ai_gpt(row, idx: int) -> None:
         )
         return
 
-    decision = html.escape(str(analysis.get("decision", "WATCH")))
+    decision_raw = str(analysis.get("decision", "WATCH")).upper()
+    decision = html.escape(decision_raw)
     confidence = as_float(analysis.get("confidence"), 0)
     quality = as_float(analysis.get("quality_score"), 0)
-    risk = html.escape(str(analysis.get("risk", "-")).upper())
-    summary = html.escape(str(analysis.get("summary", analysis.get("main_reason", "-"))))
+    risk_raw = str(analysis.get("risk", "-")).upper()
+    risk = html.escape(risk_raw)
+    summary = _model_ai_report_html(
+        analysis.get("summary", analysis.get("main_reason", "-"))
+    )
     details = analysis.get("analysis", {}) if isinstance(analysis.get("analysis"), dict) else {}
     blocks = []
-    for key, label in (
-        ("najwazniejsze_dane", "Najważniejsze dane i scenariusze"),
-        ("forma", "Forma"),
-        ("styl_matchup", "Taktyka i dopasowanie"),
-        ("kontuzje_kadra", "Kadra"),
-        ("value_kurs", "Kurs i value"),
-        ("ryzyka", "Ryzyka"),
-        ("alternatywa", "Alternatywa"),
-        ("zrodla", "Źródła"),
+    for key, label, open_by_default in (
+        ("najwazniejsze_dane", "Najważniejsze dane i scenariusze", True),
+        ("forma", "Forma i wyniki", False),
+        ("styl_matchup", "Taktyka i dopasowanie", False),
+        ("kontuzje_kadra", "Kadra i dostępność", False),
+        ("value_kurs", "Kurs, prawdopodobieństwo i value", True),
+        ("ryzyka", "Ryzyka i warunki unieważniające", True),
+        ("alternatywa", "Alternatywny scenariusz", False),
+        ("zrodla", "Źródła i jakość danych", False),
     ):
         value = details.get(key)
         if value:
+            open_attr = " open" if open_by_default else ""
             blocks.append(
-                f"<div class='model-ai-analysis-block'><b>{label}</b>"
-                f"<span>{html.escape(str(value))}</span></div>"
+                f"<details class='model-ai-report-section'{open_attr}>"
+                f"<summary><span>{label}</span><small>pokaż / ukryj</small></summary>"
+                f"<div class='model-ai-report-body'>{_model_ai_report_html(value)}</div>"
+                f"</details>"
             )
+    decision_class = (
+        "play" if decision_raw == "PLAY" else
+        "skip" if decision_raw == "SKIP" else
+        "watch"
+    )
+    risk_class = (
+        "high" if risk_raw == "HIGH" else
+        "low" if risk_raw == "LOW" else
+        "medium"
+    )
     st.markdown(
         "<div class='model-ai-analysis'>"
-        f"<div class='model-ai-analysis-summary'><b>{decision}</b>"
-        f"<span>Pewność {confidence:.0f}% · Jakość {quality:.0f}/10 · Ryzyko {risk}</span>"
-        f"<p>{summary}</p></div>{''.join(blocks)}</div>",
+        f"<div class='model-ai-analysis-summary decision-{decision_class}'>"
+        f"<div class='model-ai-decision-head'>"
+        f"<div><span class='model-ai-kicker'>WERDYKT NIEZALEŻNEJ ANALIZY</span>"
+        f"<b>{decision}</b></div>"
+        f"<div class='model-ai-verdict-metrics'>"
+        f"<span><small>Pewność</small><strong>{confidence:.0f}%</strong></span>"
+        f"<span><small>Jakość danych</small><strong>{quality:.0f}/10</strong></span>"
+        f"<span class='risk-{risk_class}'><small>Ryzyko</small><strong>{risk}</strong></span>"
+        f"</div></div>"
+        f"<div class='model-ai-summary-copy'>{summary}</div></div>"
+        f"<div class='model-ai-report-toolbar'><b>Pełny raport źródłowy</b>"
+        f"<span>Najważniejsze sekcje są otwarte · pozostałe rozwiń jednym kliknięciem</span></div>"
+        f"{''.join(blocks)}</div>",
         unsafe_allow_html=True,
     )
     source_label = "cache" if analysis.get("cache_hit") else "nowe zapytanie"
@@ -2227,6 +2276,14 @@ def render_model_ai(picks: pd.DataFrame, results: pd.DataFrame) -> None:
 
     page_banner("Model AI", "MODEL AI", "Zweryfikowane rekomendacje i pełna analiza.")
     st.markdown('<div class="model-ai-metal-title">MODEL AI</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="model-ai-readability-guide">'
+        '<div><b>1</b><span><strong>Wybór modelu</strong>Lista pokazuje tylko typy po bramkach jakości.</span></div>'
+        '<div><b>2</b><span><strong>Szczegóły typu</strong>Rozwiń wiersz, aby zobaczyć wszystkie silniki.</span></div>'
+        '<div><b>3</b><span><strong>Pełna analiza GPT</strong>Uruchamiana ręcznie; nie zmienia typu ani modelu.</span></div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     metrics([
         ("Kandydaci", str(candidates), "przed bramkami jakości"),
         ("Zaakceptowane", str(accepted), "spełniają wszystkie progi"),
