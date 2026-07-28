@@ -1,0 +1,14 @@
+BETBOT SERVER V15.7 - HISTORY REACT ARIA SELECTS
+Date: 2026-07-28
+
+Scope:
+- Adds the shared light-blue styling to the newer Streamlit React Aria select fields used by Historia.
+- Covers the Status, Liga and Rynek fields and their arrow buttons.
+- Keeps the already deployed light-blue dropdown option menus.
+- Works alongside the older BaseWeb select styling used by the remaining tabs.
+- Does not change prediction logic, learning, histories, models, credentials, or collected data.
+
+Files:
+- executive_dashboard_theme.py
+- tests/test_model_ai_unified_ui.py
+- PATCH_MANIFEST_SERVER_V15_7_HISTORY_REACT_ARIA_SELECTS.txt
