@@ -43,6 +43,12 @@ class UnifiedModelAiUiTests(unittest.TestCase):
         builder = (ROOT / "gpt_prompts.py").read_text(encoding="utf-8")
         self.assertIn("model_ai_analysis_prompt_v2.txt", builder)
 
+    def test_ui_exposes_provider_failures_instead_of_rendering_fallback(self) -> None:
+        dashboard = (ROOT / "dashboard_streamlit.py").read_text(encoding="utf-8")
+        self.assertIn("_model_ai_analysis_failed", dashboard)
+        self.assertIn("Poprzednia próba analizy nie powiodła się", dashboard)
+        self.assertIn("Analiza nie została wykonana:", dashboard)
+
 
 if __name__ == "__main__":
     unittest.main()

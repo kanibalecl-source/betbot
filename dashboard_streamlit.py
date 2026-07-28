@@ -1744,6 +1744,15 @@ def _model_ai_analysis_key(item: dict) -> tuple[str, str, str]:
     )
 
 
+def _model_ai_analysis_failed(analysis: dict | None) -> bool:
+    if not isinstance(analysis, dict):
+        return False
+    if str(analysis.get("execution_status", "")).lower() == "error":
+        return True
+    summary = str(analysis.get("summary", "")).lower()
+    return "brak pełnej analizy gpt" in summary
+
+
 def _render_model_ai_gpt(row, idx: int) -> None:
     candidate = _model_ai_candidate(row)
     try:
@@ -1759,6 +1768,13 @@ def _render_model_ai_gpt(row, idx: int) -> None:
         st.warning(f"Moduł pełnej analizy jest chwilowo niedostępny: {exc}")
         return
 
+    if _model_ai_analysis_failed(analysis):
+        st.warning(
+            "Poprzednia próba analizy nie powiodła się i nie jest używana. "
+            "Kliknij przycisk, aby wykonać nowe zapytanie."
+        )
+        analysis = None
+
     if st.button(
         "Pełna analiza GPT",
         key=f"model_ai_full_analysis_{idx}",
@@ -1773,6 +1789,7 @@ def _render_model_ai_gpt(row, idx: int) -> None:
                 )
                 st.session_state["model_ai_last_analysis"] = _model_ai_analysis_key(candidate)
             except Exception as exc:
+                analysis = None
                 st.error(f"Analiza nie została wykonana: {exc}")
 
     if not analysis:
@@ -1811,6 +1828,16 @@ def _render_model_ai_gpt(row, idx: int) -> None:
         f"<span>Pewność {confidence:.0f}% · Jakość {quality:.0f}/10 · Ryzyko {risk}</span>"
         f"<p>{summary}</p></div>{''.join(blocks)}</div>",
         unsafe_allow_html=True,
+    )
+    source_label = "cache" if analysis.get("cache_hit") else "nowe zapytanie"
+    search_label = (
+        "wyszukiwanie internetowe"
+        if analysis.get("web_search_used")
+        else "bez wyszukiwania internetowego"
+    )
+    st.caption(
+        f"Model: {analysis.get('provider_model', '-')} · "
+        f"{search_label} · Źródło wyniku: {source_label}"
     )
 
 

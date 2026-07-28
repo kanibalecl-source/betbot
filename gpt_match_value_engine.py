@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -28,6 +30,79 @@ except Exception:
 
 REPORT_FILE = Path("data/gpt_analysis_report.json")
 CACHE_DIR = Path("cache/gpt_analysis")
+MODEL_AI_PROMPT_VERSION = "v2.1-structured"
+DEFAULT_ANALYSIS_MODEL = "gpt-5.6-terra"
+DEFAULT_FALLBACK_MODEL = "gpt-4.1-mini"
+LOGGER = logging.getLogger(__name__)
+
+ANALYSIS_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "decision": {"type": "string", "enum": ["PLAY", "WATCH", "SKIP"]},
+        "confidence": {"type": "integer", "minimum": 0, "maximum": 100},
+        "value_score": {"type": "number", "minimum": 0, "maximum": 10},
+        "risk": {
+            "type": "string",
+            "enum": ["low", "medium", "high", "very_high"],
+        },
+        "quality_score": {"type": "number", "minimum": 0, "maximum": 10},
+        "main_reason": {"type": "string"},
+        "summary": {"type": "string"},
+        "analysis": {
+            "type": "object",
+            "properties": {
+                "najwazniejsze_dane": {"type": "string"},
+                "forma": {"type": "string"},
+                "styl_matchup": {"type": "string"},
+                "liga_rozgrywki": {"type": "string"},
+                "kontuzje_kadra": {"type": "string"},
+                "motywacja_atmosfera": {"type": "string"},
+                "value_kurs": {"type": "string"},
+                "argumenty_za": {"type": "string"},
+                "argumenty_przeciw": {"type": "string"},
+                "ryzyka": {"type": "string"},
+                "dopasowanie_profilu": {"type": "string"},
+                "alternatywa": {"type": "string"},
+                "rekomendacja": {"type": "string"},
+                "zrodla": {"type": "string"},
+            },
+            "required": [
+                "najwazniejsze_dane",
+                "forma",
+                "styl_matchup",
+                "liga_rozgrywki",
+                "kontuzje_kadra",
+                "motywacja_atmosfera",
+                "value_kurs",
+                "argumenty_za",
+                "argumenty_przeciw",
+                "ryzyka",
+                "dopasowanie_profilu",
+                "alternatywa",
+                "rekomendacja",
+                "zrodla",
+            ],
+            "additionalProperties": False,
+        },
+    },
+    "required": [
+        "decision",
+        "confidence",
+        "value_score",
+        "risk",
+        "quality_score",
+        "main_reason",
+        "summary",
+        "analysis",
+    ],
+    "additionalProperties": False,
+}
+
+
+class GPTAnalysisError(RuntimeError):
+    """Raised when no provider attempt returns a validated analysis."""
+
+
 try:
     from storage_paths import DATA_DIR as SHARED_DATA_DIR
 except Exception:
@@ -131,66 +206,120 @@ def _safe_name(text: str) -> str:
     return text or "match"
 
 
-def _cache_path(base_dir: Path, item: Dict[str, Any]) -> Path:
+def _analysis_model() -> str:
+    return (
+        os.getenv("GPT_ANALYSIS_MODEL", DEFAULT_ANALYSIS_MODEL).strip()
+        or DEFAULT_ANALYSIS_MODEL
+    )
+
+
+def _fallback_model() -> str:
+    return (
+        os.getenv("GPT_ANALYSIS_FALLBACK_MODEL", DEFAULT_FALLBACK_MODEL).strip()
+        or DEFAULT_FALLBACK_MODEL
+    )
+
+
+def _cache_path(
+    base_dir: Path,
+    item: Dict[str, Any],
+    model: str | None = None,
+) -> Path:
     profile = _safe_name(str(item.get("profile") or "prematch"))
-    return base_dir / CACHE_DIR / f"{profile}_{_safe_name(item.get('match',''))}_{_safe_name(item.get('bet',''))}.json"
+    identity = {
+        "prompt_version": MODEL_AI_PROMPT_VERSION,
+        "model": model or _analysis_model(),
+        "profile": item.get("profile", ""),
+        "match": item.get("match", ""),
+        "bet": item.get("bet", ""),
+        "odds": item.get("odds", ""),
+        "league": item.get("league", ""),
+        "time": item.get("time", ""),
+        "bookmaker": item.get("bookmaker", ""),
+        "odds_observed_at": item.get("odds_observed_at", ""),
+    }
+    digest = hashlib.sha256(
+        json.dumps(
+            identity,
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        ).encode("utf-8")
+    ).hexdigest()[:20]
+    return (
+        base_dir
+        / CACHE_DIR
+        / f"{profile}_{_safe_name(str(item.get('match', '')))}_{digest}.json"
+    )
 
 
-def _load_cache(base_dir: Path, item: Dict[str, Any], ttl_seconds: int = 1800):
-    p = _cache_path(base_dir, item)
+def _cache_ttl_seconds() -> int:
+    try:
+        return max(0, int(os.getenv("GPT_ANALYSIS_CACHE_TTL_SECONDS", "1800")))
+    except Exception:
+        return 1800
+
+
+def _request_timeout_seconds() -> float:
+    try:
+        return max(
+            10.0,
+            min(
+                300.0,
+                float(os.getenv("GPT_ANALYSIS_TIMEOUT_SECONDS", "120")),
+            ),
+        )
+    except Exception:
+        return 120.0
+
+
+def _load_cache(
+    base_dir: Path,
+    item: Dict[str, Any],
+    model: str | None = None,
+    ttl_seconds: int | None = None,
+):
+    p = _cache_path(base_dir, item, model=model)
     if not p.exists():
         return None
     try:
+        if ttl_seconds is None:
+            ttl_seconds = _cache_ttl_seconds()
         if time.time() - p.stat().st_mtime > ttl_seconds:
             return None
-        return json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if data.get("execution_status") != "success":
+            return None
+        cached = dict(data)
+        cached["cache_hit"] = True
+        return cached
     except Exception:
         return None
 
 
-def _save_cache(base_dir: Path, item: Dict[str, Any], data: Dict[str, Any]):
-    p = _cache_path(base_dir, item)
+def _save_cache(
+    base_dir: Path,
+    item: Dict[str, Any],
+    data: Dict[str, Any],
+    model: str | None = None,
+):
+    if data.get("execution_status") != "success":
+        return
+    p = _cache_path(base_dir, item, model=model)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def _prompt(item: Dict[str, Any]) -> str:
-    return f"""
-Jesteś profesjonalnym analitykiem zakładów sportowych. Oceń, czy wskazany zakład jest warty grania.
-
-Mecz: {item.get('match')}
-Liga: {item.get('league')}
-Termin: {item.get('time')}
-Typ zakładu: {item.get('bet')}
-Kurs: {item.get('odds')}
-
-Wykorzystaj aktualnie dostępne informacje z internetu: forma drużyn, styl gry, kontuzje, zawieszenia, rotacje, atmosfera w klubie, terminarz, motywacja, newsy, przewidywane składy, H2H i ryzyko pułapki bukmacherskiej.
-
-Zwróć WYŁĄCZNIE poprawny JSON bez markdown:
-{{
-  "decision": "PLAY albo SKIP",
-  "confidence": 0-100,
-  "value_score": 0-10,
-  "risk": "low albo medium albo high",
-  "summary": "krótka decyzja po polsku",
-  "analysis": {{
-    "forma": "opis po polsku",
-    "kontuzje_kadra": "opis po polsku",
-    "styl_matchup": "opis po polsku",
-    "motywacja_atmosfera": "opis po polsku",
-    "value_kurs": "opis po polsku",
-    "ryzyka": "opis po polsku",
-    "rekomendacja": "opis po polsku"
-  }}
-}}
-""".strip()
+    temp = p.with_suffix(f"{p.suffix}.tmp")
+    temp.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    temp.replace(p)
 
 
 def _prompt(item: Dict[str, Any]) -> str:
     return build_hidden_match_analysis_prompt(item)
 
 
-def _fallback_analysis(item: Dict[str, Any], reason: str = "") -> Dict[str, Any]:
+def _base_analysis(item: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "match": item.get("match", ""),
         "bet": item.get("bet", ""),
@@ -206,92 +335,178 @@ def _fallback_analysis(item: Dict[str, Any], reason: str = "") -> Dict[str, Any]
         "clv_percent": item.get("clv_percent", ""),
         "bookmaker": item.get("bookmaker", ""),
         "odds_observed_at": item.get("odds_observed_at", ""),
-        "decision": "SKIP",
-        "confidence": 0,
-        "value_score": 0,
-        "risk": "high",
-        "summary": "Brak pełnej analizy GPT — sprawdź OPENAI_API_KEY albo uruchom analizę ponownie.",
-        "analysis": {
-            "forma": "Analiza nie została wykonana.",
-            "kontuzje_kadra": "Brak danych GPT.",
-            "styl_matchup": "Brak danych GPT.",
-            "motywacja_atmosfera": "Brak danych GPT.",
-            "value_kurs": "Brak danych GPT.",
-            "ryzyka": reason or "Brak odpowiedzi modelu.",
-            "rekomendacja": "Nie grać bez ręcznej weryfikacji.",
-        },
     }
 
 
-def analyze_match_with_gpt(base_dir: Path, item: Dict[str, Any]) -> Dict[str, Any]:
-    cached = _load_cache(base_dir, item)
+def _safe_error_text(exc: Exception) -> str:
+    text = re.sub(r"sk-[A-Za-z0-9_-]+", "[REDACTED]", str(exc))
+    return " ".join(text.split())[:600] or type(exc).__name__
+
+
+def _response_request_id(response: Any) -> str:
+    return str(
+        getattr(response, "_request_id", "")
+        or getattr(response, "request_id", "")
+        or ""
+    )
+
+
+def _validated_analysis(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(parsed, dict):
+        raise ValueError("Odpowiedź modelu nie jest obiektem JSON.")
+    analysis = parsed.get("analysis")
+    if not isinstance(analysis, dict):
+        raise ValueError("Odpowiedź modelu nie zawiera sekcji analysis.")
+    decision = str(parsed.get("decision", "")).upper()
+    if decision not in {"PLAY", "WATCH", "SKIP"}:
+        raise ValueError("Nieprawidłowa decyzja modelu.")
+    risk = str(parsed.get("risk", "")).lower()
+    if risk not in {"low", "medium", "high", "very_high"}:
+        raise ValueError("Nieprawidłowy poziom ryzyka modelu.")
+    parsed = dict(parsed)
+    parsed["decision"] = decision
+    parsed["risk"] = risk
+    parsed["confidence"] = max(
+        0, min(100, int(float(parsed.get("confidence", 0) or 0)))
+    )
+    parsed["value_score"] = max(
+        0.0, min(10.0, float(parsed.get("value_score", 0) or 0))
+    )
+    parsed["quality_score"] = max(
+        0.0, min(10.0, float(parsed.get("quality_score", 0) or 0))
+    )
+    return parsed
+
+
+def _provider_attempt(
+    client: Any,
+    *,
+    model: str,
+    prompt: str,
+    use_web_search: bool,
+) -> tuple[Dict[str, Any], Any]:
+    kwargs: Dict[str, Any] = {
+        "model": model,
+        "input": prompt,
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "betbot_match_analysis",
+                "strict": True,
+                "schema": ANALYSIS_JSON_SCHEMA,
+            }
+        },
+    }
+    if use_web_search:
+        kwargs["tools"] = [{"type": "web_search"}]
+    response = client.responses.create(**kwargs)
+    status = str(getattr(response, "status", "completed") or "completed")
+    if status != "completed":
+        details = getattr(response, "incomplete_details", None)
+        raise ValueError(f"Niepełna odpowiedź OpenAI: {status}; {details}")
+    text = getattr(response, "output_text", "") or ""
+    if not text.strip():
+        raise ValueError("OpenAI zwróciło pustą odpowiedź tekstową.")
+    return _validated_analysis(_parse_json(text)), response
+
+
+def analyze_match_with_gpt(
+    base_dir: Path,
+    item: Dict[str, Any],
+    *,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    model = _analysis_model()
+    cached = None if force_refresh else _load_cache(base_dir, item, model=model)
     if cached:
         return cached
 
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     if not api_key:
-        data = _fallback_analysis(item, "Nie ustawiono OPENAI_API_KEY w .env / zmiennych środowiskowych.")
-        _save_cache(base_dir, item, data)
-        return data
+        raise GPTAnalysisError(
+            "Nie ustawiono OPENAI_API_KEY w zmiennych środowiskowych Railway."
+        )
 
     try:
         from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        model = os.getenv("GPT_ANALYSIS_MODEL", os.getenv("OPENAI_MODEL", "gpt-5.2-chat-latest")).strip() or "gpt-5.2-chat-latest"
-        prompt = _prompt(item)
+    except Exception as exc:
+        raise GPTAnalysisError(
+            f"Nie można uruchomić biblioteki OpenAI: {_safe_error_text(exc)}"
+        ) from exc
 
-        # Najpierw próbujemy z web search, bo użytkownik chce analizę formy, kontuzji i newsów.
-        # Jeśli konto/model nie obsłuży web_search_preview, robimy drugi bezpieczny fallback bez narzędzia,
-        # żeby zakładka GPT nie wywróciła całego dashboardu.
+    client = OpenAI(
+        api_key=api_key,
+        timeout=_request_timeout_seconds(),
+        max_retries=0,
+    )
+    prompt = _prompt(item)
+    fallback = _fallback_model()
+    attempts = [
+        ("primary_web_search", model, True),
+        ("primary_without_search", model, False),
+    ]
+    if fallback != model:
+        attempts.append(("fallback_without_search", fallback, False))
+
+    errors: List[Dict[str, str]] = []
+    for attempt_number, (label, attempt_model, use_search) in enumerate(
+        attempts, start=1
+    ):
         try:
-            response = client.responses.create(
-                model=model,
-                tools=[{"type": "web_search_preview"}],
-                input=prompt,
+            parsed, response = _provider_attempt(
+                client,
+                model=attempt_model,
+                prompt=prompt,
+                use_web_search=use_search,
             )
-        except Exception:
-            try:
-                response = client.responses.create(
-                    model=model,
-                    input=prompt,
-                )
-            except Exception:
-                fallback_model = os.getenv("GPT_ANALYSIS_FALLBACK_MODEL", "gpt-4.1-mini").strip() or "gpt-4.1-mini"
-                response = client.responses.create(
-                    model=fallback_model,
-                    input=prompt,
-                )
+            data = {
+                **_base_analysis(item),
+                **parsed,
+                "profile": str(item.get("profile") or ""),
+                "execution_status": "success",
+                "cache_hit": False,
+                "prompt_version": MODEL_AI_PROMPT_VERSION,
+                "provider_model": attempt_model,
+                "provider_attempt": label,
+                "provider_attempt_number": attempt_number,
+                "provider_request_id": _response_request_id(response),
+                "web_search_used": use_search,
+            }
+            _save_cache(base_dir, item, data, model=model)
+            LOGGER.info(
+                "GPT analysis success match=%r bet=%r model=%s attempt=%s request_id=%s",
+                item.get("match", ""),
+                item.get("bet", ""),
+                attempt_model,
+                label,
+                data["provider_request_id"],
+            )
+            return data
+        except Exception as exc:
+            error = {
+                "attempt": label,
+                "model": attempt_model,
+                "error_type": type(exc).__name__,
+                "message": _safe_error_text(exc),
+            }
+            errors.append(error)
+            LOGGER.warning(
+                "GPT analysis attempt failed match=%r bet=%r model=%s attempt=%s error_type=%s error=%s",
+                item.get("match", ""),
+                item.get("bet", ""),
+                attempt_model,
+                label,
+                error["error_type"],
+                error["message"],
+            )
 
-        text = getattr(response, "output_text", "") or ""
-        parsed = _parse_json(text)
-        data = {
-            "match": item.get("match", ""),
-            "bet": item.get("bet", ""),
-            "odds": item.get("odds", ""),
-            "league": item.get("league", ""),
-            "time": item.get("time", ""),
-            "kurs_buk": item.get("kurs_buk", item.get("odds", "")),
-            "kurs_model": item.get("kurs_model", ""),
-            "kurs_bota": item.get("kurs_bota", ""),
-            "prawd_model": item.get("prawd_model", ""),
-            "prawd_final": item.get("prawd_final", ""),
-            "closing_odds": item.get("closing_odds", ""),
-            "clv_percent": item.get("clv_percent", ""),
-            "bookmaker": item.get("bookmaker", ""),
-            "odds_observed_at": item.get("odds_observed_at", ""),
-            **parsed,
-        }
-        data["confidence"] = int(float(data.get("confidence", 0) or 0))
-        data["value_score"] = float(data.get("value_score", 0) or 0)
-        data["quality_score"] = float(data.get("quality_score", 0) or 0)
-        data["decision"] = str(data.get("decision", "SKIP")).upper()
-        data["profile"] = str(item.get("profile") or "")
-        _save_cache(base_dir, item, data)
-        return data
-    except Exception as e:
-        data = _fallback_analysis(item, str(e))
-        _save_cache(base_dir, item, data)
-        return data
+    summary = "; ".join(
+        f"{error['attempt']} ({error['error_type']}): {error['message']}"
+        for error in errors
+    )
+    raise GPTAnalysisError(
+        f"Analiza GPT nie została wykonana po {len(errors)} próbach. {summary}"
+    )
 
 
 def _parse_json(text: str) -> Dict[str, Any]:
@@ -312,12 +527,26 @@ def run_full_gpt_analysis(base_dir: Path, limit: int | None = None, profile: str
     base_dir = Path(base_dir)
     profile_name = _profile_slug(profile)
     candidates = load_candidate_matches(base_dir, limit=limit, source_files=source_files, profile=profile_name)
-    analyses = [analyze_match_with_gpt(base_dir, item) for item in candidates]
+    analyses: List[Dict[str, Any]] = []
+    failures: List[Dict[str, str]] = []
+    for item in candidates:
+        try:
+            analyses.append(analyze_match_with_gpt(base_dir, item))
+        except GPTAnalysisError as exc:
+            failures.append(
+                {
+                    "match": str(item.get("match", "")),
+                    "bet": str(item.get("bet", "")),
+                    "error": _safe_error_text(exc),
+                }
+            )
     coupons = build_ako_coupons(analyses)
     report = {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "profile": profile_name,
         "count": len(analyses),
+        "failed_count": len(failures),
+        "failures": failures,
         "analyses": analyses,
         "coupons": coupons,
     }
@@ -330,7 +559,17 @@ def run_full_gpt_analysis(base_dir: Path, limit: int | None = None, profile: str
         legacy.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     append_records("gpt_analyses", analyses, source="gpt_match_value_engine.py")
     append_records("gpt_coupons", coupons, source="gpt_match_value_engine.py")
-    append_event("gpt_analysis_report", {"profile": profile_name, "count": len(analyses), "coupons": len(coupons), "file": str(out)}, source="gpt_match_value_engine.py")
+    append_event(
+        "gpt_analysis_report",
+        {
+            "profile": profile_name,
+            "count": len(analyses),
+            "failed_count": len(failures),
+            "coupons": len(coupons),
+            "file": str(out),
+        },
+        source="gpt_match_value_engine.py",
+    )
     try:
         from agi_storage import upsert_gpt_analysis
         for item in analyses:

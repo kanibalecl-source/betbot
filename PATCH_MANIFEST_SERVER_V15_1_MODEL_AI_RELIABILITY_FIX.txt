@@ -1,0 +1,65 @@
+BETBOT SERVER V15.1 - MODEL AI RELIABILITY FIX
+================================================
+
+CEL
+---
+Naprawa pełnej analizy Model AI po błędzie niepoprawnego JSON-u.
+
+PLIKI PACZKI
+------------
+1. gpt_match_value_engine.py
+2. dashboard_streamlit.py
+3. requirements.txt
+4. .env.example
+5. tests/test_gpt_analysis_resilience.py
+6. tests/test_model_ai_unified_ui.py
+
+NAJWAŻNIEJSZE ZMIANY
+--------------------
+- odpowiedź OpenAI jest wymuszana ścisłym JSON Schema;
+- aktualne narzędzie web_search zastępuje web_search_preview;
+- domyślny model analizy: gpt-5.6-terra;
+- błąd API, pustej odpowiedzi, niepełnej odpowiedzi, parsowania lub walidacji
+  uruchamia kolejną kontrolowaną próbę;
+- model awaryjny: gpt-4.1-mini;
+- błędy i wyniki zastępcze nigdy nie są zapisywane w cache;
+- cache przechowuje tylko zweryfikowane wyniki success;
+- klucz cache uwzględnia model, wersję promptu, mecz, rynek, kurs, ligę,
+  termin, bukmachera i czas obserwacji kursu;
+- stare błędne raporty nie są prezentowane jako prawidłowa analiza;
+- panel pokazuje prawdziwy błąd, użyty model, tryb web search i źródło wyniku;
+- logi diagnostyczne nie zapisują klucza API.
+
+BEZPIECZEŃSTWO DANYCH
+---------------------
+Paczka nie zawiera i nie nadpisuje:
+- katalogu data/;
+- historii typów ani rozliczeń;
+- quality_training.csv;
+- rejestru modeli;
+- aktywnego modelu;
+- danych piłki nożnej, siatkówki ani piłki ręcznej;
+- woluminu /data;
+- sekretu OPENAI_API_KEY.
+
+WDROŻENIE
+---------
+Wgraj zawartość paczki do katalogu głównego repozytorium z zachowaniem
+podkatalogu tests/. Railway powinien wykonać pełny rebuild, ponieważ zmienia
+się requirements.txt.
+
+Zmienne opcjonalne (kod posiada bezpieczne wartości domyślne):
+GPT_ANALYSIS_MODEL=gpt-5.6-terra
+GPT_ANALYSIS_FALLBACK_MODEL=gpt-4.1-mini
+GPT_ANALYSIS_CACHE_TTL_SECONDS=1800
+GPT_ANALYSIS_TIMEOUT_SECONDS=120
+
+Nie zmieniaj istniejącej zmiennej OPENAI_API_KEY.
+
+WERYFIKACJA
+-----------
+- py_compile: OK
+- testy Model AI: 10/10 OK
+- pełna kolekcja: 285 testów przeszło; jeden test FastAPI nie uruchomił się
+  wyłącznie dlatego, że lokalne środowisko Codex nie posiada pakietu fastapi.
+  requirements.txt zawiera fastapi i Railway instaluje go podczas buildu.
