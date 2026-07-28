@@ -90,6 +90,30 @@ class UnifiedModelAiUiTests(unittest.TestCase):
         self.assertIn("linear-gradient(180deg,#43bcf5 0%,var(--ui-action) 100%)", theme)
         self.assertNotIn("linear-gradient(180deg,#0b2b51,#071e3b)", theme)
 
+    def test_every_page_uses_the_v16_card_navigation_system(self) -> None:
+        theme = (ROOT / "executive_dashboard_theme.py").read_text(encoding="utf-8")
+        dashboard = (ROOT / "dashboard_streamlit.py").read_text(encoding="utf-8")
+
+        self.assertIn("NAV_PRESENTATION", theme)
+        for slug in (
+            "live", "prematch", "model_ai", "analytics", "history",
+            "bets", "ranking", "volleyball", "handball",
+        ):
+            self.assertIn(f'"{slug}"', theme)
+        self.assertIn('key=f"nav_card_{slug}"', theme)
+        self.assertIn("ui-nav-visual", theme)
+        self.assertIn("ui-nav-badge", theme)
+        self.assertIn("ui-menu-emblem", theme)
+        self.assertIn("flex:0 0 76px!important", theme)
+        self.assertIn(".stElementContainer:has(.stButton){position:absolute!important;inset:0!important;width:100%!important;height:100%!important", theme)
+        self.assertIn("overflow-y:auto!important", theme)
+        self.assertIn("ka-page-metal-title", theme)
+        self.assertIn("ka-page-metal-title", dashboard)
+        self.assertNotIn(
+            "st.markdown('<div class=\"model-ai-metal-title\">MODEL AI</div>'",
+            dashboard,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

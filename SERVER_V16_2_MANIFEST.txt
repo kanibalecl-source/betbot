@@ -1,0 +1,16 @@
+BETBOT SERVER V16.2 - SIDEBAR FULL CARD CLICK HOTFIX
+Data: 2026-07-28
+
+PLIKI:
+1. executive_dashboard_theme.py
+2. tests/test_model_ai_unified_ui.py
+
+NAPRAWA:
+- pelny obszar kazdej karty menu jest aktywny i klikalny,
+- warstwa przycisku ma stala wysokosc 100% karty zamiast 0 px,
+- zachowane wymiary 76 px, wyglad, aktywny stan i przewijanie V16.1.
+
+BEZPIECZENSTWO:
+- brak katalogu data i plikow historii,
+- brak modeli, sekretow, .env oraz users.json,
+- brak zmian logiki typowania, uczenia i automatyzacji.
