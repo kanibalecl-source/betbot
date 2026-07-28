@@ -27,8 +27,8 @@ except Exception:
         return 0
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_DIR = BASE_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR = Path(get_data_dir()).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 PREMATCH_FILE = DATA_DIR / "auto_all_picks.csv"
 LIVE_FILE = DATA_DIR / "live_matches.csv"
