@@ -104,6 +104,8 @@ class UnifiedModelAiUiTests(unittest.TestCase):
         self.assertIn("ui-nav-visual", theme)
         self.assertIn("ui-nav-badge", theme)
         self.assertIn("ui-menu-emblem", theme)
+        self.assertIn("flex:0 0 76px!important", theme)
+        self.assertIn("overflow-y:auto!important", theme)
         self.assertIn("ka-page-metal-title", theme)
         self.assertIn("ka-page-metal-title", dashboard)
         self.assertNotIn(

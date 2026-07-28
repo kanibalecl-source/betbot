@@ -1,0 +1,18 @@
+BETBOT SERVER V16.1 - SIDEBAR CARD HEIGHT HOTFIX
+Data: 2026-07-28
+
+PLIKI:
+1. dashboard_streamlit.py
+2. executive_dashboard_theme.py
+3. tests/test_model_ai_unified_ui.py
+
+NAPRAWA:
+- blokada kurczenia kart menu przez kontener flex Streamlit,
+- stala wysokosc 76 px dla kazdej karty,
+- przewijanie pionowe panelu bocznego na nizszych ekranach,
+- zachowanie wygladu, banera i naglowkow V16.0.
+
+BEZPIECZENSTWO:
+- brak katalogu data i plikow historii,
+- brak modeli, sekretow, .env oraz users.json,
+- brak zmian logiki typowania i automatyzacji.

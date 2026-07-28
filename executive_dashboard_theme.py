@@ -81,7 +81,7 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 [data-testid="stSidebar"][aria-expanded="false"]{display:block!important;visibility:visible!important;transform:translateX(0)!important;margin-left:0!important;width:264px!important;min-width:264px!important;max-width:264px!important;flex-basis:264px!important}
 [data-testid="stSidebarCollapseButton"],[data-testid="stSidebarCollapsedControl"],[data-testid="collapsedControl"]{display:none!important;visibility:hidden!important;pointer-events:none!important}
 [data-testid="stSidebar"]>div:first-child{width:264px!important;padding:0!important}
-[data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:0!important}
+[data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:0!important;overflow-y:auto!important;overflow-x:hidden!important}
 [data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:0!important}
 .ui-side-brand{height:128px;padding:12px 24px 18px;border-bottom:1px solid #e2e8f0;box-sizing:border-box;background:#fff}
 .ui-side-logo{display:flex;align-items:center;gap:12px}.ui-side-logo img{width:54px;height:54px;object-fit:contain}
@@ -109,7 +109,7 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .ui-menu-emblem:before{top:-7px}.ui-menu-emblem:after{bottom:-10px}
 .ui-menu-emblem small{display:block;margin:12px 0 0 5px;color:#7d94aa;font-size:7px;font-style:normal;font-weight:850;letter-spacing:.38em;text-align:center;text-shadow:none;-webkit-text-stroke:0}
 [data-testid="stSidebar"] .ui-nav-start+div{margin-top:2px!important}
-[data-testid="stSidebar"] [class*="st-key-nav_card_"]{position:relative!important;height:76px!important;margin:0 12px 9px!important;border:1px solid #dfe8f2!important;border-radius:12px!important;background:#fff!important;box-shadow:0 5px 16px rgba(18,54,91,.055)!important;overflow:hidden!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]{position:relative!important;height:76px!important;min-height:76px!important;max-height:76px!important;flex:0 0 76px!important;margin:0 12px 9px!important;border:1px solid #dfe8f2!important;border-radius:12px!important;background:#fff!important;box-shadow:0 5px 16px rgba(18,54,91,.055)!important;overflow:hidden!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"]>[data-testid="stVerticalBlock"]{height:100%!important;position:relative!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"] .stElementContainer:has(.ui-nav-visual){position:absolute!important;inset:0!important;z-index:3!important;pointer-events:none!important}
 .ui-nav-visual{height:76px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:10px;padding:0 11px;box-sizing:border-box}
@@ -312,7 +312,7 @@ label,[data-testid="stWidgetLabel"]{color:#607086!important;font-size:10px!impor
 
 /* V16 final cascade: card menu and page identity must win over legacy rules. */
 [data-testid="stSidebar"] .ui-nav-start+div{margin-top:2px!important}
-[data-testid="stSidebar"] [class*="st-key-nav_card_"]{height:76px!important;margin:0 12px 9px!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]{height:76px!important;min-height:76px!important;max-height:76px!important;flex:0 0 76px!important;margin:0 12px 9px!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton{padding:0!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton button{height:100%!important;min-height:100%!important;padding:0!important;border-radius:11px!important;color:transparent!important}
 .ui-side-footer{position:relative!important;left:auto!important;bottom:auto!important;width:auto!important;margin:18px 12px 8px!important}
