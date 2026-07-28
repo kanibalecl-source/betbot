@@ -1,0 +1,88 @@
+Przygotuj profesjonalną, niezależną analizę meczu piłkarskiego:
+
+Mecz: [DRUŻYNA A] – [DRUŻYNA B]
+Rozgrywki: [LIGA/PUCHAR]
+Data i godzina: [DATA, GODZINA, STREFA CZASOWA]
+Miejsce: [STADION]
+Cel analizy: ocena sportowa oraz oszacowanie prawdopodobieństwa wyników.
+
+Przeprowadź aktualne badanie internetu. Wszystkie dane sprawdź na moment
+sporządzania raportu. Preferuj źródła pierwotne i wiarygodne: oficjalne
+strony ligi, klubów i federacji, komunikaty dotyczące składów oraz uznane
+serwisy statystyczne.
+
+Zbadaj:
+
+1. Formę obu drużyn:
+   - ostatnie 10 spotkań;
+   - osobno mecze domowe i wyjazdowe;
+   - siłę przeciwników;
+   - wyniki, bramki, xG i xGA.
+
+2. Statystyki:
+   - strzały i strzały celne;
+   - duże okazje;
+   - posiadanie piłki;
+   - stałe fragmenty;
+   - PPDA lub inne dane dotyczące pressingu;
+   - gole oczekiwane z gry i ze stałych fragmentów;
+   - częstotliwość BTTS oraz over/under 1,5, 2,5 i 3,5 gola.
+
+3. Sytuację kadrową:
+   - potwierdzone kontuzje i zawieszenia;
+   - zawodników niepewnych występu;
+   - przewidywane składy;
+   - możliwą rotację;
+   - znaczenie brakujących piłkarzy.
+   Wyraźnie oddziel informacje potwierdzone od przypuszczeń.
+
+4. Taktykę:
+   - prawdopodobne ustawienia;
+   - styl gry;
+   - pressing, budowanie ataku i obronę przejściową;
+   - słabe i mocne strony;
+   - najważniejsze pojedynki pozycyjne;
+   - wzajemne dopasowanie stylów.
+
+5. Czynniki zewnętrzne:
+   - odpoczynek od poprzedniego meczu;
+   - napięcie terminarza i podróże;
+   - pogodę i stan boiska;
+   - znaczenie spotkania oraz motywację;
+   - sędziego i jego aktualne statystyki, jeżeli są wiarygodnie dostępne.
+
+6. Bezpośrednie spotkania:
+   - uwzględnij tylko te mecze, które nadal mają znaczenie;
+   - nie przeceniaj starych wyników po zmianach trenerów lub składów.
+
+Zasady:
+
+- Nie wymyślaj żadnych danych.
+- Każdą istotną aktualną informację opatrz linkiem do źródła.
+- Podaj datę i godzinę dostępu do danych.
+- Przy sprzecznych danych pokaż rozbieżności i oceń wiarygodność źródeł.
+- Wskaż dane niedostępne albo niepewne.
+- Nie wyciągaj wniosków wyłącznie z tabeli ligowej lub wyników H2H.
+- Oddziel fakty, własne wnioski i prognozy.
+- Nie traktuj kursów bukmacherskich jako dowodu sportowego.
+
+Na końcu przedstaw:
+
+A. Krótkie podsumowanie najważniejszych faktów.
+B. Mocne i słabe strony obu zespołów.
+C. Trzy najbardziej prawdopodobne scenariusze meczu.
+D. Prawdopodobieństwa:
+   - wygrana gospodarzy;
+   - remis;
+   - wygrana gości;
+   - over/under 2,5 gola;
+   - BTTS tak/nie.
+   W każdej parze wartości muszą sumować się do 100%.
+E. Trzy najbardziej prawdopodobne dokładne wyniki.
+F. Ocenę pewności prognozy w skali 1–10.
+G. Najważniejsze ryzyka, które mogą zmienić prognozę.
+H. Listę wykorzystanych źródeł wraz z oceną ich jakości.
+
+Jeżeli oficjalne składy nie zostały jeszcze ogłoszone, przygotuj analizę
+wstępną i napisz, które elementy trzeba ponownie sprawdzić 60–75 minut
+przed rozpoczęciem spotkania.

@@ -9,34 +9,32 @@ import streamlit as st
 
 
 NAV_ITEMS = (
-    "Na żywo", "Przedmeczowe", "AI", "Analityka",
-    "Historia", "Moje zakłady", "Ranking", "Siatkówka", "Piłka ręczna", "Czat GPT",
+    "Na żywo", "Przedmeczowe", "Model AI", "Analityka",
+    "Historia", "Moje zakłady", "Ranking", "Siatkówka", "Piłka ręczna",
 )
 
 NAV_LABELS = {
     "Na żywo": "◉   Na żywo",
     "Przedmeczowe": "▣   Przedmeczowe",
-    "AI": "✦   AI",
+    "Model AI": "✦   Model AI",
     "Analityka": "▥   Analityka",
     "Historia": "◷   Historia",
     "Moje zakłady": "▤   Moje zakłady",
     "Ranking": "♜   Ranking",
     "Siatkówka": "◆   Siatkówka",
     "Piłka ręczna": "◇   Piłka ręczna",
-    "Czat GPT": "◌   Czat GPT",
 }
 
 PAGE_META = {
     "Na żywo": ("Centrum wydarzeń na żywo", "Aktualne mecze, kursy i sygnały modelu"),
     "Przedmeczowe": ("Centrum przedmeczowe", "Dzisiejsze rekomendacje i sygnały modelu"),
-    "AI": ("Centrum modeli AI", "Oceny, uzasadnienia i szczegóły predykcji"),
+    "Model AI": ("Model AI", "Zweryfikowane rekomendacje i pełna analiza meczu"),
     "Analityka": ("Analityka jakości", "Wyniki, ryzyko i nadzór Champion–Challenger"),
     "Historia": ("Historia wyników", "Rozliczone typy i pełna ścieżka audytowa"),
     "Moje zakłady": ("Moje zakłady", "Zarządzanie singlami, kuponami i stawkami"),
     "Ranking": ("Ranking skuteczności", "Najlepsze ligi, rynki i strategie"),
     "Siatkówka": ("Centrum siatkówki", "Mecze, typy shadow i autonomiczne uczenie modelu"),
     "Piłka ręczna": ("Centrum piłki ręcznej", "Mecze, typy shadow i autonomiczne uczenie modelu"),
-    "Czat GPT": ("Asystent analityczny", "Rozmowa z modelem na podstawie aktualnych danych"),
 }
 
 
@@ -124,6 +122,8 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .pill{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:62px!important;padding:5px 8px!important;border-radius:6px!important;font-size:9px!important;font-weight:800!important;text-transform:uppercase!important}.pill-green{background:#e8f8f1!important;color:#16865b!important}.pill-yellow{background:#fff4df!important;color:#bd7715!important}.pill-red{background:#feecec!important;color:#c94545!important}.progress,.ai-conf-track{height:7px!important;min-width:76px!important;background:#e3e8ee!important;border-radius:99px!important;overflow:hidden!important}.progress span,.ai-conf-fill{height:100%!important;display:block!important;background:linear-gradient(90deg,#197ce5,#28a8f5)!important;border-radius:99px!important}
 .ka-bar-row{color:#506076!important}.ka-bar-track{background:#e5eaf0!important}.ka-bar-fill{background:linear-gradient(90deg,#1675df,#29a8f5)!important}.ka-bar-value{color:#126fdc!important}.ka-viz{padding:16px 17px!important}.ka-insight{background:#f8fafc!important;border:1px solid #e7ecf2!important;border-radius:9px!important}.ka-insight b{color:#1d2d43!important}.ka-insight span{color:#718095!important}.ka-insight-icon{color:#1679df!important}
 .ai-insight-card{background:#fff!important;border:1px solid var(--ui-line)!important;box-shadow:var(--ui-shadow)!important}.ai-insight-count{float:right;color:#1478e8;font-size:9px;font-weight:800}.ai-insight-summary{border:1px solid #e1e7ee;border-radius:10px;padding:14px;background:#fff}.ai-insight-eyebrow{color:#7a8899;font-size:9px;font-weight:800;letter-spacing:.08em}.ai-insight-match{color:#173653;font-size:16px;font-weight:850;margin:7px 0 13px}.ai-insight-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 14px}.ai-insight-facts>div{padding:9px 8px;border:1px solid #e5eaf0;border-radius:8px;background:#fff}.ai-insight-facts small{display:block;color:#8491a1;font-size:8px;font-weight:750;letter-spacing:.06em;margin-bottom:5px}.ai-insight-facts b{display:block;color:#243a54;font-size:12px}.ai-insight-confidence-row{display:flex;align-items:center;gap:14px;padding-top:2px}.ai-insight-confidence{width:62px;height:62px;min-width:62px;border-radius:50%;display:grid;place-items:center;border:6px solid #2186ed;color:#126fdc;background:#fff;font-size:17px;font-weight:900}.ai-insight-copy{color:#5f7084;font-size:10px;line-height:1.55}.st-key-live_ai_insight_toggle{margin-top:-7px!important}.st-key-live_ai_insight_toggle button{width:100%!important;background:#1478e8!important;border-color:#1478e8!important;color:#fff!important;box-shadow:0 6px 16px rgba(20,120,232,.18)!important}.st-key-live_ai_insight_toggle button:hover{background:#0f68ca!important;border-color:#0f68ca!important;color:#fff!important}
+.model-ai-metal-title{margin:-4px 0 18px;color:#0a2d58;font-size:clamp(38px,5vw,74px);line-height:.88;font-weight:950;font-style:italic;letter-spacing:-.055em;text-transform:uppercase;text-shadow:0 2px 0 #fff,0 4px 0 #a9bdd2,0 7px 14px rgba(13,52,93,.18)}
+.model-ai-analysis{display:grid;gap:10px;margin-top:12px}.model-ai-analysis-summary,.model-ai-analysis-block{padding:13px 15px;border:1px solid #dfe6ef;border-radius:9px;background:#fff;color:#172b44}.model-ai-analysis-summary{border-left:4px solid #1478e8}.model-ai-analysis-summary>b{display:block;color:#126fdc;font-size:15px}.model-ai-analysis-summary>span{display:block;margin-top:4px;color:#617288;font-size:11px;font-weight:750}.model-ai-analysis-summary>p{margin:9px 0 0;font-size:12px;line-height:1.55}.model-ai-analysis-block>b{display:block;margin-bottom:6px;font-size:11px;text-transform:uppercase;color:#126fdc}.model-ai-analysis-block>span{display:block;white-space:pre-wrap;font-size:12px;line-height:1.55;color:#33465d}
 
 /* Inner tabs become calm segmented controls */
 .stTabs [data-baseweb="tab-list"],[role="tablist"]{display:flex!important;gap:3px!important;min-height:46px!important;width:100%!important;margin:0 0 16px!important;padding:4px!important;overflow-x:auto!important;background:#fff!important;border:1px solid var(--ui-line)!important;border-radius:10px!important;box-shadow:none!important}

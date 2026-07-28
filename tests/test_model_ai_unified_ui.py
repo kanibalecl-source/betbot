@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class UnifiedModelAiUiTests(unittest.TestCase):
+    def test_navigation_has_one_model_ai_entry(self) -> None:
+        text = (ROOT / "executive_dashboard_theme.py").read_text(encoding="utf-8")
+        nav_block = text.split("NAV_ITEMS =", 1)[1].split("NAV_LABELS =", 1)[0]
+        self.assertIn('"Model AI"', nav_block)
+        self.assertNotIn('"Czat GPT"', nav_block)
+        self.assertNotIn('"AI"', nav_block)
+
+    def test_dashboard_routes_unified_page(self) -> None:
+        text = (ROOT / "dashboard_streamlit.py").read_text(encoding="utf-8")
+        self.assertIn('selected_page == "Model AI"', text)
+        self.assertIn("render_model_ai(ai_picks, results)", text)
+        self.assertNotIn('selected_page == "Czat GPT"', text)
+        self.assertNotIn('selected_page == "AI"', text)
+
+    def test_gpt_is_on_demand_and_does_not_write_model_state(self) -> None:
+        dashboard = (ROOT / "dashboard_streamlit.py").read_text(encoding="utf-8")
+        engine = (ROOT / "gpt_match_value_engine.py").read_text(encoding="utf-8")
+        self.assertIn('"Pełna analiza GPT"', dashboard)
+        self.assertIn("run_gpt_analysis_for_item", dashboard)
+        helper = engine.split("def run_gpt_analysis_for_item", 1)[1].split(
+            "def run_single_gpt_analysis", 1
+        )[0]
+        self.assertNotIn("ai_picks.csv", helper)
+        self.assertNotIn("quality_training.csv", helper)
+        self.assertNotIn("active_model", helper)
+
+    def test_full_approved_prompt_is_packaged(self) -> None:
+        prompt = (ROOT / "model_ai_analysis_prompt_v2.txt").read_text(encoding="utf-8")
+        self.assertIn("ostatnie 10 spotkań", prompt)
+        self.assertIn("Każdą istotną aktualną informację opatrz linkiem", prompt)
+        self.assertIn("W każdej parze wartości muszą sumować się do 100%", prompt)
+        self.assertIn("60–75 minut", prompt)
+        builder = (ROOT / "gpt_prompts.py").read_text(encoding="utf-8")
+        self.assertIn("model_ai_analysis_prompt_v2.txt", builder)
+
+
+if __name__ == "__main__":
+    unittest.main()

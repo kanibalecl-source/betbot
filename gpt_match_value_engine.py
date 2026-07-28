@@ -348,6 +348,60 @@ def _same_analysis(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
     )
 
 
+def run_gpt_analysis_for_item(
+    base_dir: Path,
+    item: Dict[str, Any],
+    profile: str | None = "model_ai",
+) -> Dict[str, Any]:
+    """Analyze one explicit UI candidate and update only the GPT report.
+
+    The function deliberately does not write picks, training datasets or model
+    state.  It is the safe bridge used by the unified Model AI screen.
+    """
+    base_dir = Path(base_dir)
+    profile_name = _profile_slug(profile)
+    candidate = dict(item or {})
+    candidate["profile"] = profile_name
+    analysis = analyze_match_with_gpt(base_dir, candidate)
+
+    report = load_latest_report(base_dir, profile=profile_name, source_files=[])
+    analyses = list(report.get("analyses", []) or [])
+    for pos, existing in enumerate(analyses):
+        if _same_analysis(existing, analysis):
+            analyses[pos] = analysis
+            break
+    else:
+        analyses.insert(0, analysis)
+
+    updated = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "profile": profile_name,
+        "count": len(analyses),
+        "analyses": analyses,
+        "coupons": build_ako_coupons(analyses),
+    }
+    out = _report_path(base_dir, profile_name)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(updated, ensure_ascii=False, indent=2), encoding="utf-8")
+    append_records("gpt_analyses", [analysis], source="gpt_match_value_engine.py")
+    append_event(
+        "gpt_single_analysis",
+        {
+            "profile": profile_name,
+            "match": analysis.get("match"),
+            "bet": analysis.get("bet"),
+            "file": str(out),
+        },
+        source="gpt_match_value_engine.py",
+    )
+    try:
+        from agi_storage import upsert_gpt_analysis
+        upsert_gpt_analysis(analysis)
+    except Exception:
+        pass
+    return analysis
+
+
 def run_single_gpt_analysis(
     base_dir: Path,
     index: int,

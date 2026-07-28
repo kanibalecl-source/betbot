@@ -1707,7 +1707,114 @@ def render_ai_detail_card(row) -> str:
 
 
 
-def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
+def _model_ai_candidate(row) -> dict:
+    raw = row.to_dict() if hasattr(row, "to_dict") else dict(row or {})
+    match = str(first_existing(row, ["match", "mecz", "fixture"], "")).strip()
+    if not match:
+        home = str(first_existing(row, ["home", "home_team"], "")).strip()
+        away = str(first_existing(row, ["away", "away_team"], "")).strip()
+        match = f"{home} vs {away}".strip()
+    market = str(first_existing(row, ["typ", "market", "bet", "pick"], "")).strip()
+    odds_snapshot = extract_odds_snapshot(row)
+    return {
+        "match": match,
+        "bet": market,
+        "odds": format_odds(odds_snapshot.bookmaker),
+        "kurs_buk": odds_snapshot.bookmaker,
+        "kurs_model": odds_snapshot.model,
+        "kurs_bota": odds_snapshot.bot,
+        "prawd_model": first_existing(row, ["prawd_model", "model_probability", "model_prob"], ""),
+        "prawd_final": first_existing(row, ["prawd_final", "final_probability", "final_prob"], ""),
+        "closing_odds": first_existing(row, ["closing_odds", "close_odds"], ""),
+        "clv_percent": first_existing(row, ["clv_percent", "clv"], ""),
+        "bookmaker": first_existing(row, ["bookmaker", "margin_bookmaker"], ""),
+        "odds_observed_at": first_existing(row, ["odds_observed_at", "observed_at", "decision_at"], ""),
+        "league": str(first_existing(row, ["league", "liga"], "")).strip(),
+        "time": str(first_existing(row, ["time", "start", "date", "kickoff"], "")).strip(),
+        "profile": "model_ai",
+        "source_row": raw,
+    }
+
+
+def _model_ai_analysis_key(item: dict) -> tuple[str, str, str]:
+    return (
+        str(item.get("match", "")).strip().lower(),
+        str(item.get("bet", "")).strip().lower(),
+        str(item.get("odds", "")).strip(),
+    )
+
+
+def _render_model_ai_gpt(row, idx: int) -> None:
+    candidate = _model_ai_candidate(row)
+    try:
+        from gpt_match_value_engine import (
+            load_latest_report,
+            run_gpt_analysis_for_item,
+        )
+        report = load_latest_report(BASE_DIR, profile="model_ai", source_files=[])
+        analyses = report.get("analyses", []) or []
+        lookup = {_model_ai_analysis_key(item): item for item in analyses}
+        analysis = lookup.get(_model_ai_analysis_key(candidate))
+    except Exception as exc:
+        st.warning(f"Moduł pełnej analizy jest chwilowo niedostępny: {exc}")
+        return
+
+    if st.button(
+        "Pełna analiza GPT",
+        key=f"model_ai_full_analysis_{idx}",
+        use_container_width=True,
+    ):
+        with st.spinner(f"Analiza źródeł i danych: {candidate.get('match', '')}"):
+            try:
+                analysis = run_gpt_analysis_for_item(
+                    BASE_DIR,
+                    candidate,
+                    profile="model_ai",
+                )
+                st.session_state["model_ai_last_analysis"] = _model_ai_analysis_key(candidate)
+            except Exception as exc:
+                st.error(f"Analiza nie została wykonana: {exc}")
+
+    if not analysis:
+        st.caption(
+            "Analiza nie została jeszcze uruchomiona. Przycisk wykonuje pełny "
+            "prompt v2 tylko dla tego meczu i nie zmienia typu ani modelu."
+        )
+        return
+
+    decision = html.escape(str(analysis.get("decision", "WATCH")))
+    confidence = as_float(analysis.get("confidence"), 0)
+    quality = as_float(analysis.get("quality_score"), 0)
+    risk = html.escape(str(analysis.get("risk", "-")).upper())
+    summary = html.escape(str(analysis.get("summary", analysis.get("main_reason", "-"))))
+    details = analysis.get("analysis", {}) if isinstance(analysis.get("analysis"), dict) else {}
+    blocks = []
+    for key, label in (
+        ("najwazniejsze_dane", "Najważniejsze dane i scenariusze"),
+        ("forma", "Forma"),
+        ("styl_matchup", "Taktyka i dopasowanie"),
+        ("kontuzje_kadra", "Kadra"),
+        ("value_kurs", "Kurs i value"),
+        ("ryzyka", "Ryzyka"),
+        ("alternatywa", "Alternatywa"),
+        ("zrodla", "Źródła"),
+    ):
+        value = details.get(key)
+        if value:
+            blocks.append(
+                f"<div class='model-ai-analysis-block'><b>{label}</b>"
+                f"<span>{html.escape(str(value))}</span></div>"
+            )
+    st.markdown(
+        "<div class='model-ai-analysis'>"
+        f"<div class='model-ai-analysis-summary'><b>{decision}</b>"
+        f"<span>Pewność {confidence:.0f}% · Jakość {quality:.0f}/10 · Ryzyko {risk}</span>"
+        f"<p>{summary}</p></div>{''.join(blocks)}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_ai_picks_interactive(picks: pd.DataFrame, enable_gpt: bool = False) -> None:
     if picks.empty:
         st.markdown(
             '<div class="ka-panel"><h3>TYPY AI</h3>'
@@ -1733,7 +1840,7 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
         page_size=10,
     )
 
-    for idx, row in shown.iterrows():
+    for position, (_, row) in enumerate(shown.iterrows()):
         odds_snapshot = extract_odds_snapshot(row)
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
         edge = format_percent(odds_snapshot.value_percent)
@@ -1768,6 +1875,8 @@ def render_ai_picks_interactive(picks: pd.DataFrame) -> None:
 
         with st.expander(f"{status_label} - szczegóły AI", expanded=False):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
+            if enable_gpt:
+                _render_model_ai_gpt(row, position + (current_page - 1) * 10)
 
     render_pagination_controls(
         "ai_types_page",
@@ -2023,6 +2132,87 @@ def render_ai(picks: pd.DataFrame, results: pd.DataFrame) -> None:
     if picks is None or picks.empty:
         st.info(empty_msg)
     render_ai_picks_interactive(picks if picks is not None else pd.DataFrame())
+
+
+def _load_model_ai_gate_report() -> dict:
+    for path in (
+        DATA_DIR / "ai_runtime_debug_main.json",
+        DATA_DIR / "ai_runtime_debug.json",
+    ):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            report = payload.get("gate_report")
+            if isinstance(report, dict):
+                return report
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            continue
+    return {}
+
+
+def _filter_model_ai_picks(picks: pd.DataFrame) -> pd.DataFrame:
+    if picks is None or picks.empty:
+        return pd.DataFrame()
+    source = picks.copy()
+    league_col = next((c for c in ("league", "liga") if c in source.columns), None)
+    market_col = next((c for c in ("typ", "market", "bet") if c in source.columns), None)
+    confidence = pd.to_numeric(
+        source.get("confidence", source.get("ai_pick_score", 0)),
+        errors="coerce",
+    ).fillna(0)
+    source["_model_ai_status"] = confidence.map(
+        lambda value: "BARDZO MOCNY" if value >= 85 else "NORMALNY" if value >= 65 else "RYZYKO"
+    )
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        leagues = ["Wszystkie"] + (
+            sorted(source[league_col].dropna().astype(str).unique().tolist())
+            if league_col else []
+        )
+        selected_league = st.selectbox("Liga", leagues, key="model_ai_filter_league")
+    with c2:
+        markets = ["Wszystkie"] + (
+            sorted(source[market_col].dropna().astype(str).unique().tolist())
+            if market_col else []
+        )
+        selected_market = st.selectbox("Rynek", markets, key="model_ai_filter_market")
+    with c3:
+        statuses = ["Wszystkie"] + sorted(source["_model_ai_status"].unique().tolist())
+        selected_status = st.selectbox("Status", statuses, key="model_ai_filter_status")
+    if league_col and selected_league != "Wszystkie":
+        source = source[source[league_col].astype(str) == selected_league]
+    if market_col and selected_market != "Wszystkie":
+        source = source[source[market_col].astype(str) == selected_market]
+    if selected_status != "Wszystkie":
+        source = source[source["_model_ai_status"] == selected_status]
+    return source.drop(columns=["_model_ai_status"], errors="ignore")
+
+
+def render_model_ai(picks: pd.DataFrame, results: pd.DataFrame) -> None:
+    """Unified, read-only AI recommendations with on-demand GPT research."""
+    all_ai = picks if picks is not None else pd.DataFrame()
+    gate = _load_model_ai_gate_report()
+    candidates = int(gate.get("candidates", len(all_ai)) or 0)
+    accepted = int(gate.get("accepted", len(all_ai)) or 0)
+    rejected = int(gate.get("rejected", max(0, candidates - accepted)) or 0)
+    learning_mode = str(gate.get("learning_mode", "COLLECTING")).replace("_QUALITY_DATA", "")
+
+    page_banner("Model AI", "MODEL AI", "Zweryfikowane rekomendacje i pełna analiza.")
+    st.markdown('<div class="model-ai-metal-title">MODEL AI</div>', unsafe_allow_html=True)
+    metrics([
+        ("Kandydaci", str(candidates), "przed bramkami jakości"),
+        ("Zaakceptowane", str(accepted), "spełniają wszystkie progi"),
+        ("Odrzucone", str(rejected), "nie trafiają do publikacji"),
+        ("Tryb AI", learning_mode, "fail-closed · bez autotypowania GPT"),
+    ])
+    filtered = _filter_model_ai_picks(all_ai)
+    st.markdown(
+        '<div class="ka-section-heading"><span>Zweryfikowane rekomendacje AI</span>'
+        '<span class="ka-title-meta">GPT TYLKO NA ŻĄDANIE</span></div>',
+        unsafe_allow_html=True,
+    )
+    render_ai_picks_interactive(filtered, enable_gpt=True)
 
 
 def _render_quality_governance() -> None:
@@ -3045,12 +3235,11 @@ selected_page = render_navigation(BASE_DIR)
 render_workspace_bar(selected_page)
 if selected_page == "Na żywo": render_live(live, picks)
 elif selected_page == "Przedmeczowe": render_prematch(picks)
-elif selected_page == "AI": render_ai(ai_picks, results)
+elif selected_page == "Model AI": render_model_ai(ai_picks, results)
 elif selected_page == "Analityka": render_analytics(picks, results, "ANALITYKA")
 elif selected_page == "Historia": render_history(results)
 elif selected_page == "Moje zakłady": render_manual_betting(raw_picks)
 elif selected_page == "Ranking": render_ranking(picks, results)
 elif selected_page == "Siatkówka": render_volleyball()
 elif selected_page == "Piłka ręczna": render_handball()
-elif selected_page == "Czat GPT": render_gpt_professional(picks, live, results)
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
