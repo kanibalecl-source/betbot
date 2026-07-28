@@ -10,6 +10,7 @@ import json
 import os
 import hashlib
 import math
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
@@ -101,6 +102,31 @@ MARKETS = {
     "OVER_0.5", "UNDER_0.5", "OVER_1.5", "UNDER_1.5",
     "OVER_2.5", "UNDER_2.5", "OVER_3.5", "UNDER_3.5",
     "OVER_4.5", "UNDER_4.5", "BTTS_YES", "BTTS_NO",
+}
+
+REJECTION_DESCRIPTIONS = {
+    "no_match_name": "Brak nazwy meczu.",
+    "missing_fixture_id": "Brak identyfikatora wydarzenia.",
+    "missing_pick_id": "Brak identyfikatora typu.",
+    "unsupported_or_missing_market": "Brak rynku lub rynek nieobsługiwany.",
+    "missing_bookmaker_odds": "Brak prawidłowego kursu bukmachera.",
+    "missing_model_odds": "Brak prawidłowego kursu modelu.",
+    "missing_bot_odds": "Brak prawidłowego kursu bota.",
+    "missing_confidence": "Brak prawidłowej wartości pewności.",
+    "missing_edge": "Brak wyliczonej przewagi.",
+    "missing_ev": "Brak wyliczonej wartości oczekiwanej.",
+    "missing_odds_timestamp": "Brak czasu pobrania kursu.",
+    "stale_odds": "Kurs jest starszy niż dopuszczalny limit.",
+    "unverified_bookmaker": "Bukmacher nie został zweryfikowany.",
+    "invalid_bookmaker_scope": "Bukmacher nie należy do polskiej listy dozwolonej.",
+    "invalid_market_scope": "Rynek nie dotyczy pełnego czasu meczu.",
+    "market_integrity_not_passed": "Kontrola integralności rynku nie zakończyła się PASS.",
+    "missing_market_consensus": "Brak identyfikatora konsensusu rynku.",
+    "insufficient_bookmaker_consensus": "Konsensus pochodzi z mniej niż dwóch źródeł.",
+    "quality_gate_not_passed": "Rekord nie przeszedł bramki jakości.",
+    "threshold": "Wynik AI lub przewaga są niższe od aktywnego progu.",
+    "better_market_same_fixture": "Wybrano lepszy prawidłowy rynek dla tego meczu.",
+    "output_limit": "Rekord nie zmieścił się w limicie publikacji.",
 }
 
 
@@ -312,6 +338,94 @@ def validate_candidate(row: Any) -> tuple[bool, str, Dict[str, Any]]:
     }
 
 
+def rejection_record(
+    row: Any,
+    *,
+    idx: int,
+    match: str,
+    reason: str,
+    phase: str,
+    extra: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return a safe, non-secret diagnostic record for one rejected candidate."""
+    observed_at_raw = first(row, ["odds_observed_at"], "")
+    observed_at = parse_time(observed_at_raw)
+    age_seconds = (
+        max(0.0, (datetime.now(timezone.utc) - observed_at).total_seconds())
+        if observed_at is not None
+        else None
+    )
+    record: Dict[str, Any] = {
+        "idx": int(idx),
+        "fixture_id": str(first(row, ["fixture_id"], "")).strip(),
+        "pick_id": str(first(row, ["pick_id"], "")).strip(),
+        "match": str(match or "").strip(),
+        "market": normalize_market(first(row, ["market", "typ"], "")),
+        "phase": phase,
+        "reason": reason,
+        "description": REJECTION_DESCRIPTIONS.get(reason, reason),
+        "bookmaker": str(
+            first(row, ["bookmaker", "margin_bookmaker"], "")
+        ).strip(),
+        "bookmaker_verified": truthy(
+            first(row, ["bookmaker_verified"], False)
+        ),
+        "bookmaker_scope": str(first(row, ["bookmaker_scope"], "")).strip(),
+        "market_scope": str(first(row, ["market_scope"], "")).strip(),
+        "market_integrity_status": str(
+            first(row, ["market_integrity_status"], "")
+        ).strip().upper(),
+        "market_consensus_id": str(
+            first(row, ["market_consensus_id"], "")
+        ).strip(),
+        "market_bookmaker_count": optional_num(
+            first(row, ["market_bookmaker_count"], None)
+        ),
+        "quality_gate_status": str(
+            first(row, ["quality_gate_status"], "")
+        ).strip().upper(),
+        "quality_gate_enforced": truthy(
+            first(row, ["quality_gate_enforced"], False)
+        ),
+        "odds_observed_at": str(observed_at_raw),
+        "odds_age_seconds": round(age_seconds, 3)
+        if age_seconds is not None
+        else None,
+        "bookmaker_odds": optional_num(
+            first(row, ["kurs_buk", "bookmaker_odds", "odds"], None)
+        ),
+        "model_odds": optional_num(
+            first(row, ["kurs_model", "model_odds"], None)
+        ),
+        "bot_odds": optional_num(
+            first(row, ["kurs_bota", "bot_odds", "fair_odds"], None)
+        ),
+    }
+    if extra:
+        record.update(extra)
+    return record
+
+
+def summarize_gate_report(debug: Dict[str, Any]) -> Dict[str, Any]:
+    rejected = list(debug.get("rejected", []) or [])
+    reasons = Counter(str(item.get("reason", "unknown")) for item in rejected)
+    phases = Counter(str(item.get("phase", "unknown")) for item in rejected)
+    return {
+        "schema_version": "betbot.ai_gate_report.v14.1",
+        "updated_at": debug.get("updated_at", now_iso()),
+        "ai_mode": debug.get("ai_mode", "main"),
+        "learning_mode": debug.get("mode", "UNKNOWN"),
+        "candidates": int(debug.get("candidates", 0) or 0),
+        "accepted": int(debug.get("accepted", 0) or 0),
+        "rejected": len(rejected),
+        "rejection_reasons": dict(sorted(reasons.items())),
+        "rejection_phases": dict(sorted(phases.items())),
+        "min_confidence": debug.get("min_confidence"),
+        "min_edge": debug.get("min_edge"),
+        "fail_closed": True,
+    }
+
+
 def normalize_market(raw: Any) -> str:
     s = str(raw or "").strip().upper().replace(" ", "_").replace("-", "_")
     aliases = {
@@ -510,12 +624,14 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
         "min_edge": state.get("min_edge"),
     }
     if cand.empty:
+        debug["gate_report"] = summarize_gate_report(debug)
         write_json(DEBUG_FILE, debug)
         return pd.DataFrame(columns=AI_COLUMNS)
 
     league_weights = state.get("league_weights", {}) or {}
     market_weights = state.get("market_weights", {}) or {}
     rows: List[Dict[str, Any]] = []
+    qualified_meta: Dict[str, Dict[str, Any]] = {}
     features: List[Dict[str, Any]] = []
     ts = now_iso()
     for idx, row in cand.iterrows():
@@ -526,12 +642,26 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
             away = str(first(row, ["away", "away_team"], "")).strip()
             match = f"{home} vs {away}" if home or away else ""
         if not match:
-            debug["rejected"].append({"idx": int(idx), "reason": "no_match_name"})
+            debug["rejected"].append(
+                rejection_record(
+                    row,
+                    idx=int(idx),
+                    match="",
+                    reason="no_match_name",
+                    phase="identity",
+                )
+            )
             continue
         valid, rejection_reason, verified = validate_candidate(row)
         if not valid:
             debug["rejected"].append(
-                {"idx": int(idx), "match": match, "reason": rejection_reason}
+                rejection_record(
+                    row,
+                    idx=int(idx),
+                    match=match,
+                    reason=rejection_reason,
+                    phase="validation",
+                )
             )
             continue
 
@@ -569,7 +699,21 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
             source_required_edge if source_required_edge is not None else 2.0,
         )
         if score < min_conf or edge < min_edge:
-            debug["rejected"].append({"match": match, "reason": "threshold", "score": round(score,2), "edge": round(edge,2)})
+            debug["rejected"].append(
+                rejection_record(
+                    row,
+                    idx=int(idx),
+                    match=match,
+                    reason="threshold",
+                    phase="selection",
+                    extra={
+                        "score": round(score, 2),
+                        "required_score": round(min_conf, 2),
+                        "edge": round(edge, 2),
+                        "required_edge": round(min_edge, 2),
+                    },
+                )
+            )
             continue
         risk = risk_for(score, edge, odds)
         status = "AI STRONG" if score >= 75 else "AI VALUE" if score >= 64 else "AI WATCH"
@@ -648,23 +792,56 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
             "ai_generated": True,
         }
         rows.append(item)
+        qualified_meta[observation_key] = {
+            "idx": int(idx),
+            "row": row,
+            "match": match,
+            "fixture_id": verified["fixture_id"],
+        }
 
     out = pd.DataFrame(rows, columns=AI_COLUMNS)
     if not out.empty:
+        qualified = out.sort_values(
+            ["ai_pick_score", "edge", "ev"],
+            ascending=False,
+        )
         out = (
-            out.sort_values(
-                ["ai_pick_score", "edge", "ev"],
-                ascending=False,
-            )
+            qualified
             .drop_duplicates(subset=["fixture_id"], keep="first")
             .head(limit)
             .reset_index(drop=True)
         )
+        selected_keys = set(out["observation_key"].astype(str))
+        selected_fixtures = set(out["fixture_id"].astype(str))
+        for candidate in qualified.to_dict("records"):
+            observation_key = str(candidate.get("observation_key", ""))
+            if observation_key in selected_keys:
+                continue
+            meta = qualified_meta.get(observation_key, {})
+            reason = (
+                "better_market_same_fixture"
+                if str(candidate.get("fixture_id", "")) in selected_fixtures
+                else "output_limit"
+            )
+            debug["rejected"].append(
+                rejection_record(
+                    meta.get("row", {}),
+                    idx=int(meta.get("idx", -1)),
+                    match=str(meta.get("match", candidate.get("match", ""))),
+                    reason=reason,
+                    phase="ranking",
+                    extra={
+                        "ai_pick_score": candidate.get("ai_pick_score"),
+                        "observation_key": observation_key,
+                    },
+                )
+            )
         for item in out.to_dict("records"):
             feature = {key: item.get(key, "") for key in FEATURE_COLUMNS}
             feature.update({"result": "PENDING", "profit": 0.0, "roi": 0.0})
             features.append(feature)
     debug["accepted"] = int(len(out))
+    debug["gate_report"] = summarize_gate_report(debug)
     write_json(DEBUG_FILE, debug)
     append_feature_store(features)
     return out
@@ -714,6 +891,11 @@ def run_self_learning_cycle(limit: int = 12, mode: str = "main") -> Dict[str, An
         picks.to_csv(AI_PICKS_FILE, index=False)
         append_records(settings["append_stream"], picks.to_dict("records"), source="ai_self_learning_runtime.py")
     state_after = update_learning_state()
+    try:
+        debug = json.loads(DEBUG_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        debug = {}
+    gate_report = debug.get("gate_report") or summarize_gate_report(debug)
     result = {
         "status": "OK",
         "ai_mode": settings["mode"],
@@ -723,9 +905,17 @@ def run_self_learning_cycle(limit: int = 12, mode: str = "main") -> Dict[str, An
         "cycles": int(state_after.get("cycles", 0)),
         "settled_samples": int(state_after.get("settled_samples", 0)),
         "file": str(AI_PICKS_FILE),
+        "candidate_count": int(gate_report.get("candidates", 0)),
+        "rejected_count": int(gate_report.get("rejected", 0)),
+        "rejection_reasons": gate_report.get("rejection_reasons", {}),
+        "gate_report_file": str(DEBUG_FILE),
     }
     log_event("SELF_LEARNING_CYCLE", result)
     print(f"[AI-SELF-LEARNING] {settings['label']} OK | picks={result['ai_picks']} | mode={result['mode']} | settled={result['settled_samples']}")
+    print(
+        "[AI-SELF-LEARNING] GATE REPORT | "
+        + json.dumps(gate_report, ensure_ascii=False, sort_keys=True)
+    )
     return result
 
 
