@@ -1,0 +1,14 @@
+BETBOT SERVER V15.6 - LIGHT BLUE DROPDOWN MENUS
+Date: 2026-07-28
+
+Scope:
+- Changes every opened Streamlit/BaseWeb dropdown list from dark navy to the shared light-blue palette.
+- Applies globally to all authenticated tabs and all select fields.
+- Keeps option text dark navy for readability.
+- Uses a stronger light-blue highlight for the selected and hovered option.
+- Does not change prediction logic, learning, histories, models, credentials, or collected data.
+
+Files:
+- executive_dashboard_theme.py
+- tests/test_model_ai_unified_ui.py
+- PATCH_MANIFEST_SERVER_V15_6_LIGHT_BLUE_DROPDOWN_MENUS.txt

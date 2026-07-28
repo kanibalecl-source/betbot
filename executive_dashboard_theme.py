@@ -168,6 +168,29 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 }
 [data-baseweb="select"]>div>div:last-child,[data-baseweb="select"]>div>div:last-child *{color:#fff!important}
 [data-baseweb="select"]>div>div:last-child svg{fill:#fff!important;color:#fff!important}
+[data-baseweb="popover"],[data-baseweb="popover"]>div,[data-baseweb="menu"],[data-baseweb="menu"]>ul,[role="listbox"]{
+  background:#f7fcff!important;border-color:#8fd2f3!important;color:#123b5d!important
+}
+[data-baseweb="popover"]>div,[data-baseweb="menu"],[role="listbox"]{
+  border-radius:8px!important;box-shadow:0 12px 28px rgba(25,105,151,.16)!important;overflow:hidden!important
+}
+[data-baseweb="popover"] [role="option"],[data-baseweb="menu"] [role="option"],[role="listbox"] [role="option"]{
+  background:#f7fcff!important;color:#123b5d!important;border:0!important
+}
+[data-baseweb="popover"] [role="option"] *,[data-baseweb="menu"] [role="option"] *,[role="listbox"] [role="option"] *{
+  color:#123b5d!important
+}
+[data-baseweb="popover"] [role="option"]:hover,[data-baseweb="popover"] [role="option"][aria-selected="true"],
+[data-baseweb="popover"] [role="option"][data-highlighted="true"],[data-baseweb="menu"] [role="option"]:hover,
+[data-baseweb="menu"] [role="option"][aria-selected="true"],[role="listbox"] [role="option"]:hover,
+[role="listbox"] [role="option"][aria-selected="true"],[role="listbox"] [role="option"][data-highlighted="true"]{
+  background:#cfeefe!important;color:#0b4f7a!important;font-weight:750!important
+}
+[data-baseweb="popover"] [role="option"]:hover *,[data-baseweb="popover"] [role="option"][aria-selected="true"] *,
+[data-baseweb="menu"] [role="option"]:hover *,[data-baseweb="menu"] [role="option"][aria-selected="true"] *,
+[role="listbox"] [role="option"]:hover *,[role="listbox"] [role="option"][aria-selected="true"] *{
+  color:#0b4f7a!important
+}
 input,textarea{color:#1f3046!important;background:#fff!important}
 label,[data-testid="stWidgetLabel"]{color:#607086!important;font-size:10px!important;font-weight:700!important;text-transform:none!important;letter-spacing:0!important}
 [data-testid="stExpander"]{border:1px solid #bfe4f7!important;border-radius:9px!important;background:#fff!important}
