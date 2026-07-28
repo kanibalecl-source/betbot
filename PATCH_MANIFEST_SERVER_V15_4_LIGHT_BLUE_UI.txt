@@ -1,0 +1,33 @@
+BETBOT SERVER V15.4 - LIGHT BLUE UI
+Data: 2026-07-28
+
+ZAKRES
+- Globalna zmiana ciemnogranatowych tla kontrolek na jednolita, jasnoblekina palete.
+- Jasnoblekine przyciski glowne, przyciski paginacji i przyciski formularzy.
+- Jasnoblekine segmenty strzalek we wszystkich listach rozwijanych.
+- Delikatne blekitne naglowki ekspanderow i blekitne ikony rozwijania.
+- Aktywna pozycja stalego menu bocznego korzysta z tej samej palety.
+- Granat tekstu, logo, wykres banera i logika aplikacji pozostaja bez zmian dla zachowania kontrastu.
+
+PLIKI DO NADPISANIA
+- executive_dashboard_theme.py
+
+TESTY DOLACZONE DO PACZKI
+- tests/test_model_ai_unified_ui.py
+
+BEZPIECZENSTWO DANYCH
+- Paczka nie zawiera katalogu data.
+- Paczka nie zawiera historii, wynikow, modeli, wag, raportow uczenia ani plikow runtime.
+- Paczka nie zmienia logiki typowania, rozliczania, uczenia, promocji modeli ani polaczen API.
+
+WERYFIKACJA
+- Python py_compile: OK.
+- Testy Model AI/UI: OK (8/8).
+- Pelny zestaw: 288 testow wykonanych poprawnie; test FastAPI wymaga biblioteki fastapi,
+  ktorej nie ma w lokalnym runtime testowym. Nie jest to blad tej poprawki CSS.
+
+WDROZENIE
+1. Rozpakuj paczke do katalogu glownego repozytorium.
+2. Zachowaj strukture katalogow i nadpisz wskazane pliki.
+3. Nie usuwaj ani nie nadpisuj woluminu /data.
+4. Wykonaj redeploy uslugi.
