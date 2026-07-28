@@ -1,0 +1,17 @@
+BETBOT SERVER V16.4 - SIDEBAR NAME-ONLY HOVER
+Data: 2026-07-28
+
+PLIKI:
+1. executive_dashboard_theme.py
+2. tests/test_model_ai_unified_ui.py
+
+ZMIANA:
+- po najechaniu nieaktywna karta pozostaje biala,
+- podswietla sie tylko nazwa zakladki,
+- aktywna karta nadal pozostaje niebieska,
+- zachowana pelna klikalnosc kart.
+
+BEZPIECZENSTWO:
+- brak katalogu data i plikow historii,
+- brak modeli, sekretow, .env oraz users.json,
+- brak zmian logiki typowania, uczenia i automatyzacji.

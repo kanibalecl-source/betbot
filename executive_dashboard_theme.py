@@ -111,7 +111,7 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 [data-testid="stSidebar"] .ui-nav-start+div{margin-top:2px!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"]{position:relative!important;height:76px!important;min-height:76px!important;max-height:76px!important;flex:0 0 76px!important;margin:0 12px 9px!important;border:1px solid #dfe8f2!important;border-radius:12px!important;background:#fff!important;box-shadow:0 5px 16px rgba(18,54,91,.055)!important;overflow:hidden!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"]>[data-testid="stVerticalBlock"]{height:100%!important;position:relative!important}
-[data-testid="stSidebar"] [class*="st-key-nav_card_"] .stElementContainer:has(.ui-nav-visual){position:absolute!important;inset:0!important;z-index:3!important;pointer-events:none!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"] .stElementContainer:has(.ui-nav-visual){position:absolute!important;inset:0!important;z-index:5!important;pointer-events:none!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"] .stElementContainer:has(.stButton){position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:100%!important;z-index:4!important;pointer-events:auto!important}
 .ui-nav-visual{height:76px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:10px;padding:0 11px;box-sizing:border-box}
 .ui-nav-icon{width:42px;height:48px;display:grid;place-items:center;border-radius:10px;background:#eef6ff;color:#0876ee;font-size:22px;font-weight:900;box-shadow:inset 0 0 0 1px #e1eefc}
@@ -119,7 +119,9 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .ui-nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:25px;padding:0 7px;border-radius:10px;background:#edf5ff;color:#0876ee;font-size:8px;font-weight:900;box-sizing:border-box}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:100%!important;z-index:4!important;padding:0!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton button{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:100%!important;border:0!important;border-radius:11px!important;background:transparent!important;color:transparent!important;box-shadow:none!important}
-[data-testid="stSidebar"] [class*="st-key-nav_card_"]:hover{border-color:#a9d9fb!important;transform:translateY(-1px);box-shadow:0 9px 21px rgba(28,119,205,.11)!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:hover{border-color:#a9d9fb!important;background:#fff!important;transform:translateY(-1px);box-shadow:0 9px 21px rgba(28,119,205,.11)!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"] button:not([kind="primary"]):hover{background:transparent!important;border-color:transparent!important;box-shadow:none!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:not(:has(button[kind="primary"])):hover .ui-nav-copy strong{color:#168ff5!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]){border-color:#168ff5!important;background:linear-gradient(135deg,#086cff 0%,#28a8f5 100%)!important;box-shadow:0 11px 25px rgba(8,108,255,.24)!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]) .ui-nav-icon{background:#fff!important;color:#0876ee!important;box-shadow:0 4px 12px rgba(7,61,128,.12)!important}
 [data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]) .ui-nav-copy strong,
