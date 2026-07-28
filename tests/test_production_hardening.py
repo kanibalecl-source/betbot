@@ -83,7 +83,7 @@ class OddsAggregationTests(unittest.TestCase):
         original = data_api._iter_fixture_odds
         previous = os.environ.get("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST")
         os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = "*"
-        data_api._iter_fixture_odds = lambda match: [
+        data_api._iter_fixture_odds = lambda match, publication_only=True: [
             {"market": "BTTS_YES", "odds": 1.9, "bookmaker": "A",
              "observed_at": "2026-07-22T12:00:00+00:00"},
             {"market": "BTTS_NO", "odds": 1.9, "bookmaker": "A",

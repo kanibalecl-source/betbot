@@ -279,6 +279,26 @@ def _bookmaker_is_allowed(bookmaker_name):
     return _normalized_token(bookmaker_name) in allowed
 
 
+def _football_consensus_bookmakers():
+    """Return the independent sources allowed to confirm market quality.
+
+    Publication and consensus are deliberately separate concerns:
+    ``BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST`` controls which Polish-facing
+    bookmaker may be shown to the user, while this list controls which
+    identifiable provider bookmakers may contribute to the two-source market
+    consensus.  ``*`` keeps all named API-Football bookmakers eligible; the
+    integrity layer still requires complete, aligned and non-outlying markets.
+    """
+    configured = os.getenv(
+        "BETBOT_FOOTBALL_CONSENSUS_BOOKMAKER_ALLOWLIST",
+        "*",
+    )
+    values = [item.strip() for item in str(configured or "").split(",") if item.strip()]
+    if not values or any(item == "*" for item in values):
+        return None
+    return values
+
+
 def _is_full_match_total_bet(market_name):
     return _normalized_bet_name(market_name) in FULL_MATCH_TOTAL_BET_NAMES
 
@@ -320,7 +340,7 @@ def _normalize_double_chance(value):
     return None
 
 
-def _iter_fixture_odds(match):
+def _iter_fixture_odds(match, publication_only=True):
 
     fixture_id = match.get("fixture_id")
 
@@ -358,7 +378,12 @@ def _iter_fixture_odds(match):
         bookmaker_name = str(bookmaker.get("name", "")).strip()
         bookmaker_id = bookmaker.get("id")
 
-        if not bookmaker_name or not _bookmaker_is_allowed(bookmaker_name):
+        if not bookmaker_name:
+            continue
+        # Existing callers receive only publishable Polish-facing quotes.
+        # The consensus path opts in to all identifiable provider sources and
+        # applies the publication allowlist after the integrity gate.
+        if publication_only and not _bookmaker_is_allowed(bookmaker_name):
             continue
 
         for bet in bookmaker.get("bets", []):
@@ -427,7 +452,7 @@ def _iter_fixture_odds(match):
 def get_odds_market_data(match):
 
     try:
-        rows = _iter_fixture_odds(match)
+        rows = _iter_fixture_odds(match, publication_only=False)
         markets = {}
         groups = {
             "MATCH_WINNER": ("HOME_WIN", "DRAW", "AWAY_WIN"),
@@ -436,14 +461,7 @@ def get_odds_market_data(match):
         for line in ("0.5", "1.5", "2.5", "3.5", "4.5"):
             groups[f"TOTAL_{line}"] = (f"OVER_{line}", f"UNDER_{line}")
 
-        allowlist = [
-            item.strip()
-            for item in os.getenv(
-                "BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST",
-                DEFAULT_POLISH_BOOKMAKERS,
-            ).split(",")
-            if item.strip() and item.strip() != "*"
-        ]
+        consensus_allowlist = _football_consensus_bookmakers()
         minimum_bookmakers = max(
             1, int(os.getenv("BETBOT_V13_FOOTBALL_MIN_BOOKMAKERS", "2"))
         )
@@ -467,7 +485,7 @@ def get_odds_market_data(match):
                 sport="football",
                 market=group_name,
                 required_outcomes=outcomes,
-                bookmaker_allowlist=allowlist or None,
+                bookmaker_allowlist=consensus_allowlist,
                 minimum_bookmakers=minimum_bookmakers,
             )
             if consensus.get("status") != "PASS":
@@ -479,31 +497,42 @@ def get_odds_market_data(match):
                 continue
             accepted = consensus.get("accepted_quotes", [])
             for outcome in outcomes:
-                bookmaker = consensus["best_bookmakers"][outcome]
-                best_row = next(
-                    (
-                        item
-                        for item in accepted
-                        if str(item.get("outcome")) == outcome
-                        and str(item.get("bookmaker")) == bookmaker
-                        and float(item.get("odds")) == float(
-                            consensus["best_odds"][outcome]
-                        )
-                    ),
-                    {},
+                publication_quotes = [
+                    item
+                    for item in accepted
+                    if str(item.get("outcome")) == outcome
+                    and _bookmaker_is_allowed(item.get("bookmaker"))
+                ]
+                if not publication_quotes:
+                    print(
+                        "ODDS V13 PUBLICATION QUARANTINE: "
+                        f"{outcome} reason=NO_POLISH_BOOKMAKER_QUOTE "
+                        f"consensus_bookmakers={consensus['bookmaker_count']}"
+                    )
+                    continue
+                best_row = max(
+                    publication_quotes,
+                    key=lambda item: float(item.get("odds") or 0),
                 )
+                bookmaker = str(best_row.get("bookmaker") or "").strip()
                 by_bookmaker = {
                     name: float(values[outcome])
                     for name, values in consensus["by_bookmaker"].items()
-                    if outcome in values
+                    if outcome in values and _bookmaker_is_allowed(name)
                 }
                 markets[outcome] = {
-                    "best_odds": float(consensus["best_odds"][outcome]),
+                    "best_odds": float(best_row["odds"]),
                     "bookmaker": bookmaker,
-                    "bookmaker_id": consensus["best_bookmaker_ids"].get(outcome, ""),
+                    "bookmaker_id": best_row.get("bookmaker_id", ""),
                     "by_bookmaker": by_bookmaker,
                     "bookmaker_scope": "POLAND_ALLOWLIST",
                     "bookmaker_verified": True,
+                    "consensus_bookmaker_scope": (
+                        "CONFIGURED_ALLOWLIST"
+                        if consensus_allowlist is not None
+                        else "ALL_IDENTIFIABLE_PROVIDER_BOOKMAKERS"
+                    ),
+                    "publication_separated_from_consensus": True,
                     "bet_id": best_row.get("bet_id"),
                     "bet_name": best_row.get("bet_name"),
                     "market_scope": "FULL_MATCH",

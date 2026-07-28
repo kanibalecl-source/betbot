@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import data_api
 from market_data_integrity_v13 import build_market_consensus
 from market_integrity_audit_v13 import MarketIntegrityAuditV13, sport_training_ready
 
@@ -65,6 +66,70 @@ class MarketConsensusV13Tests(unittest.TestCase):
         )
         self.assertNotEqual(result["status"], "PASS")
         self.assertGreater(result["rejected"].get("bookmaker_not_allowed", 0), 0)
+
+
+class FootballPublicationConsensusTests(unittest.TestCase):
+    @staticmethod
+    def _row(bookmaker, bookmaker_id, market, odds):
+        return {
+            "bookmaker": bookmaker,
+            "bookmaker_id": bookmaker_id,
+            "market": market,
+            "odds": odds,
+            "observed_at": NOW,
+            "bet_id": 5,
+            "bet_name": "Goals Over/Under",
+        }
+
+    def test_two_source_consensus_can_publish_one_polish_bookmaker(self):
+        rows = [
+            self._row("Superbet", 10, "OVER_1.5", 1.80),
+            self._row("Superbet", 10, "UNDER_1.5", 2.05),
+            self._row("Pinnacle", 20, "OVER_1.5", 1.85),
+            self._row("Pinnacle", 20, "UNDER_1.5", 2.00),
+        ]
+        with patch.object(data_api, "_iter_fixture_odds", return_value=rows), patch.dict(
+            os.environ,
+            {
+                "BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST": "superbet,sts",
+                "BETBOT_FOOTBALL_CONSENSUS_BOOKMAKER_ALLOWLIST": "*",
+                "BETBOT_V13_FOOTBALL_MIN_BOOKMAKERS": "2",
+            },
+            clear=False,
+        ):
+            markets = data_api.get_odds_market_data({"fixture_id": 123})
+
+        self.assertEqual(markets["OVER_1.5"]["bookmaker"], "Superbet")
+        self.assertEqual(markets["OVER_1.5"]["best_odds"], 1.80)
+        self.assertEqual(markets["OVER_1.5"]["market_bookmaker_count"], 2)
+        self.assertEqual(
+            markets["OVER_1.5"]["consensus_bookmaker_scope"],
+            "ALL_IDENTIFIABLE_PROVIDER_BOOKMAKERS",
+        )
+        self.assertTrue(
+            markets["OVER_1.5"]["publication_separated_from_consensus"]
+        )
+        self.assertEqual(markets["UNDER_1.5"]["bookmaker"], "Superbet")
+
+    def test_market_without_polish_publication_quote_stays_quarantined(self):
+        rows = [
+            self._row("Pinnacle", 20, "OVER_1.5", 1.85),
+            self._row("Pinnacle", 20, "UNDER_1.5", 2.00),
+            self._row("Bet365", 30, "OVER_1.5", 1.82),
+            self._row("Bet365", 30, "UNDER_1.5", 2.02),
+        ]
+        with patch.object(data_api, "_iter_fixture_odds", return_value=rows), patch.dict(
+            os.environ,
+            {
+                "BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST": "superbet,sts",
+                "BETBOT_FOOTBALL_CONSENSUS_BOOKMAKER_ALLOWLIST": "*",
+                "BETBOT_V13_FOOTBALL_MIN_BOOKMAKERS": "2",
+            },
+            clear=False,
+        ):
+            markets = data_api.get_odds_market_data({"fixture_id": 456})
+
+        self.assertEqual(markets, {})
 
 
 class MarketAuditV13Tests(unittest.TestCase):

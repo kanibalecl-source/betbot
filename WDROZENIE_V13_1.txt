@@ -1,0 +1,51 @@
+BETBOT V13.1 — PREMATCH CONSENSUS FIX
+Data: 2026-07-28
+
+CEL
+Rozdzielenie źródeł używanych do potwierdzenia rynku od źródła kursu
+publikowanego użytkownikowi.
+
+ZASADY PO ZMIANIE
+1. Próg jakości pozostaje bez zmian: wymagane są minimum 2 niezależne,
+   kompletne i aktualne źródła kursów.
+2. Konsensus może korzystać ze wszystkich identyfikowalnych bukmacherów
+   zwracanych przez API-Football.
+3. Kurs wyświetlany w kolumnie "Buk" nadal może pochodzić wyłącznie z
+   BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST.
+4. Jeśli rynek ma konsensus, ale nie ma kursu z polskiej listy, typ pozostaje
+   w kwarantannie i nie jest publikowany.
+5. Historia, modele, dane uczące i pliki na woluminie nie są modyfikowane.
+
+PLIKI DO WGRANIA
+- data_api.py
+- .env.example
+- tests/test_market_data_integrity_v13.py
+- tests/test_production_hardening.py
+
+ZMIENNA ŚRODOWISKOWA
+Kod działa bez dodawania nowej zmiennej. Domyślna wartość:
+BETBOT_FOOTBALL_CONSENSUS_BOOKMAKER_ALLOWLIST=*
+
+Opcjonalnie można ustawić tę zmienną jawnie w Railway. Nie należy zmieniać:
+BETBOT_V13_FOOTBALL_MIN_BOOKMAKERS=2
+
+BEZPIECZNE WDROŻENIE
+1. Wgrać pliki z zachowaniem ich ścieżek.
+2. Nie usuwać i nie nadpisywać katalogu data/.
+3. Nie usuwać woluminu Railway.
+4. Wykonać redeploy.
+5. Po wdrożeniu oczekiwane logi:
+   - PREMATCH EXECUTED | CODE=0
+   - ODDS STATUS: 200
+   - ODDS MARKETS: [...]
+6. Dopuszczalny log zabezpieczenia:
+   ODDS V13 PUBLICATION QUARANTINE ... NO_POLISH_BOOKMAKER_QUOTE
+   Oznacza on, że konsensus istnieje, ale nie ma legalnego polskiego kursu
+   do opublikowania.
+
+WALIDACJA LOKALNA
+- kontrola składni: PASS
+- testy celowane: 41/41 PASS
+- pełna kolekcja: 259 testów PASS
+- 1 test FastAPI niewykonany lokalnie z powodu braku biblioteki FastAPI
+  w izolowanym interpreterze; nie jest to błąd poprawki PREMATCH.
