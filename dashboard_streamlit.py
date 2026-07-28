@@ -1891,65 +1891,40 @@ def _render_model_ai_gpt(row, idx: int) -> None:
 
 
 def render_ai_picks_interactive(picks: pd.DataFrame, enable_gpt: bool = False) -> None:
-    if picks.empty:
-        st.markdown(
-            '<div class="ka-panel"><h3>TYPY AI</h3>'
-            '<div class="ai-table-final">'
-            '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>MODEL</div><div>BOT</div><div>BUK</div><div>VALUE</div><div>ZAMK./CLV</div><div>PEWNOŚĆ</div><div>STATUS</div></div>'
-            '<div class="ai-table-final-row"><div>-</div><div><span class="ai-cell-main">Oczekiwanie na typy AI</span></div><div>-</div><div>-</div><div>-</div><div>-</div><div>-</div><div>-</div><div>-</div><div>-</div></div>'
-            '</div></div>',
-            unsafe_allow_html=True
-        )
-        return
-
-    st.markdown(
-        '<div class="ka-panel"><h3>TYPY AI</h3>'
-        '<div class="ai-table-final">'
-        '<div class="ai-table-final-head"><div>LIGA</div><div>MECZ</div><div>RYNEK</div><div>MODEL</div><div>BOT</div><div>BUK</div><div>VALUE</div><div>ZAMK./CLV</div><div>PEWNOŚĆ</div><div>STATUS</div></div>'
-        '</div></div>',
-        unsafe_allow_html=True
-    )
-
+    headers = [
+        "Liga", "Mecz", "Rynek", "Model", "Bot",
+        "Buk PL", "Value", "Zamk./CLV", "Pewność", "Status",
+    ]
     shown, current_page, total_pages, total_items = paginate_frame(
         picks,
         "ai_types_page",
         page_size=10,
     )
+    rows = pick_rows(shown) if not shown.empty else []
+    empty_row = [
+        "-", "Oczekiwanie na typy AI", "-", "-", "-", "-",
+        "-", "-", "-", "-",
+    ]
+    table = html_table(headers, rows if rows else [empty_row])
+    st.markdown(
+        f'<div class="ka-panel model-ai-types-panel">'
+        f'<h3>TYPY AI</h3>{table}</div>',
+        unsafe_allow_html=True,
+    )
 
     for position, (_, row) in enumerate(shown.iterrows()):
-        odds_snapshot = extract_odds_snapshot(row)
         conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 0))
-        edge = format_percent(odds_snapshot.value_percent)
         status_label = (
             "BARDZO MOCNY" if conf >= 85
             else "NORMALNY" if conf >= 65
             else "RYZYKO"
         )
-
-        league = league_html(row)
-        match = match_html(row, bold=False)
+        match = str(first_existing(row, ["match", "mecz"], "Mecz"))
         market = fmt_market(first_existing(row, ["typ", "market"], "-"))
-        conf_width = max(0, min(100, int(conf)))
-
-        row_html = (
-            f'<div class="ai-table-final" style="margin-top:-14px;border-top:0;border-radius:0;">'
-            f'<div class="ai-table-final-row">'
-            f'<div><span class="ai-cell-num">{league}</span></div>'
-            f'<div><span class="ai-cell-main">{match}</span><span class="ai-cell-sub">Niezależny typ AI</span></div>'
-            f'<div><span class="ai-cell-num">{market}</span></div>'
-            f'<div><span class="ai-cell-num">{format_odds(odds_snapshot.model)}</span></div>'
-            f'<div><span class="ai-cell-num">{format_odds(odds_snapshot.bot)}</span></div>'
-            f'<div><span class="ai-cell-num">{format_odds(odds_snapshot.bookmaker)}</span></div>'
-            f'<div><span class="ai-edge-plus">{edge}</span></div>'
-            f'<div><span class="ai-cell-num">{format_closing_clv(odds_snapshot)}</span></div>'
-            f'<div><div class="ai-conf-line"><span class="ai-conf-value">{conf_width}%</span><div class="ai-conf-track"><div class="ai-conf-fill" style="width:{conf_width}%"></div></div></div></div>'
-            f'<div><div class="ai-status-inline">{status_label}</div></div>'
-            f'</div></div>'
-        )
-
-        st.markdown(row_html, unsafe_allow_html=True)
-
-        with st.expander(f"{status_label} - szczegóły AI", expanded=False):
+        with st.expander(
+            f"{match} · {market} · {status_label} — szczegóły AI",
+            expanded=False,
+        ):
             st.markdown(render_ai_detail_card(row), unsafe_allow_html=True)
             if enable_gpt:
                 _render_model_ai_gpt(row, position + (current_page - 1) * 10)

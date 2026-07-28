@@ -1,0 +1,25 @@
+BETBOT SERVER V15.3 — MODEL AI TABLE
+====================================
+
+Zakres:
+- tabela „TYPY AI” korzysta z tego samego komponentu HTML co tabela „Przedmeczowe”;
+- identyczny układ kolumn: Liga, Mecz, Rynek, Model, Bot, Buk PL, Value,
+  Zamk./CLV, Pewność, Status;
+- maksymalnie 10 typów na stronie i dotychczasowa paginacja pozostają aktywne;
+- szczegóły silników i pełna analiza GPT pozostają rozwijane pod tabelą;
+- usunięto osobną siatkę CSS wierszy AI, która rozpadała się na produkcji.
+
+Bezpieczeństwo:
+- brak zmian w logice typowania, uczenia, progach jakości i automatyzacji;
+- brak zmian w plikach historii, bazach danych, modelach i danych woluminu;
+- paczka nie zawiera katalogu data ani żadnych plików użytkownika;
+- GPT nadal uruchamia się wyłącznie na żądanie i nie modyfikuje typu.
+
+Pliki:
+- dashboard_streamlit.py
+- tests/test_model_ai_unified_ui.py
+- PATCH_MANIFEST_SERVER_V15_3_MODEL_AI_TABLE.txt
+
+Walidacja:
+- py_compile: OK
+- tests.test_model_ai_unified_ui: 7/7 OK

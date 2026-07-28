@@ -45,6 +45,19 @@ class UnifiedModelAiUiTests(unittest.TestCase):
         self.assertIn("model-ai-report-section[open]", theme)
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))", theme)
 
+    def test_model_ai_uses_the_same_table_component_as_prematch(self) -> None:
+        dashboard = (ROOT / "dashboard_streamlit.py").read_text(encoding="utf-8")
+        ai_renderer = dashboard.split(
+            "def render_ai_picks_interactive", 1
+        )[1].split("def title", 1)[0]
+
+        self.assertIn("table = html_table(headers", ai_renderer)
+        self.assertIn("rows = pick_rows(shown)", ai_renderer)
+        self.assertIn('"Buk PL"', ai_renderer)
+        self.assertIn("model-ai-types-panel", ai_renderer)
+        self.assertNotIn("ai-table-final-head", ai_renderer)
+        self.assertNotIn("ai-table-final-row", ai_renderer)
+
     def test_full_approved_prompt_is_packaged(self) -> None:
         prompt = (ROOT / "model_ai_analysis_prompt_v2.txt").read_text(encoding="utf-8")
         self.assertIn("ostatnie 10 spotkań", prompt)
