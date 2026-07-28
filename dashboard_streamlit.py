@@ -1,6 +1,7 @@
 ﻿import base64
 import html
 import json
+import math
 import os
 from pathlib import Path
 from typing import Iterable, List
@@ -1570,42 +1571,78 @@ def ai_row_key(row, idx: int) -> str:
 
 
 
-def render_ai_detail_card(row) -> str:
-    conf = as_float(first_existing(row, ["confidence", "advanced_confidence", "ai_pick_score"], 62.93))
-    calibrated = as_float(first_existing(row, ["calibrated_confidence", "calibrated"], conf + 0.64))
-    model_prob = as_float(first_existing(row, ["model_prob", "model_probability"], 0.7055))
-    final_prob = as_float(first_existing(row, ["final_prob", "final_probability"], 0.6293))
+def optional_metric(row, names: Iterable[str]) -> float | None:
+    value = first_existing(row, names, None)
+    if value is None:
+        return None
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
 
-    ev = as_float(first_existing(row, ["ev", "value", "edge"], 0.1767))
-    edge = as_float(first_existing(row, ["edge", "ev", "value"], 0.1767))
-    kelly = as_float(first_existing(row, ["kelly", "kelly_fraction"], 0.05))
-    risk = str(first_existing(row, ["risk"], "HIGH")).upper()
+
+def metric_text(value: float | None, decimals: int = 2) -> str:
+    return "-" if value is None else f"{value:.{decimals}f}"
+
+
+def render_ai_detail_card(row) -> str:
+    conf = optional_metric(
+        row, ["confidence", "advanced_confidence", "ai_pick_score"]
+    )
+    calibrated = optional_metric(
+        row, ["confidence_calibrated_v2", "calibrated_confidence", "calibrated"]
+    )
+    model_prob = optional_metric(
+        row, ["prawd_model", "model_prob", "model_probability"]
+    )
+    final_prob = optional_metric(
+        row, ["prawd_final", "final_prob", "final_probability"]
+    )
+
+    ev = optional_metric(row, ["ev", "value"])
+    edge = optional_metric(row, ["edge"])
+    kelly = optional_metric(
+        row, ["kelly_10", "stage_kelly_fraction", "kelly", "kelly_fraction"]
+    )
+    risk = str(first_existing(row, ["risk"], "-")).upper()
 
     odds_snapshot = extract_odds_snapshot(row)
     book_odds = format_odds(odds_snapshot.bookmaker)
     model_odds = format_odds(odds_snapshot.model)
     bot_odds = format_odds(odds_snapshot.bot)
     closing_clv = format_closing_clv(odds_snapshot)
-    sharp = str(first_existing(row, ["sharp", "sharp_signal"], "NEUTRAL")).upper()
+    sharp = str(
+        first_existing(row, ["sharp_label", "sharp", "sharp_signal"], "-")
+    ).upper()
 
-    home_xg = as_float(first_existing(row, ["home_xg", "xg_home"], 1.15))
-    away_xg = as_float(first_existing(row, ["away_xg", "xg_away"], 1.41))
-    adv_total_xg = as_float(first_existing(row, ["adv_total_xg", "total_xg"], home_xg + away_xg))
-    adv_over = as_float(first_existing(row, ["adv_over25", "adv_over_2_5", "over25_probability"], 85.33))
-    margin = as_float(first_existing(row, ["margin", "bookmaker_margin"], 0.0))
+    home_xg = optional_metric(row, ["home_xg", "xg_home"])
+    away_xg = optional_metric(row, ["away_xg", "xg_away"])
+    adv_total_xg = optional_metric(
+        row, ["advanced_total_xg", "adv_total_xg", "total_xg"]
+    )
+    adv_over = optional_metric(
+        row,
+        ["advanced_over25_prob", "adv_over25", "adv_over_2_5", "over25_probability"],
+    )
+    margin = optional_metric(row, ["marza_%", "margin", "bookmaker_margin"])
 
-    momentum_score = as_float(first_existing(row, ["momentum_score", "momentum"], 25.0))
-    momentum_label = str(first_existing(row, ["momentum_label"], "LOW")).upper()
-    sharp_score = as_float(first_existing(row, ["sharp_score"], 0))
-    sharp_signals = str(first_existing(row, ["sharp_signals", "sharp_signal"], "NO_SHARP_SIGNAL"))
+    momentum_score = optional_metric(row, ["momentum_score", "momentum"])
+    momentum_label = str(first_existing(row, ["momentum_label"], "-")).upper()
+    sharp_score = optional_metric(row, ["sharp_score"])
+    sharp_signals = str(
+        first_existing(row, ["sharp_signals", "sharp_signal"], "-")
+    )
 
-    meta_prob = as_float(first_existing(row, ["meta_prob", "meta_probability"], 67.9))
-    model_weight = as_float(first_existing(row, ["model_weight"], 0.3))
-    market_weight = as_float(first_existing(row, ["market_weight"], 0.2))
-    xg_weight = as_float(first_existing(row, ["xg_weight"], 0.2))
-    momentum_weight = as_float(first_existing(row, ["momentum_weight"], 0.15))
-    sharp_weight = as_float(first_existing(row, ["sharp_weight"], 0.15))
-    dynamic_stake = as_float(first_existing(row, ["dynamic_stake", "stake"], 23.0))
+    meta_prob = optional_metric(row, ["meta_probability", "meta_prob"])
+    model_weight = optional_metric(row, ["meta_weight_model", "model_weight"])
+    market_weight = optional_metric(row, ["meta_weight_market", "market_weight"])
+    xg_weight = optional_metric(row, ["meta_weight_xg", "xg_weight"])
+    momentum_weight = optional_metric(
+        row, ["meta_weight_momentum", "momentum_weight"]
+    )
+    sharp_weight = optional_metric(row, ["meta_weight_sharp", "sharp_weight"])
+    dynamic_stake = optional_metric(row, ["dynamic_stake", "stake"])
 
     return (
         f"<div class='ai-detail-final'>"
@@ -1613,18 +1650,18 @@ def render_ai_detail_card(row) -> str:
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>MODEL AI</div>"
-        f"<div class='ai-engine-line'><b>PEWNOŚĆ:</b> {conf:.2f}</div>"
-        f"<div class='ai-engine-line'><b>PEWNOŚĆ SKALIBROWANA:</b> {calibrated:.2f}</div>"
-        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO MODELU:</b> {model_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO KOŃCOWE:</b> {final_prob:.4f}</div>"
-        f"<div class='ai-engine-line'><b>ETAP A:</b> {final_prob:.4f}</div>"
+        f"<div class='ai-engine-line'><b>PEWNOŚĆ:</b> {metric_text(conf)}</div>"
+        f"<div class='ai-engine-line'><b>PEWNOŚĆ SKALIBROWANA:</b> {metric_text(calibrated)}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO MODELU:</b> {metric_text(model_prob, 4)}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO KOŃCOWE:</b> {metric_text(final_prob, 4)}</div>"
+        f"<div class='ai-engine-line'><b>ETAP A:</b> {metric_text(final_prob, 4)}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>SILNIK WARTOŚCI</div>"
-        f"<div class='ai-engine-line'><b>EV:</b> {ev:.4f}</div>"
-        f"<div class='ai-engine-line'><b>PRZEWAGA:</b> {edge:.4f}</div>"
-        f"<div class='ai-engine-line'><b>KELLY:</b> {kelly:.2f}</div>"
+        f"<div class='ai-engine-line'><b>EV:</b> {metric_text(ev, 4)}</div>"
+        f"<div class='ai-engine-line'><b>PRZEWAGA:</b> {metric_text(edge, 4)}</div>"
+        f"<div class='ai-engine-line'><b>KELLY:</b> {metric_text(kelly, 4)}</div>"
         f"<div class='ai-engine-line'><b>RYZYKO:</b> {risk}</div>"
         f"</div>"
 
@@ -1639,30 +1676,30 @@ def render_ai_detail_card(row) -> str:
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>SILNIK xG</div>"
-        f"<div class='ai-engine-line'><b>xG GOSPODARZY:</b> {home_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>xG GOŚCI:</b> {away_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>SUMA xG:</b> {adv_total_xg:.2f}</div>"
-        f"<div class='ai-engine-line'><b>OVER 2.5:</b> {adv_over:.2f}</div>"
-        f"<div class='ai-engine-line'><b>MARŻA:</b> {margin:.1f}</div>"
+        f"<div class='ai-engine-line'><b>xG GOSPODARZY:</b> {metric_text(home_xg)}</div>"
+        f"<div class='ai-engine-line'><b>xG GOŚCI:</b> {metric_text(away_xg)}</div>"
+        f"<div class='ai-engine-line'><b>SUMA xG:</b> {metric_text(adv_total_xg)}</div>"
+        f"<div class='ai-engine-line'><b>OVER 2.5:</b> {metric_text(adv_over)}</div>"
+        f"<div class='ai-engine-line'><b>MARŻA:</b> {metric_text(margin, 1)}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>SILNIK TEMPA</div>"
-        f"<div class='ai-engine-line'><b>WYNIK TEMPA:</b> {momentum_score:.1f}</div>"
+        f"<div class='ai-engine-line'><b>WYNIK TEMPA:</b> {metric_text(momentum_score, 1)}</div>"
         f"<div class='ai-engine-line'><b>OCENA TEMPA:</b> {momentum_label}</div>"
-        f"<div class='ai-engine-line'><b>WYNIK SHARP:</b> {sharp_score:.0f}</div>"
+        f"<div class='ai-engine-line'><b>WYNIK SHARP:</b> {metric_text(sharp_score, 0)}</div>"
         f"<div class='ai-engine-line'><b>SYGNAŁY SHARP:</b> {sharp_signals}</div>"
         f"</div>"
 
         f"<div class='ai-detail-final-box'>"
         f"<div class='ai-detail-final-title'>META AI</div>"
-        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO META:</b> {meta_prob:.1f}</div>"
-        f"<div class='ai-engine-line'><b>WAGA MODELU:</b> {model_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA RYNKU:</b> {market_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA xG:</b> {xg_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA TEMPA:</b> {momentum_weight}</div>"
-        f"<div class='ai-engine-line'><b>WAGA SHARP:</b> {sharp_weight}</div>"
-        f"<div class='ai-engine-line'><b>DYNAMICZNA STAWKA:</b> {dynamic_stake:.1f}</div>"
+        f"<div class='ai-engine-line'><b>PRAWDOPODOBIEŃSTWO META:</b> {metric_text(meta_prob, 1)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA MODELU:</b> {metric_text(model_weight, 3)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA RYNKU:</b> {metric_text(market_weight, 3)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA xG:</b> {metric_text(xg_weight, 3)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA TEMPA:</b> {metric_text(momentum_weight, 3)}</div>"
+        f"<div class='ai-engine-line'><b>WAGA SHARP:</b> {metric_text(sharp_weight, 3)}</div>"
+        f"<div class='ai-engine-line'><b>DYNAMICZNA STAWKA:</b> {metric_text(dynamic_stake, 1)}</div>"
         f"</div>"
 
         f"</div></div>"

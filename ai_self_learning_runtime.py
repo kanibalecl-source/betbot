@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
@@ -52,15 +54,30 @@ AI_MODE_SETTINGS = {
 }
 
 AI_COLUMNS = [
-    "ai_id", "created_at", "source", "ai_mode", "ai_label", "league", "match", "market", "odds",
+    "ai_id", "observation_key", "created_at", "source", "ai_mode", "ai_label",
+    "pick_id", "fixture_id", "odds_event_id", "match_date",
+    "league", "match", "market", "odds", "kurs_buk", "kurs_model", "kurs_bota",
+    "prawd_model", "prawd_final", "bookmaker", "bookmaker_id",
+    "bookmaker_scope", "bookmaker_verified", "market_scope", "odds_observed_at",
+    "market_integrity_schema", "market_integrity_status",
+    "market_consensus_id", "market_bookmaker_count",
+    "quality_gate_status", "quality_gate_enforced", "quality_data_completeness",
     "confidence", "edge", "ev", "ai_pick_score", "risk", "status",
-    "tempo", "pressure", "momentum", "model_reason", "ai_generated"
+    "closing_odds", "clv_percent", "home_xg", "away_xg",
+    "advanced_total_xg", "advanced_over25_prob", "marza_%",
+    "tempo", "pressure", "momentum", "momentum_score", "momentum_label",
+    "sharp_score", "sharp_label", "sharp_signals",
+    "meta_probability", "meta_weight_model", "meta_weight_market",
+    "meta_weight_xg", "meta_weight_momentum", "meta_weight_sharp",
+    "kelly_10", "stage_kelly_fraction", "dynamic_stake",
+    "model_reason", "ai_generated"
 ]
 
 FEATURE_COLUMNS = [
-    "created_at", "league", "match", "market", "odds", "confidence", "edge",
-    "ev", "tempo", "pressure", "momentum", "risk", "source", "result",
-    "profit", "roi"
+    "ai_id", "observation_key", "created_at", "fixture_id", "pick_id",
+    "league", "match", "market", "odds", "odds_observed_at",
+    "market_consensus_id", "confidence", "edge", "ev", "tempo", "pressure",
+    "momentum", "risk", "source", "result", "profit", "roi"
 ]
 
 DEFAULT_STATE: Dict[str, Any] = {
@@ -72,14 +89,19 @@ DEFAULT_STATE: Dict[str, Any] = {
     "settled_samples": 0,
     "mode": "BOOTSTRAP",
     "min_confidence": 54.0,
-    "min_edge": 0.0,
+    "min_edge": 2.0,
     "league_weights": {},
     "market_weights": {},
     "risk_weights": {"LOW": 4.0, "MEDIUM": 1.5, "HIGH": -3.0},
     "last_summary": {},
 }
 
-MARKETS = ["OVER_1.5", "BTTS_YES", "OVER_2.5", "DOUBLE_1X", "DOUBLE_X2", "OVER_0.5", "BTTS_NO", "UNDER_4.5"]
+MARKETS = {
+    "HOME_WIN", "DRAW", "AWAY_WIN",
+    "OVER_0.5", "UNDER_0.5", "OVER_1.5", "UNDER_1.5",
+    "OVER_2.5", "UNDER_2.5", "OVER_3.5", "UNDER_3.5",
+    "OVER_4.5", "UNDER_4.5", "BTTS_YES", "BTTS_NO",
+}
 
 
 def configure_ai_mode(mode: str = "main") -> Dict[str, Any]:
@@ -158,6 +180,138 @@ def num(value: Any, default: float = 0.0) -> float:
         return float(default)
 
 
+def optional_num(value: Any) -> float | None:
+    try:
+        number = float(value)
+        return number if math.isfinite(number) else None
+    except (TypeError, ValueError):
+        return None
+
+
+def truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def parse_time(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def percent_value(value: Any) -> float | None:
+    number = optional_num(value)
+    if number is None:
+        return None
+    return number * 100.0 if abs(number) <= 1.0 else number
+
+
+def stable_observation_key(row: Any, market: str) -> str:
+    payload = "|".join(
+        str(first(row, [name], "")).strip()
+        for name in (
+            "fixture_id", "pick_id", "odds_event_id", "odds_observed_at",
+            "market_consensus_id",
+        )
+    )
+    payload = f"{payload}|{market}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def validate_candidate(row: Any) -> tuple[bool, str, Dict[str, Any]]:
+    fixture_id = str(first(row, ["fixture_id"], "")).strip()
+    pick_id = str(first(row, ["pick_id"], "")).strip()
+    market = normalize_market(first(row, ["market", "typ"], ""))
+    bookmaker_odds = optional_num(
+        first(row, ["kurs_buk", "bookmaker_odds", "odds"], None)
+    )
+    model_odds = optional_num(first(row, ["kurs_model", "model_odds"], None))
+    bot_odds = optional_num(first(row, ["kurs_bota", "bot_odds", "fair_odds"], None))
+    confidence = percent_value(
+        first(row, ["confidence", "advanced_confidence"], None)
+    )
+    edge_percent = percent_value(first(row, ["edge"], None))
+    ev_percent = percent_value(first(row, ["ev"], None))
+    observed_at_raw = first(row, ["odds_observed_at"], "")
+    observed_at = parse_time(observed_at_raw)
+    maximum_age = max(
+        60,
+        int(
+            os.getenv(
+                "BETBOT_AI_MAX_ODDS_AGE_SECONDS",
+                os.getenv("BETBOT_MAX_ODDS_AGE_SECONDS", "600"),
+            )
+        ),
+    )
+    age_seconds = (
+        max(0.0, (datetime.now(timezone.utc) - observed_at).total_seconds())
+        if observed_at is not None
+        else None
+    )
+    bookmaker_verified = truthy(first(row, ["bookmaker_verified"], False))
+    bookmaker_scope = str(first(row, ["bookmaker_scope"], "")).strip()
+    market_scope = str(first(row, ["market_scope"], "")).strip()
+    integrity_status = str(first(row, ["market_integrity_status"], "")).strip().upper()
+    consensus_id = str(first(row, ["market_consensus_id"], "")).strip()
+    bookmaker_count = optional_num(first(row, ["market_bookmaker_count"], None))
+    quality_status = str(first(row, ["quality_gate_status"], "")).strip().upper()
+    quality_enforced = truthy(first(row, ["quality_gate_enforced"], False))
+
+    checks = (
+        (bool(fixture_id), "missing_fixture_id"),
+        (bool(pick_id), "missing_pick_id"),
+        (market in MARKETS, "unsupported_or_missing_market"),
+        (bookmaker_odds is not None and bookmaker_odds > 1.0, "missing_bookmaker_odds"),
+        (model_odds is not None and model_odds > 1.0, "missing_model_odds"),
+        (bot_odds is not None and bot_odds > 1.0, "missing_bot_odds"),
+        (confidence is not None and 0.0 < confidence < 100.0, "missing_confidence"),
+        (edge_percent is not None, "missing_edge"),
+        (ev_percent is not None, "missing_ev"),
+        (observed_at is not None, "missing_odds_timestamp"),
+        (
+            age_seconds is not None and age_seconds <= maximum_age,
+            "stale_odds",
+        ),
+        (bookmaker_verified, "unverified_bookmaker"),
+        (bookmaker_scope == "POLAND_ALLOWLIST", "invalid_bookmaker_scope"),
+        (market_scope == "FULL_MATCH", "invalid_market_scope"),
+        (integrity_status == "PASS", "market_integrity_not_passed"),
+        (bool(consensus_id), "missing_market_consensus"),
+        (
+            bookmaker_count is not None and bookmaker_count >= 2,
+            "insufficient_bookmaker_consensus",
+        ),
+        (
+            quality_enforced and quality_status in {"ACCEPT", "REVIEW"},
+            "quality_gate_not_passed",
+        ),
+    )
+    for passed, reason in checks:
+        if not passed:
+            return False, reason, {}
+    return True, "accepted", {
+        "fixture_id": fixture_id,
+        "pick_id": pick_id,
+        "market": market,
+        "bookmaker_odds": bookmaker_odds,
+        "model_odds": model_odds,
+        "bot_odds": bot_odds,
+        "confidence": confidence,
+        "edge_percent": edge_percent,
+        "ev_percent": ev_percent,
+        "odds_observed_at": str(observed_at_raw),
+        "age_seconds": age_seconds,
+        "bookmaker_count": int(bookmaker_count),
+        "consensus_id": consensus_id,
+        "quality_status": quality_status,
+    }
+
+
 def normalize_market(raw: Any) -> str:
     s = str(raw or "").strip().upper().replace(" ", "_").replace("-", "_")
     aliases = {
@@ -181,11 +335,11 @@ def combine_results() -> pd.DataFrame:
 
 def result_score(value: Any) -> float:
     s = str(value or "").strip().lower()
-    if any(x in s for x in ["win", "won", "wygr", "traf", "1", "true"]):
+    if s in {"win", "won", "wygrana", "trafiony", "true", "1"}:
         return 1.0
-    if any(x in s for x in ["loss", "lose", "przeg", "lost", "0", "false"]):
+    if s in {"loss", "lose", "lost", "przegrana", "nietrafiony", "false", "0"}:
         return -1.0
-    if "push" in s or "void" in s or "zwrot" in s:
+    if s in {"push", "void", "zwrot"}:
         return 0.0
     return 0.0
 
@@ -300,7 +454,7 @@ def update_learning_state() -> Dict[str, Any]:
     if len(results) < 300 or not permitted:
         state["mode"] = "COLLECTING_QUALITY_DATA"
         state["min_confidence"] = 54.0
-        state["min_edge"] = 0.0
+        state["min_edge"] = 2.0
     elif not gate["statistical_edge_confirmed"]:
         state["mode"] = "VALIDATED_SHADOW_LEARNING"
         state["min_confidence"] = 60.0
@@ -329,27 +483,6 @@ def candidates(label: str = "AI") -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True, sort=False)
-
-
-def choose_market(row: Any, idx: int, state: Dict[str, Any], seed: float) -> str:
-    market_weights = state.get("market_weights", {}) or {}
-    tempo = num(first(row, ["tempo", "pace", "xg_pace"], 0), 0)
-    pressure = num(first(row, ["pressure", "momentum", "dangerous_attacks"], 0), 0)
-    base_market = normalize_market(first(row, ["market", "typ", "signal"], ""))
-    weighted = sorted(MARKETS, key=lambda m: market_weights.get(m, 0), reverse=True)
-    if pressure >= 78 or tempo >= 78:
-        pref = "OVER_1.5"
-    elif pressure >= 64 and tempo >= 55:
-        pref = "BTTS_YES"
-    elif seed >= 78:
-        pref = "OVER_2.5"
-    else:
-        pref = weighted[idx % len(weighted)] if weighted else MARKETS[idx % len(MARKETS)]
-    # This is an autonomous decision. It may use the fixture universe, but it does not blindly copy the prematch market.
-    if pref == base_market and len(weighted) > 1:
-        alt = weighted[(weighted.index(pref) + 1) % len(weighted)] if pref in weighted else MARKETS[(MARKETS.index(pref)+1) % len(MARKETS)]
-        return alt
-    return pref
 
 
 def risk_for(score: float, edge: float, odds: float) -> str:
@@ -384,7 +517,6 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
     market_weights = state.get("market_weights", {}) or {}
     rows: List[Dict[str, Any]] = []
     features: List[Dict[str, Any]] = []
-    seen = set()
     ts = now_iso()
     for idx, row in cand.iterrows():
         league = str(first(row, ["league", "liga"], "-")).strip()
@@ -396,25 +528,46 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
         if not match:
             debug["rejected"].append({"idx": int(idx), "reason": "no_match_name"})
             continue
-        key = (league.lower(), match.lower())
-        if key in seen:
+        valid, rejection_reason, verified = validate_candidate(row)
+        if not valid:
+            debug["rejected"].append(
+                {"idx": int(idx), "match": match, "reason": rejection_reason}
+            )
             continue
-        seen.add(key)
 
-        base_conf = num(first(row, ["confidence", "advanced_confidence", "score", "ai_pick_score"], 52), 52)
-        base_edge = num(first(row, ["edge", "ev", "value"], 0), 0)
-        odds = num(first(row, ["odds", "kurs_buk", "kurs"], 1.75), 1.75)
-        tempo = num(first(row, ["tempo", "pace", "xg_pace"], min(100, 35 + base_conf * 0.45)), 0)
-        pressure = num(first(row, ["pressure", "momentum", "dangerous_attacks"], min(100, 35 + base_conf * 0.42 + max(base_edge, 0))), 0)
-        momentum = num(first(row, ["momentum"], (tempo + pressure) / 2), 0)
+        base_conf = float(verified["confidence"])
+        base_edge = float(verified["edge_percent"])
+        base_ev = float(verified["ev_percent"])
+        odds = float(verified["bookmaker_odds"])
+        tempo_value = optional_num(first(row, ["tempo", "tempo_score"], None))
+        pressure_value = optional_num(first(row, ["pressure"], None))
+        momentum_value = optional_num(first(row, ["momentum"], None))
+        tempo = tempo_value if tempo_value is not None else 0.0
+        pressure = pressure_value if pressure_value is not None else 0.0
+        momentum = momentum_value if momentum_value is not None else 0.0
         league_w = float(league_weights.get(league, 0.0))
-        seed = base_conf * 0.58 + max(base_edge, 0) * 1.45 + tempo * 0.13 + pressure * 0.18 + league_w
-        market = choose_market(row, idx, state, seed)
+        market = str(verified["market"])
         market_w = float(market_weights.get(market, 0.0))
-        score = max(0.0, min(100.0, seed + market_w))
-        edge = max(0.0, min(40.0, base_edge + max(0, league_w) * 0.18 + max(0, market_w) * 0.22 + (score - 55) * 0.09))
+        score = max(
+            0.0,
+            min(
+                100.0,
+                (base_conf * 0.60)
+                + (min(max(base_edge, 0.0), 15.0) / 15.0 * 20.0)
+                + (min(max(base_ev, 0.0), 25.0) / 25.0 * 20.0)
+                + league_w
+                + market_w,
+            ),
+        )
+        edge = base_edge
         min_conf = float(state.get("min_confidence", 54))
-        min_edge = float(state.get("min_edge", 0))
+        source_required_edge = percent_value(
+            first(row, ["quality_required_edge"], None)
+        )
+        min_edge = max(
+            float(state.get("min_edge", 2.0)),
+            source_required_edge if source_required_edge is not None else 2.0,
+        )
         if score < min_conf or edge < min_edge:
             debug["rejected"].append({"match": match, "reason": "threshold", "score": round(score,2), "edge": round(edge,2)})
             continue
@@ -424,37 +577,93 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
             f"Self-learning score={score:.1f}; mode={state.get('mode')}; market={market}; "
             f"league_w={league_w:.1f}; market_w={market_w:.1f}; tempo={tempo:.1f}; pressure={pressure:.1f}"
         )
-        ai_id = f"AI-{abs(hash((league, match, market, ts[:10]))) % 10_000_000:07d}"
+        observation_key = stable_observation_key(row, market)
+        ai_id = f"AI-{observation_key[:16].upper()}"
         item = {
             "ai_id": ai_id,
+            "observation_key": observation_key,
             "created_at": ts,
             "source": first(row, ["_source"], "DATA_FEED"),
             "ai_mode": settings["mode"],
             "ai_label": settings["label"],
+            "pick_id": verified["pick_id"],
+            "fixture_id": verified["fixture_id"],
+            "odds_event_id": first(row, ["odds_event_id"], ""),
+            "match_date": first(row, ["match_date"], ""),
             "league": league,
             "match": match,
             "market": market,
             "odds": round(odds, 3),
+            "kurs_buk": round(odds, 3),
+            "kurs_model": round(float(verified["model_odds"]), 4),
+            "kurs_bota": round(float(verified["bot_odds"]), 4),
+            "prawd_model": first(row, ["prawd_model", "model_probability"], ""),
+            "prawd_final": first(row, ["prawd_final", "final_probability"], ""),
+            "bookmaker": first(row, ["bookmaker", "margin_bookmaker"], ""),
+            "bookmaker_id": first(row, ["bookmaker_id"], ""),
+            "bookmaker_scope": first(row, ["bookmaker_scope"], ""),
+            "bookmaker_verified": True,
+            "market_scope": first(row, ["market_scope"], ""),
+            "odds_observed_at": verified["odds_observed_at"],
+            "market_integrity_schema": first(row, ["market_integrity_schema"], ""),
+            "market_integrity_status": first(row, ["market_integrity_status"], ""),
+            "market_consensus_id": verified["consensus_id"],
+            "market_bookmaker_count": verified["bookmaker_count"],
+            "quality_gate_status": verified["quality_status"],
+            "quality_gate_enforced": True,
+            "quality_data_completeness": first(
+                row, ["quality_data_completeness"], ""
+            ),
             "confidence": round(score, 2),
-            "edge": round(edge, 2),
-            "ev": round(edge, 2),
+            "edge": round(base_edge / 100.0, 6),
+            "ev": round(base_ev / 100.0, 6),
             "ai_pick_score": round(score, 2),
             "risk": risk,
             "status": status,
+            "closing_odds": first(row, ["closing_odds"], ""),
+            "clv_percent": first(row, ["clv_percent"], ""),
+            "home_xg": first(row, ["home_xg"], ""),
+            "away_xg": first(row, ["away_xg"], ""),
+            "advanced_total_xg": first(row, ["advanced_total_xg"], ""),
+            "advanced_over25_prob": first(row, ["advanced_over25_prob"], ""),
+            "marza_%": first(row, ["marza_%"], ""),
             "tempo": round(tempo, 2),
             "pressure": round(pressure, 2),
             "momentum": round(momentum, 2),
+            "momentum_score": first(row, ["momentum_score"], ""),
+            "momentum_label": first(row, ["momentum_label"], ""),
+            "sharp_score": first(row, ["sharp_score"], ""),
+            "sharp_label": first(row, ["sharp_label"], ""),
+            "sharp_signals": first(row, ["sharp_signals"], ""),
+            "meta_probability": first(row, ["meta_probability"], ""),
+            "meta_weight_model": first(row, ["meta_weight_model"], ""),
+            "meta_weight_market": first(row, ["meta_weight_market"], ""),
+            "meta_weight_xg": first(row, ["meta_weight_xg"], ""),
+            "meta_weight_momentum": first(row, ["meta_weight_momentum"], ""),
+            "meta_weight_sharp": first(row, ["meta_weight_sharp"], ""),
+            "kelly_10": first(row, ["kelly_10"], ""),
+            "stage_kelly_fraction": first(row, ["stage_kelly_fraction"], ""),
+            "dynamic_stake": first(row, ["dynamic_stake"], ""),
             "model_reason": reason,
             "ai_generated": True,
         }
         rows.append(item)
-        feature = {k: item.get(k, "") for k in FEATURE_COLUMNS if k in item}
-        feature.update({"result": "PENDING", "profit": 0.0, "roi": 0.0})
-        features.append(feature)
 
     out = pd.DataFrame(rows, columns=AI_COLUMNS)
     if not out.empty:
-        out = out.sort_values(["ai_pick_score", "edge"], ascending=False).head(limit).reset_index(drop=True)
+        out = (
+            out.sort_values(
+                ["ai_pick_score", "edge", "ev"],
+                ascending=False,
+            )
+            .drop_duplicates(subset=["fixture_id"], keep="first")
+            .head(limit)
+            .reset_index(drop=True)
+        )
+        for item in out.to_dict("records"):
+            feature = {key: item.get(key, "") for key in FEATURE_COLUMNS}
+            feature.update({"result": "PENDING", "profit": 0.0, "roi": 0.0})
+            features.append(feature)
     debug["accepted"] = int(len(out))
     write_json(DEBUG_FILE, debug)
     append_feature_store(features)
@@ -468,8 +677,14 @@ def append_feature_store(rows: List[Dict[str, Any]]) -> None:
     if FEATURE_STORE_FILE.exists() and FEATURE_STORE_FILE.stat().st_size > 0:
         old = read_csv(FEATURE_STORE_FILE)
         combined = pd.concat([old, new], ignore_index=True, sort=False)
-        if {"match", "market", "created_at"}.issubset(combined.columns):
-            combined = combined.drop_duplicates(subset=["match", "market", "created_at"], keep="last")
+        if "observation_key" in combined.columns:
+            combined = combined.drop_duplicates(
+                subset=["observation_key"], keep="last"
+            )
+        elif {"match", "market", "created_at"}.issubset(combined.columns):
+            combined = combined.drop_duplicates(
+                subset=["match", "market", "created_at"], keep="last"
+            )
     else:
         combined = new
     combined.to_csv(FEATURE_STORE_FILE, index=False)
