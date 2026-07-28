@@ -1977,6 +1977,10 @@ def page_banner(section: str, name: str, subtitle: str) -> None:
         '</div>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        f'<div class="ka-page-metal-title">{html.escape(name)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def subpage_banner(section: str, name: str, subtitle: str) -> None:
@@ -2250,7 +2254,6 @@ def render_model_ai(picks: pd.DataFrame, results: pd.DataFrame) -> None:
     learning_mode = str(gate.get("learning_mode", "COLLECTING")).replace("_QUALITY_DATA", "")
 
     page_banner("Model AI", "MODEL AI", "Zweryfikowane rekomendacje i pełna analiza.")
-    st.markdown('<div class="model-ai-metal-title">MODEL AI</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="model-ai-readability-guide">'
         '<div><b>1</b><span><strong>Wybór modelu</strong>Lista pokazuje tylko typy po bramkach jakości.</span></div>'

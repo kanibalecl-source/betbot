@@ -74,5 +74,43 @@ class UnifiedModelAiUiTests(unittest.TestCase):
         self.assertIn("Analiza nie została wykonana:", dashboard)
 
 
+    def test_shared_controls_use_the_light_blue_action_palette(self) -> None:
+        theme = (ROOT / "executive_dashboard_theme.py").read_text(encoding="utf-8")
+
+        self.assertIn("--ui-action:#25a9ef", theme)
+        self.assertIn('[data-baseweb="select"]>div>div:last-child', theme)
+        self.assertIn("background:var(--ui-action-soft)!important;border-color:#8fd2f3", theme)
+        self.assertIn('[data-baseweb="popover"] [role="option"]', theme)
+        self.assertIn('[role="listbox"] [role="option"][aria-selected="true"]', theme)
+        self.assertIn("background:#cfeefe!important;color:#0b4f7a!important", theme)
+        self.assertIn('[data-testid="stSelectbox"] [data-rac][role="group"]', theme)
+        self.assertIn('input[role="combobox"][data-rac]', theme)
+        self.assertIn('button[data-rac][aria-haspopup="listbox"]', theme)
+        self.assertIn('[data-testid="stExpander"] summary', theme)
+        self.assertIn("linear-gradient(180deg,#43bcf5 0%,var(--ui-action) 100%)", theme)
+        self.assertNotIn("linear-gradient(180deg,#0b2b51,#071e3b)", theme)
+
+    def test_every_page_uses_the_v16_card_navigation_system(self) -> None:
+        theme = (ROOT / "executive_dashboard_theme.py").read_text(encoding="utf-8")
+        dashboard = (ROOT / "dashboard_streamlit.py").read_text(encoding="utf-8")
+
+        self.assertIn("NAV_PRESENTATION", theme)
+        for slug in (
+            "live", "prematch", "model_ai", "analytics", "history",
+            "bets", "ranking", "volleyball", "handball",
+        ):
+            self.assertIn(f'"{slug}"', theme)
+        self.assertIn('key=f"nav_card_{slug}"', theme)
+        self.assertIn("ui-nav-visual", theme)
+        self.assertIn("ui-nav-badge", theme)
+        self.assertIn("ui-menu-emblem", theme)
+        self.assertIn("ka-page-metal-title", theme)
+        self.assertIn("ka-page-metal-title", dashboard)
+        self.assertNotIn(
+            "st.markdown('<div class=\"model-ai-metal-title\">MODEL AI</div>'",
+            dashboard,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

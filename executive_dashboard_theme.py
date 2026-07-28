@@ -25,6 +25,18 @@ NAV_LABELS = {
     "Piłka ręczna": "◇   Piłka ręczna",
 }
 
+NAV_PRESENTATION = {
+    "Na żywo": ("live", "◎", "Mecze i sygnały live", "LIVE"),
+    "Przedmeczowe": ("prematch", "▦", "Dzisiejsze typy", "TYPY"),
+    "Model AI": ("model_ai", "◇", "Analizy i GPT", "AI"),
+    "Analityka": ("analytics", "▥", "Jakość i modele", "KPI"),
+    "Historia": ("history", "◷", "Typy i wyniki", "WYNIKI"),
+    "Moje zakłady": ("bets", "▤", "Kupony i bilans", "ROI"),
+    "Ranking": ("ranking", "♜", "Skuteczność modelu", "TOP"),
+    "Siatkówka": ("volleyball", "◉", "Dane i shadow", "SHADOW"),
+    "Piłka ręczna": ("handball", "◌", "Dane i shadow", "SHADOW"),
+}
+
 PAGE_META = {
     "Na żywo": ("Centrum wydarzeń na żywo", "Aktualne mecze, kursy i sygnały modelu"),
     "Przedmeczowe": ("Centrum przedmeczowe", "Dzisiejsze rekomendacje i sygnały modelu"),
@@ -89,6 +101,35 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 [data-testid="stSidebar"] .st-key-executive_logout button{height:40px!important;min-height:40px!important;background:#fff!important;border:1px solid #cfd9e5!important;color:#18324f!important;box-shadow:none!important;justify-content:center!important}
 [data-testid="stSidebar"] .st-key-executive_logout button:hover{background:#f3f7fb!important;border-color:#aac0d8!important}
 
+/* V16 unified card navigation */
+.ui-side-brand.ui-menu-brand{height:118px!important;padding:15px 20px 10px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+.ui-menu-emblem{position:relative;color:#116ed8;font-size:43px;line-height:1;font-weight:950;font-style:italic;letter-spacing:-.08em;text-transform:uppercase;
+  -webkit-text-stroke:1px #d9e9f9;text-shadow:0 1px 0 #fff,0 2px 0 #8bb5dc,0 4px 0 #fff,0 6px 14px rgba(17,110,216,.22)}
+.ui-menu-emblem:before,.ui-menu-emblem:after{content:"";position:absolute;left:-16px;right:-18px;height:1px;background:linear-gradient(90deg,transparent,#168ff5 18%,#168ff5 82%,transparent)}
+.ui-menu-emblem:before{top:-7px}.ui-menu-emblem:after{bottom:-10px}
+.ui-menu-emblem small{display:block;margin:12px 0 0 5px;color:#7d94aa;font-size:7px;font-style:normal;font-weight:850;letter-spacing:.38em;text-align:center;text-shadow:none;-webkit-text-stroke:0}
+[data-testid="stSidebar"] .ui-nav-start+div{margin-top:2px!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]{position:relative!important;height:76px!important;margin:0 12px 9px!important;border:1px solid #dfe8f2!important;border-radius:12px!important;background:#fff!important;box-shadow:0 5px 16px rgba(18,54,91,.055)!important;overflow:hidden!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]>[data-testid="stVerticalBlock"]{height:100%!important;position:relative!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"] .stElementContainer:has(.ui-nav-visual){position:absolute!important;inset:0!important;z-index:3!important;pointer-events:none!important}
+.ui-nav-visual{height:76px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;align-items:center;gap:10px;padding:0 11px;box-sizing:border-box}
+.ui-nav-icon{width:42px;height:48px;display:grid;place-items:center;border-radius:10px;background:#eef6ff;color:#0876ee;font-size:22px;font-weight:900;box-shadow:inset 0 0 0 1px #e1eefc}
+.ui-nav-copy{min-width:0}.ui-nav-copy strong{display:block;color:#102a49;font-size:13px;line-height:1.15;font-weight:800;white-space:nowrap}.ui-nav-copy small{display:block;margin-top:7px;color:#778ba3;font-size:9px;line-height:1;font-weight:600;white-space:nowrap}
+.ui-nav-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:25px;padding:0 7px;border-radius:10px;background:#edf5ff;color:#0876ee;font-size:8px;font-weight:900;box-sizing:border-box}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton{position:absolute!important;inset:0!important;z-index:2!important;padding:0!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton button{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:100%!important;border:0!important;border-radius:11px!important;background:transparent!important;color:transparent!important;box-shadow:none!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:hover{border-color:#a9d9fb!important;transform:translateY(-1px);box-shadow:0 9px 21px rgba(28,119,205,.11)!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]){border-color:#168ff5!important;background:linear-gradient(135deg,#086cff 0%,#28a8f5 100%)!important;box-shadow:0 11px 25px rgba(8,108,255,.24)!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]) .ui-nav-icon{background:#fff!important;color:#0876ee!important;box-shadow:0 4px 12px rgba(7,61,128,.12)!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]) .ui-nav-copy strong,
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]) .ui-nav-copy small{color:#fff!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]:has(button[kind="primary"]) .ui-nav-badge{background:#fff!important;color:#0876ee!important}
+.ui-side-footer{position:relative!important;left:auto!important;bottom:auto!important;width:auto!important;margin:18px 12px 8px!important;border:1px solid #dfe8f2!important;border-radius:12px!important;background:#fff!important}
+.ui-online{padding:15px 16px!important;border-bottom:0!important;color:#183653!important;font-weight:750!important}
+.ui-online-detail{display:block;padding:0 16px 14px;color:#7a8da3;font-size:9px;line-height:1.4}
+[data-testid="stSidebar"] .st-key-executive_logout{position:relative!important;left:auto!important;bottom:auto!important;width:auto!important;margin:0 12px 16px!important}
+[data-testid="stSidebar"] .st-key-executive_logout button{height:42px!important;min-height:42px!important;border-radius:10px!important}
+
 /* Top workspace bar */
 .ui-topbar{height:88px;margin:0 -28px 22px;padding:0 31px;display:flex;align-items:center;justify-content:space-between;gap:24px;background:#fff;color:#14283f;border-bottom:1px solid #dfe6ef;box-shadow:0 3px 12px rgba(15,35,65,.055)}
 .ui-heading h1{font-size:25px;line-height:1.1;margin:0 0 6px;color:#132238!important;font-weight:800;letter-spacing:-.02em}.ui-heading p{margin:0;color:#718095;font-size:12px}
@@ -124,6 +165,9 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 .ka-bar-row{color:#506076!important}.ka-bar-track{background:#e5eaf0!important}.ka-bar-fill{background:linear-gradient(90deg,#1675df,#29a8f5)!important}.ka-bar-value{color:#126fdc!important}.ka-viz{padding:16px 17px!important}.ka-insight{background:#f8fafc!important;border:1px solid #e7ecf2!important;border-radius:9px!important}.ka-insight b{color:#1d2d43!important}.ka-insight span{color:#718095!important}.ka-insight-icon{color:#1679df!important}
 .ai-insight-card{background:#fff!important;border:1px solid var(--ui-line)!important;box-shadow:var(--ui-shadow)!important}.ai-insight-count{float:right;color:#1478e8;font-size:9px;font-weight:800}.ai-insight-summary{border:1px solid #e1e7ee;border-radius:10px;padding:14px;background:#fff}.ai-insight-eyebrow{color:#7a8899;font-size:9px;font-weight:800;letter-spacing:.08em}.ai-insight-match{color:#173653;font-size:16px;font-weight:850;margin:7px 0 13px}.ai-insight-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 14px}.ai-insight-facts>div{padding:9px 8px;border:1px solid #e5eaf0;border-radius:8px;background:#fff}.ai-insight-facts small{display:block;color:#8491a1;font-size:8px;font-weight:750;letter-spacing:.06em;margin-bottom:5px}.ai-insight-facts b{display:block;color:#243a54;font-size:12px}.ai-insight-confidence-row{display:flex;align-items:center;gap:14px;padding-top:2px}.ai-insight-confidence{width:62px;height:62px;min-width:62px;border-radius:50%;display:grid;place-items:center;border:6px solid #2186ed;color:#126fdc;background:#fff;font-size:17px;font-weight:900}.ai-insight-copy{color:#5f7084;font-size:10px;line-height:1.55}.st-key-live_ai_insight_toggle{margin-top:-7px!important}.st-key-live_ai_insight_toggle button{width:100%!important;background:#1478e8!important;border-color:#1478e8!important;color:#fff!important;box-shadow:0 6px 16px rgba(20,120,232,.18)!important}.st-key-live_ai_insight_toggle button:hover{background:#0f68ca!important;border-color:#0f68ca!important;color:#fff!important}
 .model-ai-metal-title{margin:-2px 0 14px;color:#0a2d58;font-size:clamp(32px,3.6vw,54px);line-height:.95;font-weight:950;font-style:italic;letter-spacing:-.045em;text-transform:uppercase;text-shadow:0 2px 0 #fff,0 3px 0 #b8c8d9,0 6px 12px rgba(13,52,93,.14)}
+.ka-page-metal-title{position:relative;margin:-5px 0 20px;padding:2px 12px 10px;color:#0b65bc;font-size:clamp(34px,4.2vw,63px);line-height:.92;font-weight:950;font-style:italic;letter-spacing:-.045em;text-align:center;text-transform:uppercase;
+  -webkit-text-stroke:1px #d8eafa;text-shadow:0 1px 0 #fff,0 2px 0 #9fc5e7,0 4px 0 #fff,0 7px 16px rgba(10,87,164,.15)}
+.ka-page-metal-title:after{content:"";display:block;width:58%;height:2px;margin:11px auto 0;background:linear-gradient(90deg,transparent,#168ff5 22%,#cfeeff 50%,#168ff5 78%,transparent)}
 .model-ai-readability-guide{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 16px}.model-ai-readability-guide>div{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:center;padding:11px 13px;border:1px solid #dfe6ef;border-radius:10px;background:#f8fbff}.model-ai-readability-guide b{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;background:#1478e8;color:#fff;font-size:12px}.model-ai-readability-guide span{display:block;color:#6b7c91;font-size:10px;line-height:1.4}.model-ai-readability-guide strong{display:block;margin-bottom:2px;color:#162c46;font-size:11px}
 .model-ai-analysis{display:grid;gap:9px;margin-top:14px}.model-ai-analysis-summary{padding:18px 19px;border:1px solid #dce5ef;border-left:5px solid #1478e8;border-radius:11px;background:linear-gradient(135deg,#f8fbff,#fff);color:#172b44;box-shadow:0 7px 20px rgba(15,52,92,.06)}.model-ai-analysis-summary.decision-play{border-left-color:#20a36a}.model-ai-analysis-summary.decision-skip{border-left-color:#d95151}.model-ai-decision-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px}.model-ai-kicker{display:block;margin-bottom:6px;color:#718198;font-size:9px;font-weight:850;letter-spacing:.085em}.model-ai-decision-head b{display:block;color:#126fdc;font-size:26px;line-height:1}.decision-play .model-ai-decision-head b{color:#16865b}.decision-skip .model-ai-decision-head b{color:#c94545}.model-ai-verdict-metrics{display:grid;grid-template-columns:repeat(3,minmax(96px,1fr));gap:8px}.model-ai-verdict-metrics>span{min-width:96px;padding:9px 11px;border:1px solid #e1e7ee;border-radius:8px;background:#fff}.model-ai-verdict-metrics small{display:block;margin-bottom:3px;color:#7b899b;font-size:8px;font-weight:750;text-transform:uppercase}.model-ai-verdict-metrics strong{display:block;color:#173653;font-size:15px}.model-ai-verdict-metrics .risk-high strong{color:#c94545}.model-ai-verdict-metrics .risk-medium strong{color:#bd7715}.model-ai-verdict-metrics .risk-low strong{color:#16865b}.model-ai-summary-copy{margin-top:13px;padding-top:12px;border-top:1px solid #e5ebf2;color:#33465d;font-size:13px;line-height:1.65}.model-ai-summary-copy p{margin:0}.model-ai-report-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:7px 2px 0;color:#172b44}.model-ai-report-toolbar b{font-size:13px}.model-ai-report-toolbar span{color:#78879a;font-size:9px}.model-ai-report-section{border:1px solid #dfe6ef;border-radius:9px;background:#fff;overflow:hidden}.model-ai-report-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;cursor:pointer;list-style:none;color:#173653;font-size:12px;font-weight:800;background:#fbfcfe}.model-ai-report-section>summary::-webkit-details-marker{display:none}.model-ai-report-section>summary:after{content:"＋";color:#1478e8;font-size:16px}.model-ai-report-section[open]>summary{border-bottom:1px solid #e7ecf2;background:#f5f9fe}.model-ai-report-section[open]>summary:after{content:"−"}.model-ai-report-section>summary small{margin-left:auto;color:#8997a8;font-size:8px;font-weight:650}.model-ai-report-body{padding:14px 16px;color:#33465d;font-size:12px;line-height:1.68}.model-ai-report-body p{margin:0 0 10px}.model-ai-report-body p:last-child{margin-bottom:0}.model-ai-report-body a{color:#0f6fcf;text-decoration:none;overflow-wrap:anywhere}.model-ai-report-body a:hover{text-decoration:underline}
 
@@ -266,6 +310,14 @@ label,[data-testid="stWidgetLabel"]{color:#607086!important;font-size:10px!impor
 [data-testid="stExpander"]{border-color:#bfe4f7!important;border-radius:11px!important;box-shadow:0 5px 18px rgba(37,169,239,.09)!important}
 .footer-ka{margin-top:20px!important;padding:17px 4px 4px!important;color:#7d8c9f!important}
 
+/* V16 final cascade: card menu and page identity must win over legacy rules. */
+[data-testid="stSidebar"] .ui-nav-start+div{margin-top:2px!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"]{height:76px!important;margin:0 12px 9px!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton{padding:0!important}
+[data-testid="stSidebar"] [class*="st-key-nav_card_"] .stButton button{height:100%!important;min-height:100%!important;padding:0!important;border-radius:11px!important;color:transparent!important}
+.ui-side-footer{position:relative!important;left:auto!important;bottom:auto!important;width:auto!important;margin:18px 12px 8px!important}
+[data-testid="stSidebar"] .st-key-executive_logout{position:relative!important;left:auto!important;bottom:auto!important;width:auto!important;margin:0 12px 16px!important}
+
 @media(min-width:1500px){.ka-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}.ka-layout{grid-template-columns:1.45fr .95fr!important}.ka-bottom{grid-template-columns:1.45fr .95fr .95fr!important}}
 
 @media(max-width:1200px){[data-testid="stSidebar"]{width:220px!important;min-width:220px!important}[data-testid="stSidebar"]>div:first-child{width:220px!important}.ui-side-footer{width:220px}[data-testid="stSidebar"] .st-key-executive_logout{width:200px!important}.ka-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ui-search{display:none}.block-container{padding-left:18px!important;padding-right:18px!important}.ui-topbar{margin-left:-18px;margin-right:-18px}.model-ai-readability-guide{grid-template-columns:1fr!important}.model-ai-decision-head{flex-direction:column}.model-ai-verdict-metrics{width:100%}}
@@ -286,13 +338,11 @@ def _select_navigation(item: str) -> None:
 
 
 def render_navigation(base_dir: Path) -> str:
-    logo = _image_uri(base_dir / "kanibal_banner_2026.png")
-    image = f'<img src="{logo}" alt="KANIBAL">' if logo else ""
     with st.sidebar:
         st.markdown(
-            '<div class="ui-side-brand"><div class="ui-side-logo ui-side-banner">'
-            f'{image}'
-            '</div></div>',
+            '<div class="ui-side-brand ui-menu-brand">'
+            '<div class="ui-menu-emblem">MENU<small>KANIBAL ANALYTICS</small></div>'
+            '</div>',
             unsafe_allow_html=True,
         )
         st.markdown('<div class="ui-nav-start"></div>', unsafe_allow_html=True)
@@ -300,17 +350,29 @@ def render_navigation(base_dir: Path) -> str:
             st.session_state.executive_navigation = "Przedmeczowe"
         for item in NAV_ITEMS:
             active = st.session_state.executive_navigation == item
-            st.button(
-                NAV_LABELS[item],
-                key=f"executive_nav_{item}",
-                use_container_width=True,
-                type="primary" if active else "secondary",
-                on_click=_select_navigation,
-                args=(item,),
-            )
+            slug, icon, subtitle, badge = NAV_PRESENTATION[item]
+            with st.container(key=f"nav_card_{slug}"):
+                st.markdown(
+                    '<div class="ui-nav-visual">'
+                    f'<span class="ui-nav-icon">{html.escape(icon)}</span>'
+                    f'<span class="ui-nav-copy"><strong>{html.escape(item)}</strong>'
+                    f'<small>{html.escape(subtitle)}</small></span>'
+                    f'<span class="ui-nav-badge">{html.escape(badge)}</span>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                st.button(
+                    NAV_LABELS[item],
+                    key=f"executive_nav_{item}",
+                    use_container_width=True,
+                    type="primary" if active else "secondary",
+                    on_click=_select_navigation,
+                    args=(item,),
+                )
         selected = st.session_state.executive_navigation
         st.markdown(
-            '<div class="ui-side-footer"><div class="ui-online">System online</div></div>',
+            '<div class="ui-side-footer"><div class="ui-online">System online</div>'
+            '<span class="ui-online-detail">Wszystkie usługi działają poprawnie</span></div>',
             unsafe_allow_html=True,
         )
         if st.button("Wyloguj", key="executive_logout", use_container_width=True):

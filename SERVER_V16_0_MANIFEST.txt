@@ -1,0 +1,27 @@
+BETBOT SERVER V16.0 - UNIFIED CARD SIDEBAR AND SUBPAGES
+Data: 2026-07-28
+
+PLIKI DO WGRANIA:
+1. dashboard_streamlit.py
+2. executive_dashboard_theme.py
+
+PLIK TESTOWY (nie jest wymagany przez runtime):
+3. tests/test_model_ai_unified_ui.py
+
+ZAKRES:
+- nowe, stale widoczne menu boczne w formie kart,
+- osobna ikona, opis i znacznik dla kazdej z 9 zakladek,
+- niebieski stan aktywny zgodny z przyjetym systemem wizualnym,
+- wspolny baner i metaliczny naglowek nazwy na kazdej podstronie,
+- spojne biale karty, filtry, tabele, metryki i paginacja,
+- brak zmian logiki typowania, modeli, API, automatyzacji i danych.
+
+BEZPIECZENSTWO:
+- paczka nie zawiera katalogu data,
+- paczka nie zawiera users.json, .env ani sekretow,
+- paczka nie zawiera modeli, historii, wynikow ani danych treningowych,
+- wdrozenie nie kasuje i nie nadpisuje danych woluminu.
+
+WERYFIKACJA:
+- Python syntax: OK
+- tests.test_model_ai_unified_ui: 9/9 OK
