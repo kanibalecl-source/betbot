@@ -1,0 +1,26 @@
+BETBOT SERVER V15.5 - LIGHT BLUE SELECT FIELDS
+Data: 2026-07-28
+
+ZAKRES
+- Cale pola list rozwijanych otrzymuja jasnoblekine tlo.
+- Tekst wybranej opcji pozostaje ciemnogranatowy i czytelny.
+- Obramowanie pola jest blekitne.
+- Po najechaniu pole otrzymuje nieco mocniejszy blekit.
+- Segment strzalki pozostaje w intensywniejszym blekicie z biala ikona.
+- Zmiana jest globalna i obejmuje wszystkie zakladki panelu.
+
+PLIKI DO NADPISANIA
+- executive_dashboard_theme.py
+
+TESTY DOLACZONE DO PACZKI
+- tests/test_model_ai_unified_ui.py
+
+BEZPIECZENSTWO
+- Brak zmian logiki typowania, uczenia, rozliczania i automatyzacji.
+- Brak plikow danych, historii, modeli, wag i konfiguracji serwerowej.
+- Wolumin /data nie jest modyfikowany przez paczke.
+
+WDROZENIE
+1. Rozpakuj paczke w katalogu glownym repozytorium.
+2. Zachowaj strukture katalogow i nadpisz pliki.
+3. Wykonaj redeploy uslugi.

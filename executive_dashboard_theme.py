@@ -151,12 +151,22 @@ header[data-testid="stHeader"]{height:0!important;background:transparent!importa
 [data-baseweb="input"],[data-baseweb="input"]>div,[data-baseweb="select"],[data-baseweb="select"]>div,[data-baseweb="textarea"],[data-testid="stNumberInput"]>div>div,[data-testid="stSelectbox"] div[data-baseweb="select"]>div{
   min-height:40px!important;border-radius:8px!important;background:#fff!important;border-color:#dce4ed!important;color:#1f3046!important
 }
+[data-baseweb="select"],[data-baseweb="select"]>div,[data-testid="stSelectbox"] div[data-baseweb="select"]>div{
+  background:var(--ui-action-soft)!important;border-color:#8fd2f3!important;color:#123b5d!important
+}
+[data-baseweb="select"]>div:hover,[data-testid="stSelectbox"] div[data-baseweb="select"]>div:hover{
+  background:#dcf2fd!important;border-color:#58bced!important
+}
+[data-baseweb="select"] input,[data-baseweb="select"] span,[data-baseweb="select"] div{
+  color:#123b5d!important
+}
 [data-baseweb="select"]>div{overflow:hidden!important}
 [data-baseweb="select"]>div>div:last-child{
   align-self:stretch!important;min-width:34px!important;margin:-1px!important;padding:0 9px!important;
   display:flex!important;align-items:center!important;justify-content:center!important;
   border-radius:0 8px 8px 0!important;background:linear-gradient(180deg,#43bcf5,var(--ui-action))!important;color:#fff!important
 }
+[data-baseweb="select"]>div>div:last-child,[data-baseweb="select"]>div>div:last-child *{color:#fff!important}
 [data-baseweb="select"]>div>div:last-child svg{fill:#fff!important;color:#fff!important}
 input,textarea{color:#1f3046!important;background:#fff!important}
 label,[data-testid="stWidgetLabel"]{color:#607086!important;font-size:10px!important;font-weight:700!important;text-transform:none!important;letter-spacing:0!important}

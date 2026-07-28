@@ -79,6 +79,7 @@ class UnifiedModelAiUiTests(unittest.TestCase):
 
         self.assertIn("--ui-action:#25a9ef", theme)
         self.assertIn('[data-baseweb="select"]>div>div:last-child', theme)
+        self.assertIn("background:var(--ui-action-soft)!important;border-color:#8fd2f3", theme)
         self.assertIn('[data-testid="stExpander"] summary', theme)
         self.assertIn("linear-gradient(180deg,#43bcf5 0%,var(--ui-action) 100%)", theme)
         self.assertNotIn("linear-gradient(180deg,#0b2b51,#071e3b)", theme)
