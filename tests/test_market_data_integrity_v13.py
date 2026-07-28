@@ -9,7 +9,11 @@ from unittest.mock import patch
 
 import data_api
 from market_data_integrity_v13 import build_market_consensus
-from market_integrity_audit_v13 import MarketIntegrityAuditV13, sport_training_ready
+from market_integrity_audit_v13 import (
+    MarketIntegrityAuditV13,
+    _evaluate,
+    sport_training_ready,
+)
 
 
 NOW = "2026-07-26T12:00:00+00:00"
@@ -133,6 +137,36 @@ class FootballPublicationConsensusTests(unittest.TestCase):
 
 
 class MarketAuditV13Tests(unittest.TestCase):
+    def test_class_c_shadow_rows_are_visible_but_never_enter_training_denominator(self):
+        class_c = {
+            "market_schema": "volleyball.market_integrity_consensus.v13",
+            "bookmaker_count": 1,
+            "probability_dispersion": 0.0,
+            "average_overround": 1.05,
+            "market_quality_tier": "C_SINGLE_BOOK_SHADOW",
+            "shadow_observation_only": True,
+            "training_eligible": False,
+            "pick_eligible": False,
+            "promotion_eligible": False,
+        }
+        multi_book = {
+            "market_schema": "volleyball.market_integrity_consensus.v13",
+            "bookmaker_count": 2,
+            "probability_dispersion": 0.01,
+            "average_overround": 1.05,
+        }
+        with patch.dict(
+            os.environ,
+            {"BETBOT_V13_VOLLEYBALL_MIN_TRAINING_OBSERVATIONS": "50"},
+            clear=False,
+        ):
+            result = _evaluate([class_c] * 100 + [multi_book] * 50, "volleyball")
+        self.assertEqual(result["class_c_shadow_observations"], 100)
+        self.assertEqual(result["class_c_training_admitted"], 0)
+        self.assertEqual(result["v13_observations"], 50)
+        self.assertEqual(result["admitted_observations"], 50)
+        self.assertTrue(result["training_admission_ready"])
+
     def test_missing_evidence_blocks_training(self):
         with tempfile.TemporaryDirectory() as folder:
             audit = MarketIntegrityAuditV13(folder)

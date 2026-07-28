@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import hashlib
@@ -18,28 +18,28 @@ except ModuleNotFoundError:
     requests_stub = types.ModuleType("requests")
     requests_stub.Session = object
     sys.modules["requests"] = requests_stub
-from volleyball_v9.api_sports import ApiSportsVolleyballClient
-from volleyball_v9.config import load_volleyball_settings
-from volleyball_v9.domain import OddsQuote, VolleyballGame
-from volleyball_v9.features import (
+from handball_v11.api_sports import ApiSportsHandballClient
+from handball_v11.config import load_handball_settings
+from handball_v11.domain import OddsQuote, HandballGame
+from handball_v11.features import (
     FeatureLeakageError,
     build_point_in_time_features,
 )
-from volleyball_v9.governor import (
+from handball_v11.governor import (
     GovernorSettings,
     build_live_shadow_report,
     run_autonomous_governor,
 )
-from volleyball_v9.identity import normalize_name, stable_key
-from volleyball_v9.market import (
+from handball_v11.identity import normalize_name, stable_key
+from handball_v11.market import (
     build_no_vig_consensus,
     eligible_match_winner_quotes,
 )
-from volleyball_v9.model import VolleyballEloModel
-from volleyball_v9.runtime import run_cycle
-from volleyball_v9.settlement import settle_match_winner
-from volleyball_v9.storage import VolleyballStorage
-from volleyball_v9.training import (
+from handball_v11.model import HandballEloModel
+from handball_v11.runtime import run_cycle
+from handball_v11.settlement import settle_match_winner
+from handball_v11.storage import HandballStorage
+from handball_v11.training import (
     DEFAULT_HYPERPARAMETERS,
     HYPERPARAMETER_GRID,
     build_training_dataset,
@@ -47,7 +47,7 @@ from volleyball_v9.training import (
     tune_hyperparameters,
     verify_candidate,
 )
-from volleyball_v9.validation import (
+from handball_v11.validation import (
     ValidationSettings,
     build_walk_forward_folds,
     validate_candidate,
@@ -58,11 +58,11 @@ def game(
     *,
     game_id="1",
     status="FT",
-    home_sets=3,
-    away_sets=1,
+    home_goals=3,
+    away_goals=1,
     scheduled_at="2026-07-20T18:00:00+00:00",
 ):
-    return VolleyballGame(
+    return HandballGame(
         game_id=game_id,
         scheduled_at=scheduled_at,
         status=status,
@@ -74,8 +74,8 @@ def game(
         home_team="Home",
         away_team_id="away",
         away_team="Away",
-        home_sets=home_sets,
-        away_sets=away_sets,
+        home_goals=home_goals,
+        away_goals=away_goals,
         raw={"id": game_id, "status": status},
     )
 
@@ -85,7 +85,7 @@ def pick_payload(game_id="1", outcome="HOME"):
         "game_id": game_id,
         "league_name": "Test League",
         "match_name": "Home vs Away",
-        "market": "MATCH_WINNER",
+        "market": "MATCH_WINNER_NO_DRAW",
         "outcome": outcome,
         "bookmaker": "Test Book",
         "bookmaker_odds": 2.0,
@@ -109,15 +109,15 @@ def quote(
         game_id=game_id,
         bookmaker_id=str(bookmaker_id),
         bookmaker=f"Book {bookmaker_id}",
-        market="MATCH_WINNER",
+        market="MATCH_WINNER_NO_DRAW",
         outcome=outcome,
         odds=odds,
         observed_at=observed_at,
     )
 
 
-def training_game(index: int) -> VolleyballGame:
-    return VolleyballGame(
+def training_game(index: int) -> HandballGame:
+    return HandballGame(
         game_id=f"training-{index}",
         scheduled_at=f"2026-01-{index + 1:02d}T18:00:00+00:00",
         status="FT",
@@ -129,8 +129,8 @@ def training_game(index: int) -> VolleyballGame:
         home_team=f"Team {index % 3}",
         away_team_id=f"team-{(index + 1) % 3}",
         away_team=f"Team {(index + 1) % 3}",
-        home_sets=3 if index % 2 == 0 else 1,
-        away_sets=1 if index % 2 == 0 else 3,
+        home_goals=3 if index % 2 == 0 else 1,
+        away_goals=1 if index % 2 == 0 else 3,
         raw={
             "private_provider_payload": f"raw-{index}",
             "bookmaker_odds": 9.99,
@@ -138,11 +138,11 @@ def training_game(index: int) -> VolleyballGame:
     )
 
 
-def validation_game(index: int) -> VolleyballGame:
+def validation_game(index: int) -> HandballGame:
     scheduled = datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=index)
     home = f"validation-team-{index % 6}"
     away = f"validation-team-{(index + 1) % 6}"
-    return VolleyballGame(
+    return HandballGame(
         game_id=f"validation-{index}",
         scheduled_at=scheduled.isoformat(),
         status="FT",
@@ -154,15 +154,15 @@ def validation_game(index: int) -> VolleyballGame:
         home_team=home,
         away_team_id=away,
         away_team=away,
-        home_sets=3 if index % 3 else 1,
-        away_sets=1 if index % 3 else 3,
+        home_goals=3 if index % 3 else 1,
+        away_goals=1 if index % 3 else 3,
         raw={},
     )
 
 
-def live_game(index: int, *, finished: bool) -> VolleyballGame:
+def live_game(index: int, *, finished: bool) -> HandballGame:
     scheduled = datetime(2027, 1, 1, tzinfo=timezone.utc) + timedelta(days=index)
-    return VolleyballGame(
+    return HandballGame(
         game_id=f"live-{index}",
         scheduled_at=scheduled.isoformat(),
         status="FT" if finished else "NS",
@@ -174,64 +174,64 @@ def live_game(index: int, *, finished: bool) -> VolleyballGame:
         home_team=f"Live Home {index % 5}",
         away_team_id=f"live-away-{index % 5}",
         away_team=f"Live Away {index % 5}",
-        home_sets=3 if finished else None,
-        away_sets=1 if finished else None,
+        home_goals=3 if finished else None,
+        away_goals=1 if finished else None,
         raw={},
     )
 
 
-class VolleyballSettingsTests(unittest.TestCase):
-    def test_default_does_not_start_volleyball(self):
+class HandballSettingsTests(unittest.TestCase):
+    def test_default_does_not_start_handball(self):
         settings = load_settings({})
-        self.assertFalse(settings.volleyball_enabled)
-        self.assertNotIn("volleyball_shadow", app_launcher.build_process_specs(settings))
+        self.assertFalse(settings.handball_enabled)
+        self.assertNotIn("handball_shadow", app_launcher.build_process_specs(settings))
 
     def test_collection_poll_defaults_to_thirty_minutes(self):
         settings = load_settings({})
-        self.assertEqual(settings.volleyball_poll_minutes, 30)
-        overridden = load_settings({"BETBOT_VOLLEYBALL_POLL_MINUTES": "45"})
-        self.assertEqual(overridden.volleyball_poll_minutes, 45)
+        self.assertEqual(settings.handball_poll_minutes, 30)
+        overridden = load_settings({"BETBOT_HANDBALL_POLL_MINUTES": "45"})
+        self.assertEqual(overridden.handball_poll_minutes, 45)
 
     def test_enabled_adds_only_shadow_process(self):
         settings = load_settings(
             {
-                "BETBOT_VOLLEYBALL_ENABLED": "1",
-                "BETBOT_VOLLEYBALL_SHADOW_ONLY": "1",
+                "BETBOT_HANDBALL_ENABLED": "1",
+                "BETBOT_HANDBALL_SHADOW_ONLY": "1",
             }
         )
         specs = app_launcher.build_process_specs(settings)
-        self.assertIn("volleyball_shadow", specs)
-        self.assertIn("volleyball_v9.runtime", " ".join(specs["volleyball_shadow"]))
+        self.assertIn("handball_shadow", specs)
+        self.assertIn("handball_v11.runtime", " ".join(specs["handball_shadow"]))
 
-    def test_non_shadow_volleyball_is_rejected(self):
+    def test_non_shadow_handball_is_rejected(self):
         with self.assertRaises(ConfigurationError):
             load_settings(
                 {
-                    "BETBOT_VOLLEYBALL_ENABLED": "1",
-                    "BETBOT_VOLLEYBALL_SHADOW_ONLY": "0",
+                    "BETBOT_HANDBALL_ENABLED": "1",
+                    "BETBOT_HANDBALL_SHADOW_ONLY": "0",
                 }
             )
 
-    def test_v95_requires_two_bookmakers_by_default(self):
+    def test_v115_requires_two_bookmakers_by_default(self):
         self.assertEqual(
-            load_volleyball_settings(require_key=False).minimum_bookmakers,
+            load_handball_settings(require_key=False).minimum_bookmakers,
             2,
         )
 
-    def test_v96_requires_minimum_training_sample_by_default(self):
-        settings = load_volleyball_settings(require_key=False)
+    def test_v116_requires_minimum_training_sample_by_default(self):
+        settings = load_handball_settings(require_key=False)
         self.assertEqual(settings.training_min_games, 100)
         self.assertEqual(settings.training_min_new_games, 25)
 
-    def test_v97_walk_forward_defaults_are_conservative(self):
-        settings = load_volleyball_settings(require_key=False)
+    def test_v117_walk_forward_defaults_are_conservative(self):
+        settings = load_handball_settings(require_key=False)
         self.assertEqual(settings.validation_min_train_games, 40)
         self.assertEqual(settings.validation_min_test_games, 20)
         self.assertEqual(settings.validation_min_folds, 3)
         self.assertEqual(settings.validation_max_folds, 5)
 
     def test_v10_autonomous_shadow_defaults_are_safe(self):
-        settings = load_volleyball_settings(require_key=False)
+        settings = load_handball_settings(require_key=False)
         self.assertTrue(settings.autonomous_governor_enabled)
         self.assertEqual(settings.live_shadow_min_samples, 30)
         self.assertEqual(settings.live_shadow_positive_reports, 3)
@@ -239,17 +239,21 @@ class VolleyballSettingsTests(unittest.TestCase):
         self.assertAlmostEqual(settings.live_shadow_drift_psi_limit, 0.25)
 
 
-class VolleyballDomainTests(unittest.TestCase):
-    def test_settlement_uses_sets_and_handles_void(self):
+class HandballDomainTests(unittest.TestCase):
+    def test_settlement_uses_goals_and_handles_void(self):
         self.assertEqual(settle_match_winner("HOME", game()), "WON")
         self.assertEqual(settle_match_winner("AWAY", game()), "LOST")
         self.assertEqual(
-            settle_match_winner("HOME", game(status="CANC", home_sets=None, away_sets=None)),
+            settle_match_winner("HOME", game(status="CANC", home_goals=None, away_goals=None)),
+            "VOID",
+        )
+        self.assertEqual(
+            settle_match_winner("HOME", game(home_goals=28, away_goals=28)),
             "VOID",
         )
 
     def test_elo_learns_without_bookmaker_odds(self):
-        model = VolleyballEloModel(home_advantage=0)
+        model = HandballEloModel(home_advantage=0)
         model.fit([game()])
         prediction = model.predict("home", "away")
         self.assertGreater(prediction.home_probability, 0.5)
@@ -338,7 +342,7 @@ class VolleyballDomainTests(unittest.TestCase):
         self.assertFalse(candidate.reproducible)
 
 
-class VolleyballWalkForwardTests(unittest.TestCase):
+class HandballWalkForwardTests(unittest.TestCase):
     def _candidate(self, count=100):
         bundle = train_candidate(
             [validation_game(index) for index in range(count)],
@@ -375,7 +379,7 @@ class VolleyballWalkForwardTests(unittest.TestCase):
         paired = []
         for index, item in enumerate(games):
             paired.append(
-                VolleyballGame(
+                HandballGame(
                     **{
                         **item.__dict__,
                         "scheduled_at": games[index - index % 2].scheduled_at,
@@ -433,7 +437,7 @@ class VolleyballWalkForwardTests(unittest.TestCase):
         self.assertFalse(report["automatic_promotion"])
 
 
-class VolleyballV10GovernorTests(unittest.TestCase):
+class HandballV10GovernorTests(unittest.TestCase):
     def _registered_candidate(self, storage):
         training = [validation_game(index) for index in range(100)]
         storage.upsert_games(training)
@@ -489,7 +493,7 @@ class VolleyballV10GovernorTests(unittest.TestCase):
 
     def test_governor_waits_without_candidate(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             result = run_autonomous_governor(
                 storage,
@@ -503,7 +507,7 @@ class VolleyballV10GovernorTests(unittest.TestCase):
 
     def test_live_shadow_report_uses_paired_future_results(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = self._registered_candidate(storage)
             self._settled_pair_evidence(storage, candidate)
@@ -525,7 +529,7 @@ class VolleyballV10GovernorTests(unittest.TestCase):
 
     def test_governor_promotes_only_after_repeated_positive_live_reports(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = self._registered_candidate(storage)
             validation = {"status": "POSITIVE_VALIDATION_MANUAL_APPROVAL"}
@@ -569,7 +573,7 @@ class VolleyballV10GovernorTests(unittest.TestCase):
 
     def test_shadow_promotion_and_rollback_are_append_only(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = self._registered_candidate(storage)
             promoted, promotion_id = storage.record_lifecycle_event(
@@ -605,7 +609,7 @@ class VolleyballV10GovernorTests(unittest.TestCase):
 
     def test_live_prediction_and_settlement_are_immutable(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = self._registered_candidate(storage)
             self._settled_pair_evidence(storage, candidate, count=1)
@@ -618,47 +622,47 @@ class VolleyballV10GovernorTests(unittest.TestCase):
                     connection.execute("DELETE FROM model_live_settlements")
 
 
-class VolleyballStorageTests(unittest.TestCase):
+class HandballStorageTests(unittest.TestCase):
     def test_storage_is_isolated_and_append_only(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary) / "volleyball"
-            storage = VolleyballStorage(root)
+            root = Path(temporary) / "handball"
+            storage = HandballStorage(root)
             storage.initialize()
             storage.upsert_games([game()])
             self.assertTrue(storage.db_path.is_relative_to(root))
             with storage.connect() as connection:
                 sport = connection.execute("SELECT sport FROM games").fetchone()[0]
-                self.assertEqual(sport, "volleyball")
+                self.assertEqual(sport, "handball")
                 football_tables = connection.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%football%'"
                 ).fetchall()
                 self.assertEqual(football_tables, [])
 
-    def test_nested_volleyball_database_is_covered_by_server_guard(self):
+    def test_nested_handball_database_is_covered_by_server_guard(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            storage = VolleyballStorage(root / "volleyball")
+            storage = HandballStorage(root / "handball")
             storage.initialize()
             snapshot = snapshot_hashes(root)
-            self.assertIn("volleyball/volleyball_shadow.sqlite3", snapshot)
+            self.assertIn("handball/handball_shadow.sqlite3", snapshot)
 
     def test_public_runtime_settings_never_contains_api_key(self):
         serialized = json.dumps(load_settings({}).public_snapshot()).lower()
-        self.assertNotIn("volleyball_api_sports_key", serialized)
+        self.assertNotIn("handball_api_sports_key", serialized)
         self.assertNotIn("api_key", serialized)
 
     def test_coverage_counts_only_inserted_odds(self):
-        from volleyball_v9.domain import OddsQuote
+        from handball_v11.domain import OddsQuote
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
-            upcoming = game(status="NS", home_sets=None, away_sets=None)
+            upcoming = game(status="NS", home_goals=None, away_goals=None)
             storage.upsert_games([upcoming])
             quote = OddsQuote(
                 game_id=upcoming.game_id,
                 bookmaker_id="1",
                 bookmaker="Test",
-                market="MATCH_WINNER",
+                market="MATCH_WINNER_NO_DRAW",
                 outcome="HOME",
                 odds=1.90,
                 observed_at="2026-07-23T12:00:00+00:00",
@@ -671,7 +675,7 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_identities_are_stable_and_created_for_valid_games(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             self.assertEqual(storage.upsert_games([game()]), 1)
             with storage.connect() as connection:
@@ -695,13 +699,13 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_invalid_and_duplicate_games_are_quarantined_append_only(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             valid = game(game_id="valid")
-            duplicate = VolleyballGame(
+            duplicate = HandballGame(
                 **{**valid.__dict__, "game_id": "duplicate", "raw": {"id": "duplicate"}}
             )
-            invalid = VolleyballGame(
+            invalid = HandballGame(
                 **{
                     **valid.__dict__,
                     "game_id": "invalid",
@@ -725,9 +729,9 @@ class VolleyballStorageTests(unittest.TestCase):
                         (rows[0]["quarantine_key"],),
                     )
 
-    def test_initialize_backfills_identities_for_existing_v91_games(self):
+    def test_initialize_backfills_identities_for_existing_v111_games(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             storage.upsert_games([game(game_id="legacy")])
             with storage.connect() as connection:
@@ -741,10 +745,10 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_open_pick_dates_keep_old_matches_in_result_window(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             pending = game(
-                game_id="pending", status="NS", home_sets=None, away_sets=None
+                game_id="pending", status="NS", home_goals=None, away_goals=None
             )
             storage.upsert_games([pending])
             storage.create_shadow_pick(pick_payload(game_id="pending"))
@@ -752,7 +756,7 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_settlement_is_idempotent_and_audited_append_only(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             finished = game(game_id="settle")
             storage.upsert_games([finished])
@@ -794,7 +798,7 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_point_in_time_training_excludes_future_results(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             past = game(
                 game_id="past",
@@ -807,8 +811,8 @@ class VolleyballStorageTests(unittest.TestCase):
             target = game(
                 game_id="target",
                 status="NS",
-                home_sets=None,
-                away_sets=None,
+                home_goals=None,
+                away_goals=None,
                 scheduled_at="2026-12-10T18:00:00+00:00",
             )
             storage.upsert_games([past, future_result, target])
@@ -824,7 +828,7 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_feature_snapshot_is_point_in_time_and_append_only(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             past = game(
                 game_id="feature-past",
@@ -833,8 +837,8 @@ class VolleyballStorageTests(unittest.TestCase):
             target = game(
                 game_id="feature-target",
                 status="NS",
-                home_sets=None,
-                away_sets=None,
+                home_goals=None,
+                away_goals=None,
                 scheduled_at="2026-12-10T18:00:00+00:00",
             )
             storage.upsert_games([past, target])
@@ -886,13 +890,13 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_feature_leakage_is_blocked_and_quarantined(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             target = game(
                 game_id="leak-target",
                 status="NS",
-                home_sets=None,
-                away_sets=None,
+                home_goals=None,
+                away_goals=None,
                 scheduled_at="2026-12-10T18:00:00+00:00",
             )
             storage.upsert_games([target])
@@ -928,13 +932,13 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_market_consensus_closing_line_and_clv_are_immutable(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             target = game(
                 game_id="clv-target",
                 status="NS",
-                home_sets=None,
-                away_sets=None,
+                home_goals=None,
+                away_goals=None,
                 scheduled_at="2026-12-10T18:00:00+00:00",
             )
             storage.upsert_games([target])
@@ -1062,7 +1066,7 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_model_candidate_registry_is_idempotent_and_immutable(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = train_candidate(
                 [training_game(index) for index in range(5)],
@@ -1095,7 +1099,7 @@ class VolleyballStorageTests(unittest.TestCase):
 
     def test_model_registry_rejects_tampered_candidate(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = train_candidate(
                 [training_game(index) for index in range(4)],
@@ -1112,16 +1116,16 @@ class VolleyballStorageTests(unittest.TestCase):
                 artifact_json.encode("utf-8")
             ).hexdigest()
             candidate["candidate_id"] = (
-                f"volleyball_candidate_{candidate['artifact_sha256'][:24]}"
+                f"handball_candidate_{candidate['artifact_sha256'][:24]}"
             )
             inserted, candidate_id = storage.register_model_candidate(candidate)
             self.assertFalse(inserted)
             self.assertFalse(candidate_id)
             self.assertEqual(storage.coverage_summary()["model_candidates"], 0)
 
-    def test_v97_validation_registry_is_idempotent_and_immutable(self):
+    def test_v117_validation_registry_is_idempotent_and_immutable(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = train_candidate(
                 [validation_game(index) for index in range(100)],
@@ -1160,9 +1164,9 @@ class VolleyballStorageTests(unittest.TestCase):
                 with self.assertRaises(Exception):
                     connection.execute("DELETE FROM model_validations")
 
-    def test_v97_migration_preserves_existing_v96_registry(self):
+    def test_v117_migration_preserves_existing_v116_registry(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = train_candidate(
                 [validation_game(index) for index in range(100)],
@@ -1192,9 +1196,9 @@ class VolleyballStorageTests(unittest.TestCase):
                     ).fetchone()
                 )
 
-    def test_v10_migration_preserves_v97_candidate_and_validation(self):
+    def test_v10_migration_preserves_v117_candidate_and_validation(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             candidate = train_candidate(
                 [validation_game(index) for index in range(100)],
@@ -1253,15 +1257,15 @@ class VolleyballStorageTests(unittest.TestCase):
                     },
                 )
 
-    def test_v96_migration_preserves_existing_v95_rows(self):
+    def test_v116_migration_preserves_existing_v115_rows(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             existing = game(
-                game_id="v95-existing",
+                game_id="v115-existing",
                 status="NS",
-                home_sets=None,
-                away_sets=None,
+                home_goals=None,
+                away_goals=None,
             )
             storage.upsert_games([existing])
             storage.create_shadow_pick(pick_payload(game_id=existing.game_id))
@@ -1272,14 +1276,14 @@ class VolleyballStorageTests(unittest.TestCase):
             with storage.connect() as connection:
                 self.assertEqual(
                     connection.execute(
-                        "SELECT COUNT(*) FROM games WHERE game_id='v95-existing'"
+                        "SELECT COUNT(*) FROM games WHERE game_id='v115-existing'"
                     ).fetchone()[0],
                     1,
                 )
                 self.assertEqual(
                     connection.execute(
                         "SELECT COUNT(*) FROM shadow_picks "
-                        "WHERE game_id='v95-existing'"
+                        "WHERE game_id='v115-existing'"
                     ).fetchone()[0],
                     1,
                 )
@@ -1298,15 +1302,15 @@ class VolleyballStorageTests(unittest.TestCase):
                     tables, {"model_training_datasets", "model_candidates"}
                 )
 
-    def test_v95_migration_preserves_existing_v94_rows(self):
+    def test_v115_migration_preserves_existing_v114_rows(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             existing = game(
-                game_id="v94-existing",
+                game_id="v114-existing",
                 status="NS",
-                home_sets=None,
-                away_sets=None,
+                home_goals=None,
+                away_goals=None,
             )
             storage.upsert_games([existing])
             storage.create_shadow_pick(pick_payload(game_id=existing.game_id))
@@ -1319,14 +1323,14 @@ class VolleyballStorageTests(unittest.TestCase):
             with storage.connect() as connection:
                 self.assertEqual(
                     connection.execute(
-                        "SELECT COUNT(*) FROM games WHERE game_id='v94-existing'"
+                        "SELECT COUNT(*) FROM games WHERE game_id='v114-existing'"
                     ).fetchone()[0],
                     1,
                 )
                 self.assertEqual(
                     connection.execute(
                         "SELECT COUNT(*) FROM shadow_picks "
-                        "WHERE game_id='v94-existing'"
+                        "WHERE game_id='v114-existing'"
                     ).fetchone()[0],
                     1,
                 )
@@ -1354,15 +1358,15 @@ class VolleyballStorageTests(unittest.TestCase):
                     },
                 )
 
-    def test_v94_migration_preserves_existing_v93_rows(self):
+    def test_v114_migration_preserves_existing_v113_rows(self):
         with tempfile.TemporaryDirectory() as temporary:
-            storage = VolleyballStorage(Path(temporary) / "volleyball")
+            storage = HandballStorage(Path(temporary) / "handball")
             storage.initialize()
             existing = game(
-                game_id="v93-existing",
+                game_id="v113-existing",
                 status="NS",
-                home_sets=None,
-                away_sets=None,
+                home_goals=None,
+                away_goals=None,
             )
             storage.upsert_games([existing])
             storage.create_shadow_pick(pick_payload(game_id=existing.game_id))
@@ -1374,13 +1378,13 @@ class VolleyballStorageTests(unittest.TestCase):
             with storage.connect() as connection:
                 self.assertEqual(
                     connection.execute(
-                        "SELECT COUNT(*) FROM games WHERE game_id='v93-existing'"
+                        "SELECT COUNT(*) FROM games WHERE game_id='v113-existing'"
                     ).fetchone()[0],
                     1,
                 )
                 self.assertEqual(
                     connection.execute(
-                        "SELECT COUNT(*) FROM shadow_picks WHERE game_id='v93-existing'"
+                        "SELECT COUNT(*) FROM shadow_picks WHERE game_id='v113-existing'"
                     ).fetchone()[0],
                     1,
                 )
@@ -1423,10 +1427,10 @@ class _FakeSession:
         return response
 
 
-class VolleyballProviderTests(unittest.TestCase):
+class HandballProviderTests(unittest.TestCase):
     def test_retry_is_bounded_and_observed(self):
         observed = []
-        settings = load_volleyball_settings(require_key=False)
+        settings = load_handball_settings(require_key=False)
         session = _FakeSession(
             [
                 _FakeResponse(500, {}),
@@ -1437,7 +1441,7 @@ class VolleyballProviderTests(unittest.TestCase):
                 ),
             ]
         )
-        client = ApiSportsVolleyballClient(
+        client = ApiSportsHandballClient(
             settings, session=session, observer=observed.append
         )
         rows = client._get("games", {"date": "2026-07-23"})
@@ -1448,17 +1452,74 @@ class VolleyballProviderTests(unittest.TestCase):
         self.assertEqual(observed[-1]["status"], "SUCCESS")
         self.assertEqual(observed[-1]["remaining"], 99)
 
+    def test_regular_time_three_way_market_is_rejected_fail_closed(self):
+        settings = load_handball_settings(require_key=False)
+        session = _FakeSession([
+            _FakeResponse(
+                200,
+                {
+                    "errors": [],
+                    "response": [{
+                        "bookmakers": [{
+                            "id": 1,
+                            "name": "TestBook",
+                            "bets": [{
+                                "name": "Match Winner",
+                                "values": [
+                                    {"value": "Home", "odd": "1.80"},
+                                    {"value": "Draw", "odd": "8.00"},
+                                    {"value": "Away", "odd": "2.20"},
+                                ],
+                            }],
+                        }],
+                    }],
+                },
+            )
+        ])
+        client = ApiSportsHandballClient(settings, session=session)
+        self.assertEqual(client.odds_for_game("game-1"), [])
 
-class VolleyballSingleBookShadowTests(unittest.TestCase):
+    def test_two_way_no_draw_market_is_accepted(self):
+        settings = load_handball_settings(require_key=False)
+        session = _FakeSession([
+            _FakeResponse(
+                200,
+                {
+                    "errors": [],
+                    "response": [{
+                        "bookmakers": [{
+                            "id": 1,
+                            "name": "TestBook",
+                            "bets": [{
+                                "name": "Home/Away (incl. overtime)",
+                                "values": [
+                                    {"value": "Home", "odd": "1.80"},
+                                    {"value": "Away", "odd": "2.20"},
+                                ],
+                            }],
+                        }],
+                    }],
+                },
+            )
+        ])
+        client = ApiSportsHandballClient(settings, session=session)
+        quotes = client.odds_for_game("game-1")
+        self.assertEqual({quote.outcome for quote in quotes}, {"HOME", "AWAY"})
+        self.assertTrue(all(
+            quote.market == "MATCH_WINNER_NO_DRAW" for quote in quotes
+        ))
+
+
+class HandballRuntimeSmokeTests(unittest.TestCase):
     def test_single_book_is_collected_but_cannot_create_pick_or_train(self):
         scheduled = (
             datetime.now(timezone.utc) + timedelta(days=1)
         ).isoformat(timespec="seconds")
         upcoming = game(
-            game_id="volleyball-single-book",
+            game_id="handball-single-book",
             status="NS",
-            home_sets=None,
-            away_sets=None,
+            home_goals=None,
+            away_goals=None,
             scheduled_at=scheduled,
         )
 
@@ -1474,13 +1535,13 @@ class VolleyballSingleBookShadowTests(unittest.TestCase):
                 ]
 
         with tempfile.TemporaryDirectory() as root:
-            storage = VolleyballStorage(Path(root) / "volleyball")
+            storage = HandballStorage(Path(root) / "handball")
             storage.initialize()
             storage.set_state("initial_backfill_complete", "1")
             health = run_cycle(
                 storage,
                 FakeClient(),
-                load_volleyball_settings(require_key=False),
+                load_handball_settings(require_key=False),
             )
             self.assertEqual(health["single_book_shadow_observed"], 1)
             self.assertEqual(health["single_book_shadow_saved"], 1)
@@ -1491,6 +1552,53 @@ class VolleyballSingleBookShadowTests(unittest.TestCase):
             self.assertEqual(health["multi_book_consensus_saved"], 0)
             self.assertEqual(storage.coverage_summary()["market_consensus_snapshots"], 1)
 
+    def test_full_collection_prediction_and_storage_cycle_is_isolated(self):
+        scheduled = (
+            datetime.now(timezone.utc) + timedelta(days=1)
+        ).isoformat(timespec="seconds")
+        upcoming = game(
+            game_id="handball-runtime-1",
+            status="NS",
+            home_goals=None,
+            away_goals=None,
+            scheduled_at=scheduled,
+        )
+
+        class FakeClient:
+            def games_for_date(self, _day):
+                return [upcoming]
+
+            def odds_for_game(self, game_id):
+                observed = datetime.now(timezone.utc).isoformat(timespec="seconds")
+                return [
+                    quote("a", "HOME", 2.10, game_id=game_id, observed_at=observed),
+                    quote("a", "AWAY", 1.80, game_id=game_id, observed_at=observed),
+                    quote("b", "HOME", 2.05, game_id=game_id, observed_at=observed),
+                    quote("b", "AWAY", 1.82, game_id=game_id, observed_at=observed),
+                ]
+
+        with tempfile.TemporaryDirectory() as root:
+            storage = HandballStorage(Path(root) / "handball")
+            storage.initialize()
+            storage.set_state("initial_backfill_complete", "1")
+            health = run_cycle(
+                storage,
+                FakeClient(),
+                load_handball_settings(require_key=False),
+            )
+            self.assertEqual(health["status"], "HEALTHY")
+            self.assertTrue(health["shadow_only"])
+            self.assertFalse(health["real_execution_allowed"])
+            self.assertFalse(health["football_data_modified"])
+            self.assertFalse(health["volleyball_data_modified"])
+            self.assertEqual(health["games_received"], 1)
+            self.assertEqual(health["quotes_saved"], 4)
+            self.assertGreaterEqual(health["picks_created"], 1)
+            self.assertTrue(storage.db_path.exists())
+            self.assertIn("handball", storage.db_path.parts)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+

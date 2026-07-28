@@ -1759,6 +1759,7 @@ class HandballStorage:
                 """
                 SELECT * FROM market_consensus_snapshots
                 WHERE game_id=? AND market=? AND observed_at<?
+                  AND bookmaker_count>=2
                 ORDER BY observed_at DESC, consensus_key DESC
                 LIMIT 1
                 """,

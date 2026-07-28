@@ -24,8 +24,10 @@ class MarketConsensus:
     best_away_odds: float
     average_overround: float
     probability_dispersion: float
+    source_bookmakers: tuple[str, ...] = ()
 
     def payload(self) -> dict:
+        multi_book = self.bookmaker_count >= 2
         return {
             "market_schema": MARKET_SCHEMA_VERSION,
             "game_id": self.game_id,
@@ -40,6 +42,16 @@ class MarketConsensus:
             "best_away_odds": self.best_away_odds,
             "average_overround": self.average_overround,
             "probability_dispersion": self.probability_dispersion,
+            "source_bookmakers": list(self.source_bookmakers),
+            "market_quality_tier": (
+                "AB_MULTI_BOOK" if multi_book else "C_SINGLE_BOOK_SHADOW"
+            ),
+            "shadow_observation_only": not multi_book,
+            "training_eligible": multi_book,
+            "pick_eligible": multi_book,
+            "promotion_eligible": multi_book,
+            "de_vig_applied": True,
+            "complete_market_required": True,
         }
 
 
@@ -69,6 +81,15 @@ def build_no_vig_consensus(
         best_away_odds=round(float(result["best_odds"]["AWAY"]), 6),
         average_overround=round(float(result["average_overround"]), 8),
         probability_dispersion=round(float(result["probability_dispersion"]), 8),
+        source_bookmakers=tuple(
+            sorted(
+                {
+                    str(item.bookmaker_id or item.bookmaker).strip()
+                    for item in accepted
+                    if str(item.bookmaker_id or item.bookmaker).strip()
+                }
+            )
+        ),
     )
 
 

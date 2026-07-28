@@ -124,12 +124,29 @@ def _shadow_rows(root: Path, sport: str) -> list[dict[str, Any]]:
             rows = connection.execute(
                 """
                 SELECT market_schema, bookmaker_count, probability_dispersion,
-                       average_overround, observed_at
+                       average_overround, observed_at, payload_json
                 FROM market_consensus_snapshots
                 ORDER BY observed_at DESC
                 """
             ).fetchall()
-            return [dict(row) for row in rows]
+            result = []
+            for row in rows:
+                item = dict(row)
+                try:
+                    payload = json.loads(str(item.pop("payload_json") or "{}"))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    payload = {}
+                for field in (
+                    "market_quality_tier",
+                    "shadow_observation_only",
+                    "training_eligible",
+                    "pick_eligible",
+                    "promotion_eligible",
+                ):
+                    if field in payload:
+                        item[field] = payload[field]
+                result.append(item)
+            return result
     except (sqlite3.Error, OSError):
         return []
 
@@ -140,6 +157,7 @@ def _evaluate(rows: Iterable[Mapping[str, Any]], sport: str) -> dict[str, Any]:
     reasons: Counter[str] = Counter()
     admitted = 0
     v13_observed = 0
+    class_c_shadow_observations = 0
     dispersion_values: list[float] = []
     overround_values: list[float] = []
     for row in rows:
@@ -150,6 +168,18 @@ def _evaluate(rows: Iterable[Mapping[str, Any]], sport: str) -> dict[str, Any]:
         if SCHEMA_VERSION not in schema and not schema.endswith(".v13"):
             reasons["legacy_or_missing_v13_provenance"] += 1
             continue
+        if str(row.get("market_quality_tier", "")).strip() == "C_SINGLE_BOOK_SHADOW":
+            valid_class_c = (
+                int(_number(row.get("bookmaker_count")) or 0) == 1
+                and _truthy(row.get("shadow_observation_only"))
+                and not _truthy(row.get("training_eligible"))
+                and not _truthy(row.get("pick_eligible"))
+                and not _truthy(row.get("promotion_eligible"))
+            )
+            if valid_class_c:
+                class_c_shadow_observations += 1
+                continue
+            reasons["invalid_class_c_contract"] += 1
         v13_observed += 1
         count = int(_number(row.get("market_bookmaker_count") or row.get("bookmaker_count")) or 0)
         dispersion = _number(
@@ -193,6 +223,8 @@ def _evaluate(rows: Iterable[Mapping[str, Any]], sport: str) -> dict[str, Any]:
         "status": status,
         "training_admission_ready": ready,
         "v13_observations": v13_observed,
+        "class_c_shadow_observations": class_c_shadow_observations,
+        "class_c_training_admitted": 0,
         "admitted_observations": admitted,
         "required_observations": minimum,
         "quarantined_observations": rejected,

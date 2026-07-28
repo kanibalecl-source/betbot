@@ -193,6 +193,9 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
     features_quarantined = 0
     market_consensus_saved = 0
     market_insufficient_books = 0
+    single_book_shadow_observed = 0
+    single_book_shadow_saved = 0
+    multi_book_consensus_saved = 0
     for game in games:
         if game.finished or game.status.upper() not in {"NS", "NOT_STARTED", "TBD"}:
             continue
@@ -221,8 +224,12 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
             market_insufficient_books += 1
             continue
         if consensus.bookmaker_count < settings.minimum_bookmakers:
+            if consensus.bookmaker_count == 1:
+                single_book_shadow_observed += 1
+                single_book_shadow_saved += int(consensus_inserted)
             market_insufficient_books += 1
             continue
+        multi_book_consensus_saved += int(consensus_inserted)
         feature_observed_at = utc_now()
         training_games, source_metadata = storage.point_in_time_training_set(
             game, feature_observed_at
@@ -380,7 +387,13 @@ def run_cycle(storage: VolleyballStorage, client: ApiSportsVolleyballClient, set
         "features_saved": features_saved,
         "features_quarantined": features_quarantined,
         "market_consensus_saved": market_consensus_saved,
+        "multi_book_consensus_saved": multi_book_consensus_saved,
         "market_insufficient_books": market_insufficient_books,
+        "single_book_shadow_observed": single_book_shadow_observed,
+        "single_book_shadow_saved": single_book_shadow_saved,
+        "single_book_training_admitted": 0,
+        "single_book_picks_created": 0,
+        "single_book_promotion_allowed": False,
         "clv_recorded": clv_recorded,
         "candidate_training_status": candidate_status,
         "candidate_created": candidate_created,
