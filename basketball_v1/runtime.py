@@ -20,7 +20,6 @@ from .storage import BasketballStorage
 _CIRCUIT_CATEGORIES = {
     "AUTH",
     "AUTH_OR_ENTITLEMENT",
-    "ENTITLEMENT",
     "QUOTA",
     "RATE_LIMIT",
     "ENDPOINT_UNAVAILABLE",
@@ -98,6 +97,8 @@ def run_cycle(
     retry_after_seconds: int | None = None
     quota_limit: int | None = None
     quota_remaining: int | None = None
+    entitlement_failures_without_success = 0
+    date_scope_limited = 0
 
     begin_cycle = getattr(client, "begin_cycle", None)
     if callable(begin_cycle):
@@ -112,6 +113,7 @@ def run_cycle(
         try:
             games.extend(client.games_for_date(value))
             days_succeeded += 1
+            entitlement_failures_without_success = 0
             if value in failed_backfill:
                 failed_backfill.remove(value)
         except BasketballRequestBudgetExhausted:
@@ -126,8 +128,19 @@ def run_cycle(
             if value not in live_dates:
                 if value not in failed_backfill:
                     failed_backfill.append(value)
-            if category in _CIRCUIT_CATEGORIES:
+            if category == "ENTITLEMENT":
+                date_scope_limited += 1
+                if days_succeeded == 0:
+                    entitlement_failures_without_success += 1
+                if (
+                    days_succeeded == 0
+                    and entitlement_failures_without_success
+                    >= settings.entitlement_circuit_threshold
+                ):
+                    circuit_open = True
+            elif category in _CIRCUIT_CATEGORIES:
                 circuit_open = True
+            if circuit_open:
                 retry_after_seconds = getattr(
                     exc, "retry_after_seconds", None
                 )
@@ -244,6 +257,10 @@ def run_cycle(
         "days_failed": days_failed,
         "provider_circuit_open": circuit_open,
         "provider_failure_categories": dict(failed_categories),
+        "date_scope_limited_days": date_scope_limited,
+        "date_scope_restriction_detected": date_scope_limited > 0,
+        "entitlement_circuit_threshold":
+            settings.entitlement_circuit_threshold,
         "provider_retry_after_seconds": retry_after_seconds,
         "provider_quota_limit": quota_limit,
         "provider_quota_remaining": quota_remaining,

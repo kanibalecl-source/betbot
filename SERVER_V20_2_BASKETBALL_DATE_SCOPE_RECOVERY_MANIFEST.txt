@@ -1,0 +1,39 @@
+BETBOT SERVER v20.2 - BASKETBALL DATE-SCOPE RECOVERY
+
+Purpose:
+- update the isolated basketball shadow runtime from 1.1 to 1.2
+- continue a cycle when the provider restricts only a particular date
+- retain fail-closed behavior for real authentication, quota, rate-limit,
+  endpoint and whole-product access failures
+
+Runtime behavior:
+- an ENTITLEMENT application error after a successful date is classified as
+  a date-scoped restriction and the next planned date is attempted
+- if no date succeeds, three consecutive ENTITLEMENT errors open the circuit
+- HTTP 401/403 AUTH_OR_ENTITLEMENT still opens the circuit immediately
+- odds endpoint ENTITLEMENT errors still open the circuit immediately
+- the existing 40-request budget remains enforced
+
+Changed runtime files:
+- basketball_v1/__init__.py
+- basketball_v1/config.py
+- basketball_v1/runtime.py
+
+Validation and documentation:
+- tests/test_basketball_v1.py
+- .env.example
+- BASKETBALL_SHADOW_V1_DEPLOY.md
+- SERVER_V20_2_BASKETBALL_DATE_SCOPE_RECOVERY_MANIFEST.txt
+
+Persistence:
+- no data, history, model, training, backup or credential file is included
+- /data/basketball/basketball_shadow.sqlite3 is reused without replacement
+- no destructive schema operation is performed
+
+Safety gates:
+- shadow_only=true
+- training_admission_allowed=false
+- model_candidate_creation_allowed=false
+- automatic_model_promotion_allowed=false
+- real_execution_allowed=false
+- all other sport modified flags remain false

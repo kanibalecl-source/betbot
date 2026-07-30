@@ -49,6 +49,7 @@ class BasketballSettings:
     retry_backoff_seconds: float
     minimum_request_interval_seconds: float
     maximum_requests_per_cycle: int
+    entitlement_circuit_threshold: int
     backfill_days_per_cycle: int
     backfill_retry_dates_per_cycle: int
     odds_refresh_hours: int
@@ -96,6 +97,9 @@ def load_basketball_settings(
         ),
         maximum_requests_per_cycle=_integer(
             "BETBOT_BASKETBALL_MAX_REQUESTS_PER_CYCLE", 40, 10, 500
+        ),
+        entitlement_circuit_threshold=_integer(
+            "BETBOT_BASKETBALL_ENTITLEMENT_CIRCUIT_THRESHOLD", 3, 2, 10
         ),
         backfill_days_per_cycle=_integer(
             "BETBOT_BASKETBALL_BACKFILL_DAYS_PER_CYCLE", 2, 1, 14

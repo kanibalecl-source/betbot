@@ -1,4 +1,4 @@
-# Basketball Shadow v1.1 / server v20.1
+# Basketball Shadow v1.2 / server v20.2
 
 The module is isolated from football, volleyball, handball and tennis.
 Uploading the package does not start it automatically.
@@ -15,6 +15,7 @@ BETBOT_BASKETBALL_LOOKAHEAD_DAYS=7
 BETBOT_BASKETBALL_BACKFILL_DAYS_PER_CYCLE=2
 BETBOT_BASKETBALL_BACKFILL_RETRY_DATES_PER_CYCLE=1
 BETBOT_BASKETBALL_MAX_REQUESTS_PER_CYCLE=40
+BETBOT_BASKETBALL_ENTITLEMENT_CIRCUIT_THRESHOLD=3
 BETBOT_BASKETBALL_MAX_ODDS_REQUESTS_PER_CYCLE=20
 BETBOT_BASKETBALL_MIN_REQUEST_INTERVAL_SECONDS=0.25
 ```
@@ -26,7 +27,7 @@ Expected production logs:
 
 ```text
 START basketball_shadow: ... -m basketball_v1.runtime
-BASKETBALL v1.1 SHADOW START ...
+BASKETBALL v1.2 SHADOW START ...
 BASKETBALL_SHADOW_CYCLE
 HEARTBEAT ... basketball_shadow=True
 ```
@@ -43,5 +44,7 @@ Safety guarantees:
 - existing sport databases are not read or modified
 - the 30-day backfill advances by two days per cycle and survives restarts
 - quota, authentication and rate-limit responses open a circuit breaker
+- date-scoped plan restrictions are skipped after another date succeeds
+- three entitlement failures without any successful date open the circuit
 - the request budget prevents retry storms and excessive API consumption
 - provider quota headers and sanitized failure categories are persisted
