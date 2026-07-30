@@ -28,7 +28,7 @@ from market_integrity_audit_v13 import sport_training_ready
 
 
 MODEL_VERSION = "handball-elo-shadow-baseline-v1"
-RUNTIME_VERSION = "12.0"
+RUNTIME_VERSION = "12.1"
 
 
 def _fetch_days(client: ApiSportsHandballClient, days: list[date]):
@@ -61,10 +61,17 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
     )
     governor_enabled = settings.autonomous_governor_enabled and integrity_training_ready
     today = date.today()
-    days = [today - timedelta(days=1), today, today + timedelta(days=1)]
+    days = [today - timedelta(days=1)] + [
+        today + timedelta(days=offset)
+        for offset in range(settings.lookahead_days + 1)
+    ]
     if storage.state("initial_backfill_complete") != "1" and settings.backfill_days:
-        days = [today - timedelta(days=offset) for offset in range(settings.backfill_days, -1, -1)] + [
-            today + timedelta(days=1)
+        days = [
+            today - timedelta(days=offset)
+            for offset in range(settings.backfill_days, -1, -1)
+        ] + [
+            today + timedelta(days=offset)
+            for offset in range(1, settings.lookahead_days + 1)
         ]
     for raw_day in storage.open_pick_dates():
         try:
@@ -189,6 +196,8 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
     quotes_saved = 0
     odds_attempted = 0
     odds_failed = 0
+    odds_empty_responses = 0
+    odds_skipped_by_cycle_cap = 0
     features_saved = 0
     features_quarantined = 0
     market_consensus_saved = 0
@@ -196,13 +205,17 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
     single_book_shadow_observed = 0
     single_book_shadow_saved = 0
     multi_book_consensus_saved = 0
-    for game in games:
+    for game in sorted(games, key=lambda item: (item.scheduled_at, item.game_id)):
         if game.finished or game.status.upper() not in {"NS", "NOT_STARTED", "TBD"}:
+            continue
+        if odds_attempted >= settings.maximum_odds_requests_per_cycle:
+            odds_skipped_by_cycle_cap += 1
             continue
         if not storage.odds_refresh_due(
             game.game_id,
             settings.odds_refresh_hours,
             scheduled_at=game.scheduled_at,
+            empty_refresh_hours=settings.empty_odds_retry_hours,
         ):
             continue
         odds_attempted += 1
@@ -211,6 +224,8 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
         except HandballProviderError:
             odds_failed += 1
             continue
+        if not quotes:
+            odds_empty_responses += 1
         quotes_saved += storage.save_odds(quotes)
         consensus = build_no_vig_consensus(quotes)
         if consensus is None:
@@ -387,6 +402,13 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
         "days_failed": days_failed,
         "odds_attempted": odds_attempted,
         "odds_failed": odds_failed,
+        "odds_empty_responses": odds_empty_responses,
+        "odds_skipped_by_cycle_cap": odds_skipped_by_cycle_cap,
+        "lookahead_days": settings.lookahead_days,
+        "maximum_odds_requests_per_cycle": (
+            settings.maximum_odds_requests_per_cycle
+        ),
+        "empty_odds_retry_hours": settings.empty_odds_retry_hours,
         "features_saved": features_saved,
         "features_quarantined": features_quarantined,
         "market_consensus_saved": market_consensus_saved,

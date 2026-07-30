@@ -11,7 +11,13 @@ from .config import SportradarSettings
 
 
 class SportradarProviderError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status_code: int = 0) -> None:
+        super().__init__(message)
+        self.status_code = int(status_code)
+
+
+class SportradarRateLimited(SportradarProviderError):
+    """Provider quota signal used to stop the entire odds cycle."""
 
 
 @dataclass(frozen=True)
@@ -104,9 +110,21 @@ class SportradarClient:
                             or response.headers.get("x-request-id", "")
                         ),
                     )
+                if status_code == 429:
+                    retry_after = str(response.headers.get("retry-after", "")).strip()
+                    suffix = f"; retry-after={retry_after}" if retry_after else ""
+                    raise SportradarRateLimited(
+                        f"{url} rate limited (HTTP 429){suffix}",
+                        status_code=429,
+                    )
                 last_error = f"HTTP {status_code}"
                 if status_code not in {429, 500, 502, 503, 504}:
                     break
+            except SportradarRateLimited:
+                # Retrying every sport with the same quota-limited key creates
+                # a retry storm and can never restore coverage in this cycle.
+                self._last_request_monotonic = time.monotonic()
+                raise
             except (requests.RequestException, ValueError, SportradarProviderError) as exc:
                 self._last_request_monotonic = time.monotonic()
                 last_error = f"{type(exc).__name__}: {exc}"
@@ -141,6 +159,11 @@ class SportradarClient:
         return self._get(url)
 
     def odds_sports(self) -> ProviderResponse:
+        if self.settings.odds_api_variant == "prematch_v2":
+            return self._get(
+                "https://api.sportradar.com/oddscomparison-prematch/"
+                f"{self.settings.access_level}/v2/{self.settings.language}/sports.json"
+            )
         return self._get(
             "https://api.sportradar.com/oddscomparison-rowt1/"
             f"{self.settings.language}/eu/sports.json"
@@ -151,6 +174,12 @@ class SportradarClient:
             sport_id = SPORT_IDS[sport]
         except KeyError as exc:
             raise ValueError(f"unsupported sport: {sport}") from exc
+        if self.settings.odds_api_variant == "prematch_v2":
+            return self._get(
+                "https://api.sportradar.com/oddscomparison-prematch/"
+                f"{self.settings.access_level}/v2/{self.settings.language}/"
+                f"sports/{sport_id}/schedules/{day.isoformat()}/schedules.json"
+            )
         return self._get(
             "https://api.sportradar.com/oddscomparison-rowt1/"
             f"{self.settings.language}/eu/sports/{sport_id}/"
@@ -161,8 +190,13 @@ class SportradarClient:
         safe_id = str(event_id).strip()
         if not safe_id.startswith(("sr:match:", "sr:sport_event:")):
             raise ValueError("invalid Sportradar event id")
+        if self.settings.odds_api_variant == "prematch_v2":
+            return self._get(
+                "https://api.sportradar.com/oddscomparison-prematch/"
+                f"{self.settings.access_level}/v2/{self.settings.language}/"
+                f"sport_events/{safe_id}/sport_event_markets.json"
+            )
         return self._get(
             "https://api.sportradar.com/oddscomparison-rowt1/"
             f"{self.settings.language}/eu/sport_events/{safe_id}/markets.json"
         )
-

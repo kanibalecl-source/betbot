@@ -6,14 +6,18 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from . import SCHEMA_VERSION
-from .client import SportradarClient, SportradarProviderError
+from .client import (
+    SportradarClient,
+    SportradarProviderError,
+    SportradarRateLimited,
+)
 from .config import SportradarSettings, load_sportradar_settings
 from .normalize import normalize_events, normalize_odds, schedule_event_ids
 from .storage import SportradarShadowStorage
 
 
 SPORTS = ("football", "volleyball", "handball")
-RUNTIME_VERSION = "1.0"
+RUNTIME_VERSION = "1.1"
 
 
 def _utc_now() -> str:
@@ -70,6 +74,7 @@ def run_cycle(
             except SportradarProviderError:
                 sport_health[sport]["summary_failures"] += 1
 
+    odds_rate_limited = False
     if settings.odds_enabled:
         future_days = [
             day for day in requested_days if day >= datetime.now(timezone.utc).date()
@@ -77,13 +82,21 @@ def run_cycle(
         market_candidates: list[tuple[str, str, str]] = []
         for sport in SPORTS:
             for day in future_days:
+                if odds_rate_limited:
+                    break
                 sport_health[sport]["odds_schedule_requests"] += 1
                 try:
                     response = client.odds_daily_schedule(sport, day)
                     for event_id, scheduled_at in schedule_event_ids(response.payload):
                         market_candidates.append((scheduled_at, sport, event_id))
+                except SportradarRateLimited:
+                    sport_health[sport]["odds_schedule_failures"] += 1
+                    odds_rate_limited = True
+                    break
                 except SportradarProviderError:
                     sport_health[sport]["odds_schedule_failures"] += 1
+            if odds_rate_limited:
+                break
         unique_candidates = {
             (sport, event_id): scheduled_at
             for scheduled_at, sport, event_id in market_candidates
@@ -96,6 +109,8 @@ def run_cycle(
             key=lambda item: (item[0], item[1], item[2]),
         )[: settings.odds_maximum_events_per_cycle]
         for _, sport, event_id in ordered:
+            if odds_rate_limited:
+                break
             sport_health[sport]["odds_market_requests"] += 1
             try:
                 response = client.odds_event_markets(event_id)
@@ -108,6 +123,10 @@ def run_cycle(
                 sport_health[sport]["odds_received"] += len(quotes)
                 sport_health[sport]["odds_inserted"] += storage.save_odds(quotes)
                 sport_health[sport]["quarantined"] += storage.quarantine(rejected)
+            except SportradarRateLimited:
+                sport_health[sport]["odds_market_failures"] += 1
+                odds_rate_limited = True
+                break
             except SportradarProviderError:
                 sport_health[sport]["odds_market_failures"] += 1
 
@@ -123,13 +142,20 @@ def run_cycle(
         + item["odds_market_requests"]
         for item in sport_health.values()
     )
-    status = (
-        "HEALTHY"
-        if request_failures == 0
-        else "DEGRADED"
-        if request_failures < request_total
-        else "FAILED"
+    event_ingestion_operational = any(
+        item["summary_requests"] > item["summary_failures"]
+        for item in sport_health.values()
     )
+    if odds_rate_limited and event_ingestion_operational:
+        status = "LIMITED_BY_PROVIDER"
+    else:
+        status = (
+            "HEALTHY"
+            if request_failures == 0
+            else "DEGRADED"
+            if request_failures < request_total
+            else "FAILED"
+        )
     return {
         "schema_version": SCHEMA_VERSION,
         "runtime_version": RUNTIME_VERSION,
@@ -140,6 +166,9 @@ def run_cycle(
         "sports": sport_health,
         "provider_requests": request_total,
         "provider_failures": request_failures,
+        "odds_rate_limited": odds_rate_limited,
+        "retry_storm_prevented": odds_rate_limited,
+        "event_ingestion_operational": event_ingestion_operational,
         "storage_counts": storage.counts(),
         "shadow_only": True,
         "active_model_modified": False,
@@ -204,4 +233,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

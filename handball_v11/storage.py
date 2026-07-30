@@ -1849,6 +1849,7 @@ class HandballStorage:
         refresh_hours: int,
         *,
         scheduled_at: str | None = None,
+        empty_refresh_hours: int = 6,
     ) -> bool:
         with self.connect() as connection:
             row = connection.execute(
@@ -1858,9 +1859,49 @@ class HandballStorage:
                 """,
                 (str(game_id),),
             ).fetchone()
+            empty_row = connection.execute(
+                """
+                SELECT observed_at
+                FROM provider_calls
+                WHERE endpoint='odds'
+                  AND status='SUCCESS'
+                  AND rows_received=0
+                  AND params_json=?
+                ORDER BY observed_at DESC
+                LIMIT 1
+                """,
+                (
+                    json.dumps(
+                        {"game": str(game_id)},
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                ),
+            ).fetchone()
         latest = None if row is None else row["latest"]
         if not latest:
-            return True
+            latest_empty = None if empty_row is None else empty_row["observed_at"]
+            if not latest_empty:
+                return True
+            from datetime import datetime, timedelta, timezone
+            try:
+                observed_empty = datetime.fromisoformat(
+                    str(latest_empty).replace("Z", "+00:00")
+                )
+                if observed_empty.tzinfo is None:
+                    observed_empty = observed_empty.replace(tzinfo=timezone.utc)
+                effective_empty_hours = max(1, int(empty_refresh_hours))
+                if scheduled_at:
+                    starts_in = parse_utc(scheduled_at) - datetime.now(timezone.utc)
+                    if timedelta(0) < starts_in <= timedelta(hours=6):
+                        effective_empty_hours = 1
+                    elif timedelta(0) < starts_in <= timedelta(hours=24):
+                        effective_empty_hours = min(effective_empty_hours, 3)
+                return datetime.now(timezone.utc) - observed_empty >= timedelta(
+                    hours=effective_empty_hours
+                )
+            except ValueError:
+                return True
         from datetime import datetime, timedelta, timezone
         from multisport_quality_v12 import odds_snapshot_stage
         try:

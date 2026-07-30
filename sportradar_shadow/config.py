@@ -61,6 +61,7 @@ class SportradarSettings:
     maximum_retries: int
     odds_enabled: bool
     odds_maximum_events_per_cycle: int
+    odds_api_variant: str
 
     def public_snapshot(self) -> dict[str, object]:
         return {
@@ -76,6 +77,7 @@ class SportradarSettings:
             "maximum_retries": self.maximum_retries,
             "odds_enabled": self.odds_enabled,
             "odds_maximum_events_per_cycle": self.odds_maximum_events_per_cycle,
+            "odds_api_variant": self.odds_api_variant,
             "api_key_configured": bool(self.api_key),
         }
 
@@ -95,6 +97,14 @@ def load_sportradar_settings(
     if len(language) != 2 or not language.isalpha():
         raise SportradarConfigurationError(
             "BETBOT_SPORTRADAR_LANGUAGE must be a two-letter code"
+        )
+    odds_api_variant = str(
+        source.get("BETBOT_SPORTRADAR_ODDS_API_VARIANT", "legacy_rowt1")
+    ).strip().lower()
+    if odds_api_variant not in {"legacy_rowt1", "prematch_v2"}:
+        raise SportradarConfigurationError(
+            "BETBOT_SPORTRADAR_ODDS_API_VARIANT must be "
+            "legacy_rowt1 or prematch_v2"
         )
     settings = SportradarSettings(
         enabled=_bool(source, "BETBOT_SPORTRADAR_SHADOW_ENABLED", False),
@@ -124,6 +134,7 @@ def load_sportradar_settings(
         odds_maximum_events_per_cycle=_int(
             source, "BETBOT_SPORTRADAR_ODDS_MAX_EVENTS_PER_CYCLE", 6, 0, 50
         ),
+        odds_api_variant=odds_api_variant,
     )
     if settings.enabled and not settings.shadow_only:
         raise SportradarConfigurationError(
@@ -134,4 +145,3 @@ def load_sportradar_settings(
             "SPORTRADAR_API_KEY is required when Sportradar shadow is enabled"
         )
     return settings
-

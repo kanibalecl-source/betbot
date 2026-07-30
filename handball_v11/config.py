@@ -46,6 +46,9 @@ class HandballSettings:
     retry_attempts: int
     retry_backoff_seconds: float
     odds_refresh_hours: int
+    empty_odds_retry_hours: int
+    lookahead_days: int
+    maximum_odds_requests_per_cycle: int
     minimum_bookmakers: int
     training_min_games: int
     training_min_new_games: int
@@ -86,6 +89,15 @@ def load_handball_settings(*, require_key: bool = True) -> HandballSettings:
         ),
         odds_refresh_hours=int(
             _float("BETBOT_HANDBALL_ODDS_REFRESH_HOURS", 12, 1, 24)
+        ),
+        empty_odds_retry_hours=int(
+            _float("BETBOT_HANDBALL_EMPTY_ODDS_RETRY_HOURS", 6, 1, 24)
+        ),
+        lookahead_days=int(
+            _float("BETBOT_HANDBALL_LOOKAHEAD_DAYS", 7, 1, 21)
+        ),
+        maximum_odds_requests_per_cycle=int(
+            _float("BETBOT_HANDBALL_MAX_ODDS_REQUESTS_PER_CYCLE", 80, 1, 500)
         ),
         minimum_bookmakers=int(
             _float("BETBOT_HANDBALL_MIN_BOOKMAKERS", 2, 1, 20)

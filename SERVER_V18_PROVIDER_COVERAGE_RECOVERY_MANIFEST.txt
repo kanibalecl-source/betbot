@@ -1,0 +1,41 @@
+BETBOT SERVER V18 - PROVIDER COVERAGE RECOVERY
+
+Cel:
+- zatrzymanie lawiny ponowień Sportradar po HTTP 429,
+- rozróżnienie ograniczenia konta od awarii aplikacji,
+- obsługa oficjalnych endpointów Odds Comparison Prematch v2 po zakupie licencji,
+- rozszerzenie wyszukiwania kursów piłki ręcznej do 7 dni,
+- pamięć pustych odpowiedzi API-Sports,
+- limit maksymalnie 80 zapytań o kursy piłki ręcznej na cykl.
+
+Pliki wdrożeniowe:
+- sportradar_shadow/client.py
+- sportradar_shadow/config.py
+- sportradar_shadow/runtime.py
+- handball_v11/config.py
+- handball_v11/storage.py
+- handball_v11/runtime.py
+- .env.example
+- WDROZENIE_V18_PROVIDER_COVERAGE_RECOVERY.md
+
+Bezpieczeństwo:
+- paczka nie zawiera katalogu data ani żadnej historii,
+- nie zawiera kluczy API,
+- nie zmienia aktywnych modeli,
+- nie dopuszcza pustych ani syntetycznych kursów do uczenia,
+- wszystkie moduły sportowe pozostają w trybie shadow/fail-closed.
+
+Testy:
+- py_compile: OK
+- testy Sportradar + piłka ręczna: 62/62 OK
+- pełny zestaw: 305 testów wykonanych poprawnie; test FastAPI nie został
+  zaimportowany wyłącznie dlatego, że lokalny runtime kontrolny nie ma
+  zainstalowanego pakietu fastapi.
+
+Ważne:
+- obecny klucz Sportradar otrzymał HTTP 403 dla Prematch v2, dlatego na serwerze
+  należy pozostawić BETBOT_SPORTRADAR_ODDS_API_VARIANT=legacy_rowt1;
+- HTTP 429 oznacza limit konta dostawcy. Kod może zatrzymać retry storm, ale
+  nie może zwiększyć zewnętrznego limitu ani uprawnień produktu;
+- API-Sports zwraca HTTP 200 i zero kursów dla aktualnych meczów MŚ U18 kobiet.
+  V18 szuka również kolejnych dni, ale nadal odrzuca mecze bez prawdziwej oferty.
