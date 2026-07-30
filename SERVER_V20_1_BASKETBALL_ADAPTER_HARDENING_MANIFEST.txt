@@ -1,0 +1,41 @@
+BETBOT SERVER v20.1 — BASKETBALL PROVIDER ADAPTER HARDENING
+
+Purpose:
+- update only the isolated basketball shadow adapter from runtime 1.0 to 1.1
+- preserve the existing /data/basketball/basketball_shadow.sqlite3 database
+- prevent quota/rate-limit retry storms
+- make the 30-day historical backfill incremental and restart-safe
+
+Changed runtime files:
+- basketball_v1/__init__.py
+- basketball_v1/config.py
+- basketball_v1/client.py
+- basketball_v1/storage.py
+- basketball_v1/runtime.py
+
+Validation and documentation:
+- tests/test_basketball_v1.py
+- .env.example
+- BASKETBALL_SHADOW_V1_DEPLOY.md
+- SERVER_V20_1_BASKETBALL_ADAPTER_HARDENING_MANIFEST.txt
+
+Default safeguards:
+- 40 total HTTP attempts per 30-minute cycle
+- 20 odds endpoints per cycle
+- 2 new historical dates per cycle
+- 1 failed historical date retried per cycle
+- 0.25 second minimum interval between HTTP attempts
+- immediate circuit breaker on AUTH, ENTITLEMENT, QUOTA, RATE_LIMIT and 404
+- only network and upstream 5xx failures are retried
+
+Persistence:
+- no data, history, model, training or credential file is included
+- the schema migration only adds nullable diagnostic columns
+- existing games, odds, settlements and provider-call rows remain in place
+
+Learning and execution:
+- training_admission_allowed=false
+- model_candidate_creation_allowed=false
+- automatic_model_promotion_allowed=false
+- real_execution_allowed=false
+- all other sport modified flags remain false

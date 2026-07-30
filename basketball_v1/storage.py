@@ -98,6 +98,9 @@ class BasketballStorage:
                     success INTEGER NOT NULL,
                     error_type TEXT NOT NULL,
                     call_id TEXT NOT NULL,
+                    quota_limit INTEGER,
+                    quota_remaining INTEGER,
+                    retry_after_seconds INTEGER,
                     created_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS basketball_quarantine (
@@ -115,6 +118,22 @@ class BasketballStorage:
                 );
                 """
             )
+            columns = {
+                str(row["name"])
+                for row in connection.execute(
+                    "PRAGMA table_info(basketball_provider_calls)"
+                ).fetchall()
+            }
+            for name in (
+                "quota_limit",
+                "quota_remaining",
+                "retry_after_seconds",
+            ):
+                if name not in columns:
+                    connection.execute(
+                        f"ALTER TABLE basketball_provider_calls "
+                        f"ADD COLUMN {name} INTEGER"
+                    )
 
     @staticmethod
     def validate_game(game: BasketballGame) -> tuple[bool, str]:
@@ -392,18 +411,24 @@ class BasketballStorage:
         status_code: int | None = None,
         error_type: str = "",
         call_id: str = "",
+        quota_limit: int | None = None,
+        quota_remaining: int | None = None,
+        retry_after_seconds: int | None = None,
     ) -> None:
         with self._connect() as connection:
             connection.execute(
                 """
                 INSERT INTO basketball_provider_calls (
                     provider, endpoint, status_code, rows_received, success,
-                    error_type, call_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    error_type, call_id, quota_limit, quota_remaining,
+                    retry_after_seconds, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     provider, endpoint, status_code, int(rows_received),
-                    int(success), str(error_type), str(call_id), utc_now(),
+                    int(success), str(error_type), str(call_id),
+                    quota_limit, quota_remaining, retry_after_seconds,
+                    utc_now(),
                 ),
             )
 
@@ -452,6 +477,25 @@ class BasketballStorage:
                 "SUM(CASE WHEN success=0 THEN 1 ELSE 0 END) "
                 "FROM basketball_provider_calls"
             ).fetchone()
+            failures = connection.execute(
+                """
+                SELECT error_type, COUNT(*) AS amount
+                FROM basketball_provider_calls
+                WHERE success=0
+                GROUP BY error_type
+                ORDER BY amount DESC, error_type
+                """
+            ).fetchall()
+            latest_limits = connection.execute(
+                """
+                SELECT quota_limit, quota_remaining, retry_after_seconds
+                FROM basketball_provider_calls
+                WHERE quota_limit IS NOT NULL
+                   OR quota_remaining IS NOT NULL
+                   OR retry_after_seconds IS NOT NULL
+                ORDER BY id DESC LIMIT 1
+                """
+            ).fetchone()
         return {
             "games_total": games,
             "games_quality_settled": finished,
@@ -462,6 +506,24 @@ class BasketballStorage:
             "provider_calls": int(calls[0] or 0),
             "provider_success": int(calls[1] or 0),
             "provider_failed": int(calls[2] or 0),
+            "provider_failure_categories": {
+                str(row["error_type"] or "UNKNOWN"): int(row["amount"])
+                for row in failures
+            },
+            "provider_quota": {
+                "limit": (
+                    None if latest_limits is None
+                    else latest_limits["quota_limit"]
+                ),
+                "remaining": (
+                    None if latest_limits is None
+                    else latest_limits["quota_remaining"]
+                ),
+                "retry_after_seconds": (
+                    None if latest_limits is None
+                    else latest_limits["retry_after_seconds"]
+                ),
+            },
             "storage": str(self.db_path),
         }
 

@@ -47,6 +47,10 @@ class BasketballSettings:
     request_timeout_seconds: float
     retry_attempts: int
     retry_backoff_seconds: float
+    minimum_request_interval_seconds: float
+    maximum_requests_per_cycle: int
+    backfill_days_per_cycle: int
+    backfill_retry_dates_per_cycle: int
     odds_refresh_hours: int
     empty_odds_retry_hours: int
     maximum_odds_requests_per_cycle: int
@@ -84,6 +88,24 @@ def load_basketball_settings(
         retry_backoff_seconds=_number(
             "BETBOT_BASKETBALL_RETRY_BACKOFF_SECONDS", 1.5, 0.1, 30.0
         ),
+        minimum_request_interval_seconds=_number(
+            "BETBOT_BASKETBALL_MIN_REQUEST_INTERVAL_SECONDS",
+            0.25,
+            0.0,
+            10.0,
+        ),
+        maximum_requests_per_cycle=_integer(
+            "BETBOT_BASKETBALL_MAX_REQUESTS_PER_CYCLE", 40, 10, 500
+        ),
+        backfill_days_per_cycle=_integer(
+            "BETBOT_BASKETBALL_BACKFILL_DAYS_PER_CYCLE", 2, 1, 14
+        ),
+        backfill_retry_dates_per_cycle=_integer(
+            "BETBOT_BASKETBALL_BACKFILL_RETRY_DATES_PER_CYCLE",
+            1,
+            0,
+            7,
+        ),
         odds_refresh_hours=_integer(
             "BETBOT_BASKETBALL_ODDS_REFRESH_HOURS", 6, 1, 24
         ),
@@ -91,7 +113,7 @@ def load_basketball_settings(
             "BETBOT_BASKETBALL_EMPTY_ODDS_RETRY_HOURS", 3, 1, 24
         ),
         maximum_odds_requests_per_cycle=_integer(
-            "BETBOT_BASKETBALL_MAX_ODDS_REQUESTS_PER_CYCLE", 80, 1, 500
+            "BETBOT_BASKETBALL_MAX_ODDS_REQUESTS_PER_CYCLE", 20, 1, 500
         ),
     )
     if settings.enabled and not settings.shadow_only:
@@ -103,4 +125,3 @@ def load_basketball_settings(
             "BASKETBALL_API_SPORTS_KEY or API_SPORTS_KEY is required"
         )
     return settings
-

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import Counter
 from datetime import date, timedelta
 from typing import Any
 
@@ -9,26 +10,72 @@ from . import RUNTIME_VERSION, SCHEMA_VERSION
 from .client import (
     ApiSportsBasketballClient,
     BasketballProviderError,
+    BasketballRequestBudgetExhausted,
 )
 from .config import BasketballSettings, load_basketball_settings
 from .domain import UPCOMING_STATUSES, BasketballGame, utc_now
 from .storage import BasketballStorage
 
 
-def _requested_dates(
-    storage: BasketballStorage, settings: BasketballSettings
-) -> list[str]:
-    today = date.today()
-    dates = [
-        (today + timedelta(days=offset)).isoformat()
-        for offset in range(0, settings.lookahead_days + 1)
+_CIRCUIT_CATEGORIES = {
+    "AUTH",
+    "AUTH_OR_ENTITLEMENT",
+    "ENTITLEMENT",
+    "QUOTA",
+    "RATE_LIMIT",
+    "ENDPOINT_UNAVAILABLE",
+    "PROVIDER_4XX",
+    "PROVIDER_RESPONSE",
+}
+
+
+def _json_list(raw: str) -> list[str]:
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(value, list):
+        return []
+    return [
+        str(item)
+        for item in value
+        if isinstance(item, str) and len(item) == 10
     ]
-    if settings.backfill_days and storage.state("initial_backfill_complete") != "1":
-        dates.extend(
-            (today - timedelta(days=offset)).isoformat()
-            for offset in range(1, settings.backfill_days + 1)
-        )
-    return list(dict.fromkeys(dates))
+
+
+def _backfill_cursor(storage: BasketballStorage) -> int:
+    try:
+        return max(0, int(storage.state("backfill_cursor_days") or "0"))
+    except ValueError:
+        return 0
+
+
+def _date_plan(
+    storage: BasketballStorage, settings: BasketballSettings
+) -> dict[str, list[tuple[str, int | None]]]:
+    today = date.today()
+    live = [
+        ((today + timedelta(days=offset)).isoformat(), None)
+        for offset in range(settings.lookahead_days + 1)
+    ]
+    failed = _json_list(storage.state("backfill_failed_dates"))
+    retry = [(value, None) for value in failed[
+        :settings.backfill_retry_dates_per_cycle
+    ]]
+    cursor = min(_backfill_cursor(storage), settings.backfill_days)
+    upper = min(
+        settings.backfill_days,
+        cursor + settings.backfill_days_per_cycle,
+    )
+    new_backfill = [
+        ((today - timedelta(days=offset)).isoformat(), offset)
+        for offset in range(cursor + 1, upper + 1)
+    ]
+    return {
+        "live": live,
+        "retry": retry,
+        "new_backfill": new_backfill,
+    }
 
 
 def run_cycle(
@@ -36,22 +83,75 @@ def run_cycle(
     client: ApiSportsBasketballClient,
     settings: BasketballSettings,
 ) -> dict[str, Any]:
-    dates = _requested_dates(storage, settings)
+    plan = _date_plan(storage, settings)
+    planned = plan["live"] + plan["retry"] + plan["new_backfill"]
+    live_dates = {item[0] for item in plan["live"]}
     games: list[BasketballGame] = []
     days_succeeded = 0
     days_failed = 0
-    for value in dates:
+    days_attempted = 0
+    failed_categories: Counter[str] = Counter()
+    failed_backfill = _json_list(storage.state("backfill_failed_dates"))
+    attempted_new_offsets: list[int] = []
+    circuit_open = False
+    request_budget_reached = False
+    retry_after_seconds: int | None = None
+    quota_limit: int | None = None
+    quota_remaining: int | None = None
+
+    begin_cycle = getattr(client, "begin_cycle", None)
+    if callable(begin_cycle):
+        begin_cycle(settings.maximum_requests_per_cycle)
+
+    for value, backfill_offset in planned:
+        if circuit_open or request_budget_reached:
+            break
+        days_attempted += 1
+        if backfill_offset is not None:
+            attempted_new_offsets.append(backfill_offset)
         try:
             games.extend(client.games_for_date(value))
             days_succeeded += 1
-        except BasketballProviderError:
+            if value in failed_backfill:
+                failed_backfill.remove(value)
+        except BasketballRequestBudgetExhausted:
+            request_budget_reached = True
+            failed_categories["REQUEST_BUDGET"] += 1
+            if value not in live_dates and value not in failed_backfill:
+                failed_backfill.append(value)
+        except BasketballProviderError as exc:
             days_failed += 1
-    if not games and days_failed == len(dates):
-        raise BasketballProviderError("all basketball date requests failed")
+            category = str(getattr(exc, "category", "") or "PROVIDER")
+            failed_categories[category] += 1
+            if value not in live_dates:
+                if value not in failed_backfill:
+                    failed_backfill.append(value)
+            if category in _CIRCUIT_CATEGORIES:
+                circuit_open = True
+                retry_after_seconds = getattr(
+                    exc, "retry_after_seconds", None
+                )
+                quota_limit = getattr(exc, "quota_limit", None)
+                quota_remaining = getattr(exc, "quota_remaining", None)
 
+    if attempted_new_offsets:
+        storage.set_state(
+            "backfill_cursor_days", str(max(attempted_new_offsets))
+        )
+    failed_backfill = list(dict.fromkeys(failed_backfill))[
+        :settings.backfill_days
+    ]
+    storage.set_state(
+        "backfill_failed_dates", json.dumps(failed_backfill, sort_keys=True)
+    )
+    cursor = min(_backfill_cursor(storage), settings.backfill_days)
+    backfill_complete = (
+        cursor >= settings.backfill_days and not failed_backfill
+    )
+    storage.set_state(
+        "initial_backfill_complete", "1" if backfill_complete else "0"
+    )
     saved = storage.upsert_games(games)
-    if settings.backfill_days and days_failed == 0:
-        storage.set_state("initial_backfill_complete", "1")
 
     odds_attempted = 0
     odds_failed = 0
@@ -59,7 +159,9 @@ def run_cycle(
     odds_quotes = 0
     for game in sorted(games, key=lambda item: item.scheduled_at):
         if (
-            game.status.upper() not in UPCOMING_STATUSES
+            circuit_open
+            or request_budget_reached
+            or game.status.upper() not in UPCOMING_STATUSES
             or odds_attempted >= settings.maximum_odds_requests_per_cycle
         ):
             continue
@@ -73,16 +175,58 @@ def run_cycle(
         storage.mark_odds_attempt(game.game_id)
         try:
             quotes = client.odds_for_game(game.game_id)
-        except BasketballProviderError:
+        except BasketballRequestBudgetExhausted:
+            request_budget_reached = True
+            failed_categories["REQUEST_BUDGET"] += 1
+            break
+        except BasketballProviderError as exc:
             odds_failed += 1
+            category = str(getattr(exc, "category", "") or "PROVIDER")
+            failed_categories[category] += 1
+            if category in _CIRCUIT_CATEGORIES:
+                circuit_open = True
+                retry_after_seconds = getattr(
+                    exc, "retry_after_seconds", None
+                )
+                quota_limit = getattr(exc, "quota_limit", None)
+                quota_remaining = getattr(exc, "quota_remaining", None)
+                break
             continue
         if not quotes:
             odds_empty += 1
         odds_quotes += storage.save_odds(quotes)
 
+    if circuit_open:
+        storage.set_state(
+            "provider_circuit",
+            json.dumps(
+                {
+                    "open": True,
+                    "failure_categories": dict(failed_categories),
+                    "retry_after_seconds": retry_after_seconds,
+                    "quota_limit": quota_limit,
+                    "quota_remaining": quota_remaining,
+                    "updated_at": utc_now(),
+                },
+                sort_keys=True,
+            ),
+        )
+    else:
+        storage.set_state(
+            "provider_circuit",
+            json.dumps({"open": False, "updated_at": utc_now()}),
+        )
+
     settlement = storage.settle_finished_games()
     coverage = storage.coverage_summary()
-    status = "HEALTHY" if days_failed == 0 else "LIMITED_BY_PROVIDER"
+    if circuit_open:
+        status = "PROVIDER_CIRCUIT_OPEN"
+    elif request_budget_reached:
+        status = "REQUEST_BUDGET_REACHED"
+    elif days_failed:
+        status = "LIMITED_BY_PROVIDER"
+    else:
+        status = "HEALTHY"
     return {
         "schema_version": SCHEMA_VERSION,
         "runtime_version": RUNTIME_VERSION,
@@ -93,9 +237,23 @@ def run_cycle(
         "games_received": len(games),
         "games_admitted": saved["admitted"],
         "games_quarantined": saved["quarantined"],
-        "days_requested": len(dates),
+        "days_requested": len(planned),
+        "days_attempted": days_attempted,
+        "days_skipped_after_circuit": len(planned) - days_attempted,
         "days_succeeded": days_succeeded,
         "days_failed": days_failed,
+        "provider_circuit_open": circuit_open,
+        "provider_failure_categories": dict(failed_categories),
+        "provider_retry_after_seconds": retry_after_seconds,
+        "provider_quota_limit": quota_limit,
+        "provider_quota_remaining": quota_remaining,
+        "request_budget_per_cycle": settings.maximum_requests_per_cycle,
+        "requests_made": int(getattr(client, "requests_made", 0)),
+        "request_budget_reached": request_budget_reached,
+        "backfill_cursor_days": cursor,
+        "backfill_target_days": settings.backfill_days,
+        "backfill_failed_dates": len(failed_backfill),
+        "backfill_complete": backfill_complete,
         "odds_attempted": odds_attempted,
         "odds_failed": odds_failed,
         "odds_empty_responses": odds_empty,
@@ -174,4 +332,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
