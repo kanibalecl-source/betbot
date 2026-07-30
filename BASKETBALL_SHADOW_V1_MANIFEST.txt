@@ -1,0 +1,54 @@
+BETBOT SERVER V20 - BASKETBALL SHADOW COLLECTION
+
+FILES TO UPLOAD
+- app_launcher.py
+- settings_v81.py
+- basketball_v1/__init__.py
+- basketball_v1/config.py
+- basketball_v1/domain.py
+- basketball_v1/client.py
+- basketball_v1/storage.py
+- basketball_v1/settlement.py
+- basketball_v1/runtime.py
+- BASKETBALL_SHADOW_V1_DEPLOY.md
+
+FILES INTENTIONALLY NOT INCLUDED
+- databases
+- CSV history
+- model artifacts
+- training datasets
+- API keys
+- .env files
+- user credentials
+
+SAFE DEFAULT
+BETBOT_BASKETBALL_ENABLED=0
+
+ACTIVATION
+BETBOT_BASKETBALL_ENABLED=1
+BETBOT_BASKETBALL_SHADOW_ONLY=1
+BASKETBALL_API_SPORTS_KEY=<Railway secret>
+
+EXPECTED STORAGE
+/data/basketball/basketball_shadow.sqlite3
+
+EXPECTED LOGS
+BASKETBALL v1.0 SHADOW START
+BASKETBALL_SHADOW_CYCLE
+HEARTBEAT ... basketball_shadow=True
+
+AUTOMATICALLY ENABLED
+- schedule and result collection
+- odds collection for moneyline, spread and totals
+- data-quality quarantine
+- final-score settlement
+- overtime tracking
+- provider health counters
+- SQLite integrity check
+
+INTENTIONALLY DISABLED
+- training admission
+- candidate model creation
+- model promotion
+- active-model modification
+- real-money execution

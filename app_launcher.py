@@ -47,6 +47,8 @@ def build_process_specs(settings: RuntimeSettings | None = None) -> dict[str, li
         specs["handball_shadow"] = [python, "-m", "handball_v11.runtime"]
     if config.tennis_enabled:
         specs["tennis_shadow"] = [python, "-m", "tennis_v1.runtime"]
+    if config.basketball_enabled:
+        specs["basketball_shadow"] = [python, "-m", "basketball_v1.runtime"]
     if config.sportradar_shadow_enabled:
         specs["sportradar_shadow"] = [python, "-m", "sportradar_shadow.runtime"]
     if os.getenv("BETBOT_FASTAPI_SYNC_ENABLED", "0").strip().lower() in {
@@ -153,6 +155,7 @@ class ProcessSupervisor:
                 "volleyball_execution_enabled": False,
                 "handball_execution_enabled": False,
                 "tennis_execution_enabled": False,
+                "basketball_execution_enabled": False,
                 "sportradar_execution_enabled": False,
             },
             "sports": {
@@ -173,6 +176,19 @@ class ProcessSupervisor:
                     "storage": "isolated",
                     "market": "match_winner_two_way",
                     "active_model_effect": False,
+                    "automatic_real_promotion_allowed": False,
+                },
+                "basketball": {
+                    "enabled": self.settings.basketball_enabled,
+                    "shadow_only": self.settings.basketball_shadow_only,
+                    "storage": "isolated",
+                    "markets": [
+                        "moneyline",
+                        "point_spread",
+                        "total_points",
+                    ],
+                    "active_model_effect": False,
+                    "automatic_training_admission": False,
                     "automatic_real_promotion_allowed": False,
                 },
                 "sportradar": {

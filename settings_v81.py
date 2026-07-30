@@ -71,6 +71,10 @@ class RuntimeSettings:
     tennis_shadow_only: bool
     tennis_poll_minutes: int
     tennis_backfill_days: int
+    basketball_enabled: bool
+    basketball_shadow_only: bool
+    basketball_poll_minutes: int
+    basketball_backfill_days: int
     sportradar_shadow_enabled: bool
     sportradar_shadow_only: bool
 
@@ -127,6 +131,16 @@ def load_settings(
         tennis_backfill_days=_int(
             source, "BETBOT_TENNIS_BACKFILL_DAYS", 30, 0, 365
         ),
+        basketball_enabled=_bool(source, "BETBOT_BASKETBALL_ENABLED", False),
+        basketball_shadow_only=_bool(
+            source, "BETBOT_BASKETBALL_SHADOW_ONLY", True
+        ),
+        basketball_poll_minutes=_int(
+            source, "BETBOT_BASKETBALL_POLL_MINUTES", 30, 5, 1440
+        ),
+        basketball_backfill_days=_int(
+            source, "BETBOT_BASKETBALL_BACKFILL_DAYS", 30, 0, 365
+        ),
         sportradar_shadow_enabled=_bool(
             source, "BETBOT_SPORTRADAR_SHADOW_ENABLED", False
         ),
@@ -171,6 +185,25 @@ def load_settings(
             raise ConfigurationError(
                 "Tennis v1 requires provider keys: "
                 + ", ".join(missing_tennis_keys)
+            )
+    if (
+        validate_cross_fields
+        and settings.basketball_enabled
+        and not settings.basketball_shadow_only
+    ):
+        raise ConfigurationError(
+            "Basketball v1 is shadow-only; "
+            "BETBOT_BASKETBALL_SHADOW_ONLY must remain enabled"
+        )
+    if validate_cross_fields and settings.basketball_enabled:
+        basketball_key = (
+            str(source.get("BASKETBALL_API_SPORTS_KEY", "")).strip()
+            or str(source.get("API_SPORTS_KEY", "")).strip()
+        )
+        if not basketball_key:
+            raise ConfigurationError(
+                "Basketball v1 requires BASKETBALL_API_SPORTS_KEY "
+                "or API_SPORTS_KEY"
             )
     if (
         validate_cross_fields
