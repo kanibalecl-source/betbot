@@ -15,9 +15,14 @@ except ModuleNotFoundError:
     requests_stub.Session = object
     sys.modules["requests"] = requests_stub
 from tennis_v1.config import load_tennis_settings
+from tennis_v1.clients import _JsonClient, TennisEndpointUnavailable
 from tennis_v1.domain import TennisMatch, TennisOddsQuote
 from tennis_v1.model import build_ratings, predict_match, validate_candidates
-from tennis_v1.runtime import admitted_match
+from tennis_v1.runtime import (
+    _fetch_odds,
+    _match_from_odds_event,
+    admitted_match,
+)
 from tennis_v1.storage import TennisStorage
 
 
@@ -99,6 +104,26 @@ class TennisSettingsTests(unittest.TestCase):
 
 
 class TennisDomainAndStorageTests(unittest.TestCase):
+    def test_unavailable_endpoint_is_not_retried(self) -> None:
+        class FakeResponse:
+            status_code = 404
+            headers = {}
+
+        class FakeSession:
+            def __init__(self):
+                self.calls = 0
+
+            def get(self, *args, **kwargs):
+                self.calls += 1
+                return FakeResponse()
+
+        client = _JsonClient(load_tennis_settings(require_keys=False))
+        fake_session = FakeSession()
+        client.session = fake_session
+        with self.assertRaises(TennisEndpointUnavailable):
+            client._get("https://provider.invalid/unavailable")
+        self.assertEqual(fake_session.calls, 1)
+
     def test_only_top_singles_are_admitted(self) -> None:
         settings = load_tennis_settings(require_keys=False)
         self.assertEqual(admitted_match(match(), settings), (True, "ADMITTED"))
@@ -178,6 +203,106 @@ class TennisDomainAndStorageTests(unittest.TestCase):
             files = [path.relative_to(root).as_posix() for path in Path(root).rglob("*") if path.is_file()]
             self.assertTrue(files)
             self.assertTrue(all(name.startswith("tennis/") for name in files))
+
+    def test_odds_api_event_is_safe_schedule_fallback(self) -> None:
+        sport = {
+            "key": "tennis_atp_test",
+            "title": "ATP Test",
+            "group": "Tennis",
+        }
+        event = {
+            "id": "odds-event-1",
+            "sport_key": "tennis_atp_test",
+            "commence_time": "2026-07-30T14:00:00Z",
+            "home_team": "Player One",
+            "away_team": "Player Two",
+            "completed": False,
+        }
+        fallback = _match_from_odds_event(event, sport)
+        self.assertIsNotNone(fallback)
+        assert fallback is not None
+        self.assertEqual(fallback.event_id, "odds:odds-event-1")
+        self.assertEqual(fallback.tour, "ATP")
+        self.assertFalse(fallback.finished)
+
+    def test_odds_fallback_stores_schedule_scores_and_two_book_quotes(self) -> None:
+        sport = {
+            "key": "tennis_atp_test",
+            "title": "ATP Test",
+            "group": "Tennis",
+            "active": True,
+        }
+        event = {
+            "id": "odds-event-1",
+            "sport_key": "tennis_atp_test",
+            "commence_time": "2026-07-30T14:00:00Z",
+            "home_team": "Player One",
+            "away_team": "Player Two",
+            "completed": False,
+            "bookmakers": [
+                {
+                    "key": "book-a",
+                    "last_update": "2026-07-30T12:00:00Z",
+                    "markets": [{
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Player One", "price": 1.90},
+                            {"name": "Player Two", "price": 2.00},
+                        ],
+                    }],
+                },
+                {
+                    "key": "book-b",
+                    "last_update": "2026-07-30T12:00:00Z",
+                    "markets": [{
+                        "key": "h2h",
+                        "outcomes": [
+                            {"name": "Player One", "price": 1.95},
+                            {"name": "Player Two", "price": 1.95},
+                        ],
+                    }],
+                },
+            ],
+        }
+        completed = {
+            **event,
+            "completed": True,
+            "scores": [
+                {"name": "Player One", "score": "2"},
+                {"name": "Player Two", "score": "0"},
+            ],
+        }
+
+        class FakeOddsClient:
+            def active_tennis_sports(self):
+                return [sport]
+
+            def odds(self, sport_key):
+                self.assert_key(sport_key)
+                return [event], {}
+
+            def scores(self, sport_key):
+                self.assert_key(sport_key)
+                return [completed]
+
+            @staticmethod
+            def assert_key(sport_key):
+                if sport_key != "tennis_atp_test":
+                    raise AssertionError(sport_key)
+
+        with tempfile.TemporaryDirectory() as root:
+            storage = TennisStorage(root)
+            settings = load_tennis_settings(require_keys=False)
+            stats = _fetch_odds(
+                settings, storage, FakeOddsClient(), []
+            )
+            self.assertEqual(stats["fallback_matches"], 1)
+            self.assertEqual(stats["quotes"], 4)
+            stored = storage.load_matches()
+            self.assertEqual(len(stored), 1)
+            self.assertTrue(stored[0].finished)
+            consensus = storage.consensus_odds(stored[0].event_id, 2)
+            self.assertTrue(consensus["Player One"]["admitted"])
 
 
 if __name__ == "__main__":

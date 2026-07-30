@@ -622,7 +622,10 @@ class TennisStorage:
                 "SELECT COUNT(*) FROM tennis_odds"
             ).fetchone()[0])
             calls = connection.execute(
-                "SELECT COUNT(*), SUM(success), SUM(CASE WHEN success=0 THEN 1 ELSE 0 END) "
+                "SELECT COUNT(*), SUM(success), "
+                "SUM(CASE WHEN success=0 AND error_type!='DATE_UNAVAILABLE' "
+                "THEN 1 ELSE 0 END), "
+                "SUM(CASE WHEN error_type='DATE_UNAVAILABLE' THEN 1 ELSE 0 END) "
                 "FROM tennis_provider_calls"
             ).fetchone()
             candidates = int(connection.execute(
@@ -651,6 +654,7 @@ class TennisStorage:
             "provider_calls": int(calls[0] or 0),
             "provider_success": int(calls[1] or 0),
             "provider_failed": int(calls[2] or 0),
+            "provider_unavailable": int(calls[3] or 0),
             "model_candidates": candidates,
             "model_validations": validations,
             "quarantined": quarantine,

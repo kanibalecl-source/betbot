@@ -9,13 +9,30 @@ from .config import TennisSettings
 
 
 class TennisProviderError(RuntimeError):
-    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        category: str = "PROVIDER_ERROR",
+        retryable: bool = False,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.category = category
+        self.retryable = retryable
 
 
 class TennisRateLimited(TennisProviderError):
     pass
+
+
+class TennisAuthorizationError(TennisProviderError):
+    pass
+
+
+class TennisEndpointUnavailable(TennisProviderError):
+    """A valid request for a date/endpoint unavailable in the current plan."""
 
 
 class _JsonClient:
@@ -41,12 +58,31 @@ class _JsonClient:
                 )
                 if response.status_code == 429:
                     raise TennisRateLimited(
-                        f"Provider rate limit for {url}", status_code=429
+                        f"Provider rate limit for {url}",
+                        status_code=429,
+                        category="RATE_LIMIT",
+                        retryable=False,
                     )
                 if response.status_code in {401, 403}:
-                    raise TennisProviderError(
+                    raise TennisAuthorizationError(
                         f"Provider authorization failed for {url}",
                         status_code=response.status_code,
+                        category="AUTHORIZATION",
+                        retryable=False,
+                    )
+                if response.status_code in {404, 410, 422}:
+                    raise TennisEndpointUnavailable(
+                        f"Provider endpoint/date unavailable for {url}",
+                        status_code=response.status_code,
+                        category="UNAVAILABLE",
+                        retryable=False,
+                    )
+                if 400 <= response.status_code < 500:
+                    raise TennisProviderError(
+                        f"Provider rejected request for {url}",
+                        status_code=response.status_code,
+                        category="BAD_REQUEST",
+                        retryable=False,
                     )
                 response.raise_for_status()
                 return response.json(), {
@@ -60,7 +96,15 @@ class _JsonClient:
                 last_error = exc
                 if attempt + 1 < self.settings.retry_attempts:
                     time.sleep(1.5 * (attempt + 1))
-        raise TennisProviderError(str(last_error or "Provider request failed"))
+        status_code = getattr(
+            getattr(last_error, "response", None), "status_code", None
+        )
+        raise TennisProviderError(
+            str(last_error or "Provider request failed"),
+            status_code=status_code,
+            category="TRANSIENT",
+            retryable=True,
+        )
 
 
 class SportradarTennisClient(_JsonClient):
@@ -119,3 +163,13 @@ class TennisOddsClient(_JsonClient):
         )
         return (payload if isinstance(payload, list) else []), headers
 
+    def scores(self, sport_key: str) -> list[dict[str, Any]]:
+        payload, _ = self._get(
+            f"{self.settings.odds_api_base_url}/sports/{sport_key}/scores",
+            params={
+                "apiKey": self.settings.odds_api_key,
+                "daysFrom": self.settings.odds_scores_days,
+                "dateFormat": "iso",
+            },
+        )
+        return payload if isinstance(payload, list) else []

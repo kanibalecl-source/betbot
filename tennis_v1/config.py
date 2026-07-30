@@ -41,8 +41,10 @@ class TennisSettings:
     odds_api_key: str
     odds_api_base_url: str
     odds_regions: str
+    odds_scores_days: int
     request_timeout_seconds: float
     retry_attempts: int
+    sportradar_max_schedule_days: int
     minimum_bookmakers: int
     minimum_edge: float
     maximum_odds_sports_per_cycle: int
@@ -87,10 +89,16 @@ def load_tennis_settings(*, require_keys: bool = True) -> TennisSettings:
         odds_regions=os.getenv(
             "BETBOT_TENNIS_ODDS_REGIONS", "eu,uk"
         ).strip(),
+        odds_scores_days=int(
+            _number("BETBOT_TENNIS_ODDS_SCORES_DAYS", 3, 1, 3)
+        ),
         request_timeout_seconds=_number(
             "BETBOT_TENNIS_REQUEST_TIMEOUT_SECONDS", 20, 3, 120
         ),
         retry_attempts=int(_number("BETBOT_TENNIS_RETRY_ATTEMPTS", 2, 1, 5)),
+        sportradar_max_schedule_days=int(
+            _number("BETBOT_TENNIS_SPORTRADAR_MAX_SCHEDULE_DAYS", 7, 1, 31)
+        ),
         minimum_bookmakers=int(
             _number("BETBOT_TENNIS_MIN_BOOKMAKERS", 2, 2, 20)
         ),

@@ -1,0 +1,29 @@
+BETBOT SERVER v19.1 - TENNIS PROVIDER RECOVERY
+
+Scope:
+- tennis_v1 only;
+- no modification of football, volleyball or handball data;
+- no real-money execution;
+- no automatic promotion outside tennis shadow.
+
+Changes:
+- non-retryable 4xx responses no longer create retry storms;
+- 401/403 opens a Sportradar authorization circuit breaker for the cycle;
+- unavailable historical dates are classified separately from real failures;
+- Sportradar daily schedule window is capped adaptively;
+- The Odds API supplies an isolated schedule and score fallback;
+- two-book consensus remains mandatory;
+- synthetic fallback identities are stable and confined to tennis storage;
+- completed fallback scores can autonomously settle tennis shadow picks;
+- runtime version: tennis-shadow-v1.1-provider-recovery.
+
+Persistent data:
+- /data/tennis/tennis_shadow.sqlite3 is reused;
+- no history file is deleted, replaced or truncated;
+- schema changes are not required.
+
+Expected Railway evidence:
+- tennis_shadow=True in HEARTBEAT;
+- TENNIS_SHADOW_CYCLE status HEALTHY or HEALTHY_ODDS_FALLBACK;
+- provider failures stop growing for unavailable dates;
+- fallback_matches, scores_received and odds quotes become visible as coverage grows.

@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .clients import (
+    TennisAuthorizationError,
+    TennisEndpointUnavailable,
     SportradarTennisClient,
     TennisOddsClient,
     TennisProviderError,
@@ -18,7 +20,7 @@ from .model import build_ratings, predict_match, validate_candidates
 from .storage import TennisStorage
 
 
-RUNTIME_VERSION = "tennis-shadow-v1.0"
+RUNTIME_VERSION = "tennis-shadow-v1.1-provider-recovery"
 EXCLUDED_LEVEL_WORDS = ("challenger", "itf", "junior", "doubles", "double")
 
 
@@ -29,6 +31,88 @@ def _parse_time(value: str) -> datetime | None:
         )
     except (TypeError, ValueError):
         return None
+
+
+def _provider_error_type(exc: TennisProviderError) -> str:
+    return str(getattr(exc, "category", "") or type(exc).__name__).upper()
+
+
+def _score_number(value: Any) -> float | None:
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _odds_player_id(name: str) -> str:
+    normalized = normalize_name(name)
+    return "odds-player:" + hashlib.sha256(
+        normalized.encode("utf-8")
+    ).hexdigest()[:20]
+
+
+def _match_from_odds_event(
+    event: dict[str, Any],
+    sport: dict[str, Any],
+) -> TennisMatch | None:
+    event_id = str(event.get("id") or "").strip()
+    player1 = str(event.get("home_team") or "").strip()
+    player2 = str(event.get("away_team") or "").strip()
+    scheduled_at = str(event.get("commence_time") or "").strip()
+    if not event_id or not player1 or not player2 or not scheduled_at:
+        return None
+    descriptor = " ".join(
+        (
+            str(sport.get("key") or ""),
+            str(sport.get("title") or ""),
+            str(sport.get("description") or ""),
+        )
+    ).lower()
+    tour = "WTA" if ("wta" in descriptor or "women" in descriptor) else "ATP"
+    completed = bool(event.get("completed"))
+    scores = event.get("scores")
+    scores = scores if isinstance(scores, list) else []
+    by_name: dict[str, float] = {}
+    for score in scores:
+        if not isinstance(score, dict):
+            continue
+        number = _score_number(score.get("score"))
+        name = normalize_name(str(score.get("name") or ""))
+        if name and number is not None:
+            by_name[name] = number
+    player1_score = by_name.get(normalize_name(player1))
+    player2_score = by_name.get(normalize_name(player2))
+    player1_id = _odds_player_id(player1)
+    player2_id = _odds_player_id(player2)
+    winner_id = ""
+    if completed and player1_score is not None and player2_score is not None:
+        if player1_score > player2_score:
+            winner_id = player1_id
+        elif player2_score > player1_score:
+            winner_id = player2_id
+    return TennisMatch(
+        event_id=f"odds:{event_id}",
+        scheduled_at=scheduled_at,
+        status="closed" if completed and winner_id else "not_started",
+        tour=tour,
+        competition_id=str(sport.get("key") or ""),
+        competition_name=str(
+            sport.get("title") or event.get("sport_title") or sport.get("key") or tour
+        ),
+        competition_level=tour,
+        competition_type="singles",
+        surface="unknown",
+        best_of=3,
+        player1_id=player1_id,
+        player1_name=player1,
+        player2_id=player2_id,
+        player2_name=player2,
+        player1_sets=int(player1_score) if player1_score is not None else None,
+        player2_sets=int(player2_score) if player2_score is not None else None,
+        winner_id=winner_id,
+        retired=False,
+        raw={"provider": "the_odds_api", **event},
+    )
 
 
 def admitted_match(match: TennisMatch, settings: TennisSettings) -> tuple[bool, str]:
@@ -154,13 +238,22 @@ def _fetch_matches(
     settings: TennisSettings,
     storage: TennisStorage,
     client: SportradarTennisClient,
-) -> dict[str, int]:
+) -> dict[str, int | bool]:
     today = datetime.now(timezone.utc).date()
     first_cycle = storage.state("initial_backfill_complete") != "1"
-    start = today - timedelta(days=settings.backfill_days if first_cycle else 1)
+    requested_backfill = settings.backfill_days if first_cycle else 1
+    adaptive_backfill = min(
+        requested_backfill,
+        max(0, settings.sportradar_max_schedule_days - settings.lookahead_days - 1),
+    )
+    start = today - timedelta(days=adaptive_backfill)
     end = today + timedelta(days=settings.lookahead_days)
     accepted: list[TennisMatch] = []
     rejected = 0
+    successful_days = 0
+    unavailable_days = 0
+    failed_days = 0
+    authorization_blocked = False
     day = start
     while day <= end:
         day_text = day.isoformat()
@@ -170,18 +263,40 @@ def _fetch_matches(
                 "sportradar", f"daily_summaries:{day_text}",
                 success=True, rows_received=len(payloads), status_code=200,
             )
+            successful_days += 1
         except TennisRateLimited:
             storage.record_provider_call(
                 "sportradar", f"daily_summaries:{day_text}",
                 success=False, status_code=429, error_type="RATE_LIMIT",
             )
             raise
+        except TennisEndpointUnavailable as exc:
+            storage.record_provider_call(
+                "sportradar", f"daily_summaries:{day_text}",
+                success=False,
+                status_code=exc.status_code,
+                error_type="DATE_UNAVAILABLE",
+            )
+            unavailable_days += 1
+            day += timedelta(days=1)
+            continue
+        except TennisAuthorizationError as exc:
+            storage.record_provider_call(
+                "sportradar", f"daily_summaries:{day_text}",
+                success=False,
+                status_code=exc.status_code,
+                error_type="AUTHORIZATION",
+            )
+            failed_days += 1
+            authorization_blocked = True
+            break
         except TennisProviderError as exc:
             storage.record_provider_call(
                 "sportradar", f"daily_summaries:{day_text}",
                 success=False, status_code=exc.status_code,
-                error_type=type(exc).__name__,
+                error_type=_provider_error_type(exc),
             )
+            failed_days += 1
             day += timedelta(days=1)
             continue
         for payload in payloads:
@@ -199,9 +314,16 @@ def _fetch_matches(
                 rejected += 1
         day += timedelta(days=1)
     stored = storage.upsert_matches(accepted)
-    if first_cycle:
+    if first_cycle and successful_days:
         storage.set_state("initial_backfill_complete", "1")
-    return {"accepted": stored, "rejected": rejected}
+    return {
+        "accepted": stored,
+        "rejected": rejected,
+        "successful_days": successful_days,
+        "unavailable_days": unavailable_days,
+        "failed_days": failed_days,
+        "authorization_blocked": authorization_blocked,
+    }
 
 
 def _fetch_rankings(
@@ -228,7 +350,7 @@ def _fetch_rankings(
     except TennisProviderError as exc:
         storage.record_provider_call(
             "sportradar", "rankings", success=False,
-            status_code=exc.status_code, error_type=type(exc).__name__,
+            status_code=exc.status_code, error_type=_provider_error_type(exc),
         )
         return 0
 
@@ -248,11 +370,20 @@ def _fetch_odds(
     except TennisProviderError as exc:
         storage.record_provider_call(
             "the_odds_api", "sports", success=False,
-            status_code=exc.status_code, error_type=type(exc).__name__,
+            status_code=exc.status_code, error_type=_provider_error_type(exc),
         )
-        return {"sports": 0, "quotes": 0, "matched_events": 0}
+        return {
+            "sports": 0, "quotes": 0, "matched_events": 0,
+            "fallback_matches": 0, "scores_received": 0,
+        }
     quotes: list[TennisOddsQuote] = []
     matched_events = 0
+    fallback_matches: dict[str, TennisMatch] = {}
+    scores_received = 0
+    sport_by_key = {
+        str(item.get("key") or ""): item for item in sports
+        if isinstance(item, dict) and item.get("key")
+    }
     keys = _sports_keys(sports, settings)
     for key in keys:
         try:
@@ -270,19 +401,55 @@ def _fetch_odds(
         except TennisProviderError as exc:
             storage.record_provider_call(
                 "the_odds_api", f"odds:{key}", success=False,
-                status_code=exc.status_code, error_type=type(exc).__name__,
+                status_code=exc.status_code, error_type=_provider_error_type(exc),
             )
             continue
         for event in events:
             match = _match_odds_event(event, matches)
             if match is None:
-                continue
+                match = _match_from_odds_event(event, sport_by_key.get(key, {}))
+                if match is None:
+                    continue
+                fallback_matches[match.event_id] = match
             matched_events += 1
             quotes.extend(_quotes_from_event(event, match))
+        try:
+            score_rows = client.scores(key)
+            storage.record_provider_call(
+                "the_odds_api", f"scores:{key}", success=True,
+                rows_received=len(score_rows), status_code=200,
+            )
+            scores_received += len(score_rows)
+        except TennisRateLimited:
+            storage.record_provider_call(
+                "the_odds_api", f"scores:{key}", success=False,
+                status_code=429, error_type="RATE_LIMIT",
+            )
+            break
+        except TennisProviderError as exc:
+            storage.record_provider_call(
+                "the_odds_api", f"scores:{key}", success=False,
+                status_code=exc.status_code, error_type=_provider_error_type(exc),
+            )
+            score_rows = []
+        known_matches = matches + list(fallback_matches.values())
+        for event in score_rows:
+            score_match = _match_odds_event(event, known_matches)
+            fallback = _match_from_odds_event(
+                event, sport_by_key.get(key, {})
+            )
+            if fallback is None:
+                continue
+            if score_match is None or score_match.event_id.startswith("odds:"):
+                fallback_matches[fallback.event_id] = fallback
+    fallback_rows = storage.upsert_matches(fallback_matches.values())
+    stored_quotes = storage.upsert_odds(quotes)
     return {
         "sports": len(keys),
-        "quotes": storage.upsert_odds(quotes),
+        "quotes": stored_quotes,
         "matched_events": matched_events,
+        "fallback_matches": fallback_rows,
+        "scores_received": scores_received,
     }
 
 
@@ -414,11 +581,39 @@ def run_cycle(
     try:
         match_stats = _fetch_matches(config, store, radar)
     except TennisRateLimited:
-        match_stats = {"accepted": 0, "rejected": 0}
+        match_stats = {
+            "accepted": 0, "rejected": 0, "successful_days": 0,
+            "unavailable_days": 0, "failed_days": 1,
+            "authorization_blocked": False,
+        }
         provider_state = "SPORTRADAR_RATE_LIMITED"
-    ranking_rows = _fetch_rankings(store, radar)
+    ranking_rows = (
+        0
+        if bool(match_stats.get("authorization_blocked"))
+        or provider_state == "SPORTRADAR_RATE_LIMITED"
+        else _fetch_rankings(store, radar)
+    )
     matches = store.load_matches()
     odds_stats = _fetch_odds(config, store, odds, matches)
+    matches = store.load_matches()
+    if (
+        provider_state != "HEALTHY"
+        and int(odds_stats.get("fallback_matches", 0)) > 0
+    ):
+        provider_state = "HEALTHY_ODDS_FALLBACK"
+    elif bool(match_stats.get("authorization_blocked")):
+        provider_state = (
+            "HEALTHY_ODDS_FALLBACK"
+            if int(odds_stats.get("fallback_matches", 0)) > 0
+            else "SPORTRADAR_AUTHORIZATION_BLOCKED"
+        )
+    elif (
+        int(match_stats.get("failed_days", 0)) > 0
+        and int(odds_stats.get("fallback_matches", 0)) > 0
+    ):
+        provider_state = "HEALTHY_ODDS_FALLBACK"
+    elif int(match_stats.get("failed_days", 0)) > 0:
+        provider_state = "DEGRADED_PROVIDER"
     model_stats = _predict_and_settle(config, store, matches)
     validation = _validate(config, store, matches)
     active_model_id, _ = store.active_shadow_model()
