@@ -846,6 +846,18 @@ def run_bot(mode="main"):
                 betfair_odds=data.get("betfair_odds")
             )
 
+            feature_snapshot = (
+                build_feature_snapshot(
+                    match,
+                    data,
+                    home_xg=home_xg,
+                    away_xg=away_xg,
+                    probability=final_prob,
+                    league=match.get("league", ""),
+                )
+                if build_feature_snapshot
+                else {"feature_completeness": 1.0, "missing_features_json": "[]"}
+            )
             stage_b_data = stage_b.enrich_pick(
                 pick={},
                 probability=final_prob,
@@ -860,6 +872,13 @@ def run_bot(mode="main"):
                 sharp_score=stage_a_data.get("sharp_score", 0),
                 clv_score=0,
                 market=market,
+                council_features={
+                    **dict(match),
+                    **feature_snapshot,
+                    "league": match.get("league", ""),
+                    "home_team": home_team,
+                    "away_team": away_team,
+                },
             )
 
             fair_odds_model = probability_data["fair_odds_model"]
@@ -898,19 +917,6 @@ def run_bot(mode="main"):
             if not filter_decision.get("accepted", True):
                 skip_stats["stage_filter_rejected"] += 1
                 continue
-
-            feature_snapshot = (
-                build_feature_snapshot(
-                    match,
-                    data,
-                    home_xg=home_xg,
-                    away_xg=away_xg,
-                    probability=final_prob,
-                    league=match.get("league", ""),
-                )
-                if build_feature_snapshot
-                else {"feature_completeness": 1.0, "missing_features_json": "[]"}
-            )
 
             try:
                 from quality_selection_gate import evaluate_recommendation
@@ -1185,6 +1191,33 @@ def run_bot(mode="main"):
                 "momentum_score": stage_b_data.get("momentum_score"),
                 "momentum_label": stage_b_data.get("momentum_label"),
                 "confidence_calibrated_v2": stage_b_data.get("confidence_calibrated_v2"),
+                "football_council_version": stage_b_data.get(
+                    "football_council_version"
+                ),
+                "football_council_mode": stage_b_data.get(
+                    "football_council_mode"
+                ),
+                "football_council_champion_active": stage_b_data.get(
+                    "football_council_champion_active"
+                ),
+                "football_council_decision_authority": stage_b_data.get(
+                    "football_council_decision_authority"
+                ),
+                "football_council_consensus": stage_b_data.get(
+                    "football_council_consensus"
+                ),
+                "football_council_disagreement": stage_b_data.get(
+                    "football_council_disagreement"
+                ),
+                "football_council_available_models": stage_b_data.get(
+                    "football_council_available_models"
+                ),
+                "football_council_gate": stage_b_data.get(
+                    "football_council_gate"
+                ),
+                "football_council_models_json": stage_b_data.get(
+                    "football_council_models_json"
+                ),
 
                 "meta_probability": stage_c_data.get("meta_probability"),
                 "meta_weight_model": stage_c_data.get("meta_weight_model"),

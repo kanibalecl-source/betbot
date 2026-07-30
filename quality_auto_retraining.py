@@ -15,6 +15,7 @@ from diagnostic_advantage_report import write_report
 from quality_champion_challenger import train_candidate_state, walk_forward_validate
 from quality_upgrade_engine import BetaCalibrator, train_time_safe_state
 from storage_paths import get_data_dir
+from football_model_council_trainer import train_football_council_shadow
 
 
 def _utc_now() -> datetime:
@@ -340,6 +341,23 @@ class ControlledQualityRetrainer:
             )
             new_rows = max(0, len(rows) - baseline_rows)
             now = _utc_now().isoformat()
+            council_dir = self.data_dir / "football_model_council"
+            council_state_missing = not (council_dir / "shadow_state.json").exists()
+            council_training: dict[str, Any] = {
+                "status": "WAITING_FOR_RETRAINING_WINDOW",
+                "active_model_modified": False,
+            }
+            if force or council_state_missing or new_rows >= self.min_new_rows:
+                try:
+                    council_training = train_football_council_shadow(
+                        rows, council_dir
+                    )
+                except Exception as council_exc:
+                    council_training = {
+                        "status": "SHADOW_TRAINING_ERROR",
+                        "error": f"{type(council_exc).__name__}: {council_exc}",
+                        "active_model_modified": False,
+                    }
             if new_rows < self.min_new_rows and not force:
                 result = {
                     "status": "WAITING_FOR_NEW_SETTLED_ROWS",
@@ -350,6 +368,7 @@ class ControlledQualityRetrainer:
                     "required_new_rows": self.min_new_rows,
                     "source_hashes_unchanged": metadata.get("source_hashes_unchanged"),
                     "diagnostic_report": diagnostic,
+                    "football_model_council": council_training,
                 }
                 _atomic_json(self.control_path, {
                     **control,
@@ -363,7 +382,13 @@ class ControlledQualityRetrainer:
 
             candidate, variants = self._candidate_factory(rows)
             if candidate.get("status") != "TRAINED_TIME_SAFE":
-                result = {"status": "TRAINING_REJECTED", "checked_at": now, "training": candidate}
+                result = {
+                    "status": "TRAINING_REJECTED",
+                    "checked_at": now,
+                    "training": candidate,
+                    "football_model_council": council_training,
+                    "active_model_modified": False,
+                }
                 _append_event(self.events_path, result)
                 return result
             validation = validate_candidate(
@@ -391,6 +416,7 @@ class ControlledQualityRetrainer:
                     "selection_metric": "minimum_holdout_brier_then_log_loss",
                 },
                 "diagnostic_report": diagnostic,
+                "football_model_council": council_training,
                 "dataset_admission": {
                     "quarantined_rows": metadata.get("quarantined_rows", 0),
                     "conflicting_event_keys": metadata.get("conflicting_event_keys", 0),
@@ -410,6 +436,7 @@ class ControlledQualityRetrainer:
                 "candidate": str(version_path),
                 "validation": validation,
                 "diagnostic_report": diagnostic,
+                "football_model_council": council_training,
                 "active_model_modified": False,
             }
             _atomic_json(self.control_path, {

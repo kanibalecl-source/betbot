@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Optional
+import json
+from typing import Any, Mapping, Optional
+
+from football_model_council import FootballModelCouncil
 
 
 PROBABILITY_METHOD = "independent_poisson"
@@ -105,6 +108,9 @@ def market_probability(
 
 class StageBModelLayer:
 
+    def __init__(self, council: FootballModelCouncil | None = None):
+        self.council = council or FootballModelCouncil()
+
     def enrich_pick(
         self,
         pick,
@@ -120,6 +126,7 @@ class StageBModelLayer:
         sharp_score=0,
         clv_score=0,
         market=None,
+        council_features: Mapping[str, Any] | None = None,
     ):
         try:
             home = _finite_non_negative(home_xg)
@@ -156,6 +163,13 @@ class StageBModelLayer:
             calibrated_conf += clv_score * 0.05
             calibrated_conf = max(1, min(99, calibrated_conf))
 
+            council = self.council.evaluate(
+                champion_probability=probability,
+                market=market,
+                home_xg=home,
+                away_xg=away,
+                features=council_features,
+            ).payload()
             result = dict(pick)
             result.update({
                 "advanced_total_xg": round(total_xg, 2),
@@ -178,6 +192,21 @@ class StageBModelLayer:
                 "momentum_score": round(momentum_score, 2),
                 "momentum_label": momentum_label,
                 "confidence_calibrated_v2": round(calibrated_conf, 2),
+                "football_council_version": council["version"],
+                "football_council_mode": council["mode"],
+                "football_council_champion_active": council[
+                    "champion_remains_active"
+                ],
+                "football_council_decision_authority": council[
+                    "challengers_have_decision_authority"
+                ],
+                "football_council_consensus": council["diagnostic_consensus"],
+                "football_council_disagreement": council["model_disagreement"],
+                "football_council_available_models": council["available_models"],
+                "football_council_gate": council["gate_status"],
+                "football_council_models_json": json.dumps(
+                    council["models"], ensure_ascii=False, sort_keys=True
+                ),
             })
             return result
 
@@ -194,4 +223,13 @@ class StageBModelLayer:
                 "momentum_score": 0,
                 "momentum_label": "ERROR",
                 "confidence_calibrated_v2": 0,
+                "football_council_version": None,
+                "football_council_mode": "SHADOW_ONLY_ERROR",
+                "football_council_champion_active": True,
+                "football_council_decision_authority": False,
+                "football_council_consensus": None,
+                "football_council_disagreement": None,
+                "football_council_available_models": 0,
+                "football_council_gate": "ERROR",
+                "football_council_models_json": "{}",
             }

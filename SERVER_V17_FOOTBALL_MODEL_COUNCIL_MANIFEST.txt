@@ -1,0 +1,28 @@
+BETBOT SERVER V17 - FOOTBALL MODEL COUNCIL
+
+NOWE:
+- football_model_council.py
+- football_model_council_trainer.py
+- tests/test_football_model_council.py
+- WDROZENIE_FOOTBALL_MODEL_COUNCIL_V17.md
+
+ZMIENIONE:
+- bot.py
+- stage_b_model_layer.py
+- quality_auto_retraining.py
+- requirements.txt
+- pyproject.toml
+- .env.example
+
+NIE ZAWIERA:
+- data/
+- historii typów i rozliczeń
+- baz SQLite
+- aktywnego modelu
+- sekretów i kluczy API
+
+GWARANCJA LOGICZNA:
+- Champion pozostaje jedynym modelem decyzyjnym.
+- Rada modeli działa w trybie SHADOW_ONLY.
+- Brak automatycznej promocji lub podmiany aktywnego modelu.
+- Kurs bukmachera nie jest wejściem do modeli rady.

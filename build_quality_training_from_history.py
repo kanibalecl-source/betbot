@@ -223,6 +223,11 @@ def transform_row(
         "market": market,
         "league": league,
         "fixture_id": fixture_id,
+        # Shadow-only identity features. They are intentionally excluded from
+        # the immutable core admission digest for backward compatibility with
+        # the existing server ledger.
+        "home_team": str(_first(row, ("home_team", "home", "team_home")) or ""),
+        "away_team": str(_first(row, ("away_team", "away", "team_away")) or ""),
         "bookmaker": str(_first(row, ("bookmaker", "bukmacher")) or ""),
         "selection": str(_first(row, ("selection", "outcome_name")) or market),
         "sport": str(_first(row, ("sport", "discipline")) or "football").lower(),
@@ -358,7 +363,9 @@ def _enforce_admission_ledger(
     try:
         for row in records:
             canonical = {
-                key: value for key, value in row.items() if key != "source"
+                key: value
+                for key, value in row.items()
+                if key not in {"source", "home_team", "away_team"}
             }
             payload = json.dumps(
                 canonical, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -519,7 +526,7 @@ def build(data_dir: Path, output: Path, replace_derived: bool = False) -> dict[s
     temporary = output.with_suffix(output.suffix + ".tmp")
     fields = [
         "timestamp", "kickoff", "source", "record_id", "fixture_id", "market",
-        "league", "bookmaker", "selection", "sport",
+        "league", "home_team", "away_team", "bookmaker", "selection", "sport",
         "current_probability", "dixon_coles_probability",
         "market_probability", "market_probability_method", "target",
         "odds", "closing_odds", "home_xg", "away_xg", "data_quality",
