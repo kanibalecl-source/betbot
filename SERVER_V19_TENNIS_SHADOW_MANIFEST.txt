@@ -1,0 +1,19 @@
+BETBOT SERVER v19 — TENNIS SHADOW
+
+Zakres:
+- nowy, całkowicie izolowany moduł tennis_v1;
+- singiel ATP/WTA i rynek zwycięzcy meczu;
+- harmonogram, wyniki i rankingi: Sportradar Tennis API;
+- kursy: The Odds API, konsensus minimum dwóch bukmacherów;
+- surface Elo + general Elo;
+- kandydaci i chronologiczny walk-forward;
+- automatyczna promocja wyłącznie modelu shadow tenisa;
+- panel Tenis w menu.
+
+Bezpieczeństwo:
+- moduł jest domyślnie wyłączony;
+- brak realnych zakładów i brak ścieżki do realnej promocji;
+- osobna baza data/tennis/tennis_shadow.sqlite3;
+- bez modyfikacji historii i modeli innych dyscyplin;
+- Challenger, ITF, debel i live są wyłączone;
+- błędne rekordy trafiają do kwarantanny.

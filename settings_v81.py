@@ -67,6 +67,10 @@ class RuntimeSettings:
     handball_shadow_only: bool
     handball_poll_minutes: int
     handball_backfill_days: int
+    tennis_enabled: bool
+    tennis_shadow_only: bool
+    tennis_poll_minutes: int
+    tennis_backfill_days: int
     sportradar_shadow_enabled: bool
     sportradar_shadow_only: bool
 
@@ -115,6 +119,14 @@ def load_settings(
         handball_backfill_days=_int(
             source, "BETBOT_HANDBALL_BACKFILL_DAYS", 30, 0, 365
         ),
+        tennis_enabled=_bool(source, "BETBOT_TENNIS_ENABLED", False),
+        tennis_shadow_only=_bool(source, "BETBOT_TENNIS_SHADOW_ONLY", True),
+        tennis_poll_minutes=_int(
+            source, "BETBOT_TENNIS_POLL_MINUTES", 240, 30, 1440
+        ),
+        tennis_backfill_days=_int(
+            source, "BETBOT_TENNIS_BACKFILL_DAYS", 30, 0, 365
+        ),
         sportradar_shadow_enabled=_bool(
             source, "BETBOT_SPORTRADAR_SHADOW_ENABLED", False
         ),
@@ -142,6 +154,24 @@ def load_settings(
         raise ConfigurationError(
             "Handball v11 is shadow-only; BETBOT_HANDBALL_SHADOW_ONLY must remain enabled"
         )
+    if validate_cross_fields and settings.tennis_enabled and not settings.tennis_shadow_only:
+        raise ConfigurationError(
+            "Tennis v1 is shadow-only; BETBOT_TENNIS_SHADOW_ONLY must remain enabled"
+        )
+    if validate_cross_fields and settings.tennis_enabled:
+        missing_tennis_keys = []
+        if not str(source.get("SPORTRADAR_API_KEY", "")).strip():
+            missing_tennis_keys.append("SPORTRADAR_API_KEY")
+        if not (
+            str(source.get("THE_ODDS_API_KEY", "")).strip()
+            or str(source.get("ODDS_API_KEY", "")).strip()
+        ):
+            missing_tennis_keys.append("THE_ODDS_API_KEY or ODDS_API_KEY")
+        if missing_tennis_keys:
+            raise ConfigurationError(
+                "Tennis v1 requires provider keys: "
+                + ", ".join(missing_tennis_keys)
+            )
     if (
         validate_cross_fields
         and settings.sportradar_shadow_enabled

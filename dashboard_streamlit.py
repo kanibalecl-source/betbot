@@ -61,6 +61,11 @@ try:
 except Exception:
     load_handball_dashboard = None
 
+try:
+    from tennis_v1.dashboard import load_tennis_dashboard
+except Exception:
+    load_tennis_dashboard = None
+
 
 try:
     from manual_betting import (
@@ -3312,6 +3317,136 @@ def render_handball() -> None:
             )
 
 
+def render_tennis() -> None:
+    page_banner(
+        "Tenis",
+        "TENIS",
+        "ATP i WTA — autonomiczny moduł w bezpiecznym trybie shadow.",
+    )
+    if load_tennis_dashboard is None:
+        st.error("Panel tenisa nie został załadowany.")
+        return
+    snapshot = load_tennis_dashboard()
+    coverage = snapshot.get("coverage", {})
+    rows_done = int(snapshot.get("candidate_rows", 0))
+    minimum = max(1, int(snapshot.get("candidate_minimum_rows", 1500)))
+    progress = min(100.0, 100.0 * rows_done / minimum)
+    model_id = str(snapshot.get("active_model_id", "BASELINE"))
+    metrics([
+        ("Rozliczone mecze", str(rows_done), f"minimum: {minimum}"),
+        ("Postęp danych", f"{progress:.0f}%", "ATP/WTA"),
+        ("Aktywny model", "Bazowy" if model_id == "BASELINE" else "Challenger", model_id[:18]),
+        ("Kursy konsensusowe", str(int(coverage.get("matches_with_consensus_odds", 0))), "minimum 2 bukmacherów"),
+    ])
+    if not snapshot.get("available"):
+        st.info(
+            "Moduł oczekuje na aktywację i pierwszy cykl. Tenis jest całkowicie "
+            "odseparowany od modeli pozostałych dyscyplin."
+        )
+        return
+    st.markdown(
+        '<div class="ka-panel"><h3>POSTĘP AUTONOMICZNEGO UCZENIA</h3>'
+        '<div style="display:flex;justify-content:space-between;margin-bottom:10px;'
+        'color:#5f7084;font-size:12px">'
+        f'<span>{rows_done} z {minimum} rozliczonych meczów</span>'
+        f'<b style="color:#168ff5">{progress:.0f}%</b></div>'
+        '<div class="progress" style="width:100%;height:10px">'
+        f'<span style="width:{progress:.2f}%"></span></div>'
+        '<div style="margin-top:12px;color:#718095;font-size:11px">'
+        'Zakres startowy: singiel ATP/WTA, rynek zwycięzcy meczu. '
+        'Challenger, ITF, debel, live i realny kapitał są wyłączone.</div></div>',
+        unsafe_allow_html=True,
+    )
+    matches_tab, picks_tab, learning_tab = st.tabs(
+        ["Mecze ATP/WTA", "Rekomendacje shadow", "Model i nauka"]
+    )
+    with matches_tab:
+        matches = snapshot.get("matches", [])
+        if not matches:
+            st.info("Brak zapisanych meczów tenisowych.")
+        else:
+            body = []
+            for match in matches:
+                body.append([
+                    _volleyball_datetime(match.get("scheduled_at")),
+                    html.escape(str(match.get("tour") or "-")),
+                    html.escape(str(match.get("competition_name") or "-")),
+                    html.escape(str(match.get("surface") or "-").title()),
+                    (
+                        f"<b>{html.escape(str(match.get('player1_name') or '-'))}</b>"
+                        '<span class="ka-match-separator">–</span>'
+                        f"<b>{html.escape(str(match.get('player2_name') or '-'))}</b>"
+                    ),
+                    html.escape(str(match.get("score") or "-")),
+                    html.escape(_volleyball_status(match.get("status", ""))),
+                ])
+            st.markdown(
+                '<div class="ka-table-scroll">'
+                + html_table(
+                    ["Data", "Tour", "Turniej", "Nawierzchnia", "Mecz", "Sety", "Status"],
+                    body,
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+    with picks_tab:
+        picks = snapshot.get("picks", [])
+        if not picks:
+            st.info(
+                "Typy pojawią się po dopasowaniu meczu do konsensusu co najmniej "
+                "dwóch bukmacherów i przejściu bramki jakości."
+            )
+        else:
+            body = []
+            for pick in picks:
+                edge = 100.0 * float(pick.get("edge", 0) or 0)
+                body.append([
+                    _volleyball_datetime(pick.get("created_at")),
+                    html.escape(str(pick.get("competition_name") or "-")),
+                    html.escape(str(pick.get("match_name") or "-")),
+                    html.escape(str(pick.get("outcome") or "-")),
+                    f"{float(pick.get('model_fair_odds', 0) or 0):.2f}",
+                    f"{float(pick.get('bookmaker_odds', 0) or 0):.2f}",
+                    confidence_bar(float(pick.get("confidence", 0) or 0)),
+                    f'<span class="green">{edge:+.1f}%</span>',
+                    html.escape(_volleyball_status(pick.get("status", ""))),
+                ])
+            st.markdown(
+                '<div class="ka-table-scroll">'
+                + html_table(
+                    ["Utworzono", "Turniej", "Mecz", "Typ", "Model", "Buk", "Pewność", "Value", "Status"],
+                    body,
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+    with learning_tab:
+        health = snapshot.get("health", {})
+        validation = health.get("validation", {})
+        surface_rows = coverage.get("surface_rows", {})
+        body = [
+            ["Stan systemu", html.escape(_volleyball_status(snapshot.get("status", "")))],
+            ["Governor", html.escape(_volleyball_status(snapshot.get("governor_status", "")))],
+            ["Walk-forward", html.escape(_volleyball_status(validation.get("status", "")))],
+            ["Kort twardy", str(int(surface_rows.get("hard", 0) or 0))],
+            ["Mączka", str(int(surface_rows.get("clay", 0) or 0))],
+            ["Trawa", str(int(surface_rows.get("grass", 0) or 0))],
+            ["Kwarantanna", str(int(coverage.get("quarantined", 0) or 0))],
+            ["Tryb", "Shadow — bez realnego kapitału"],
+        ]
+        st.markdown(
+            '<div class="ka-panel"><h3>STATUS MODELU</h3>'
+            '<div class="ka-table-scroll">'
+            + html_table(["Element", "Stan"], body)
+            + "</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.success(
+            "Promocja może zmienić wyłącznie model shadow tenisa. "
+            "Nie ma ścieżki do realnych zakładów ani modeli innych dyscyplin."
+        )
+
+
 require_login()
 css()
 raw_picks = load_picks()
@@ -3332,4 +3467,5 @@ elif selected_page == "Moje zakłady": render_manual_betting(raw_picks)
 elif selected_page == "Ranking": render_ranking(picks, results)
 elif selected_page == "Siatkówka": render_volleyball()
 elif selected_page == "Piłka ręczna": render_handball()
+elif selected_page == "Tenis": render_tennis()
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)
