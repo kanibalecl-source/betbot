@@ -65,7 +65,9 @@ AI_COLUMNS = [
     "quality_gate_status", "quality_gate_enforced", "quality_data_completeness",
     "confidence", "edge", "ev", "ai_pick_score", "risk", "status",
     "closing_odds", "clv_percent", "home_xg", "away_xg",
-    "advanced_total_xg", "advanced_over25_prob", "marza_%",
+    "advanced_total_xg", "advanced_over25_prob", "advanced_under25_prob",
+    "advanced_market_prob", "advanced_probability_method",
+    "advanced_probability_version", "advanced_probability_integrity", "marza_%",
     "tempo", "pressure", "momentum", "momentum_score", "momentum_label",
     "sharp_score", "sharp_label", "sharp_signals",
     "meta_probability", "meta_weight_model", "meta_weight_market",
@@ -770,6 +772,17 @@ def build_ai_picks(limit: int = 12, mode: str = "main") -> pd.DataFrame:
             "away_xg": first(row, ["away_xg"], ""),
             "advanced_total_xg": first(row, ["advanced_total_xg"], ""),
             "advanced_over25_prob": first(row, ["advanced_over25_prob"], ""),
+            "advanced_under25_prob": first(row, ["advanced_under25_prob"], ""),
+            "advanced_market_prob": first(row, ["advanced_market_prob"], ""),
+            "advanced_probability_method": first(
+                row, ["advanced_probability_method"], ""
+            ),
+            "advanced_probability_version": first(
+                row, ["advanced_probability_version"], ""
+            ),
+            "advanced_probability_integrity": first(
+                row, ["advanced_probability_integrity"], ""
+            ),
             "marza_%": first(row, ["marza_%"], ""),
             "tempo": round(tempo, 2),
             "pressure": round(pressure, 2),

@@ -528,16 +528,10 @@ def stage_probability(
         return None
 
     # Helper engines are observational until independently validated with
-    # walk-forward data. They cannot alter production fair odds.
+    # walk-forward data. The legacy XGEngine returns the home share of total
+    # xG, not a probability aligned to an arbitrary betting market, so it
+    # must never be compared with or blended into the selected-market output.
     xg_probability = None
-    xg_engine = engines.get("xg") if isinstance(engines, dict) else None
-    if xg_engine and home_xg is not None and away_xg is not None:
-        try:
-            xg_probability = strict_probability(
-                xg_engine.calculate_probability(home_xg, away_xg)
-            )
-        except Exception:
-            xg_probability = None
 
     final_probability = verified_model_probability
     fair_odds_model = 1 / verified_model_probability
@@ -864,7 +858,8 @@ def run_bot(mode="main"):
                 pressure=pressure,
                 corners=match.get("corners", 0),
                 sharp_score=stage_a_data.get("sharp_score", 0),
-                clv_score=0
+                clv_score=0,
+                market=market,
             )
 
             fair_odds_model = probability_data["fair_odds_model"]
@@ -929,7 +924,7 @@ def run_bot(mode="main"):
                         "home_xg": home_xg,
                         "away_xg": away_xg,
                         "current_probability": final_prob,
-                        "xg_probability": probability_data.get("xg_probability"),
+                        "xg_probability": stage_b_data.get("advanced_market_prob"),
                         "feature_completeness": feature_snapshot.get("feature_completeness"),
                         "lineup_available": feature_snapshot.get("lineup_available"),
                         "injuries_available": feature_snapshot.get("injuries_available"),
@@ -971,7 +966,7 @@ def run_bot(mode="main"):
                 market=market,
                 model_prob=model_prob,
                 market_prob=true_book_prob,
-                xg_prob=stage_b_data.get("advanced_over25_prob"),
+                xg_prob=stage_b_data.get("advanced_market_prob"),
                 momentum_prob=stage_b_data.get("confidence_calibrated_v2"),
                 sharp_prob=stage_a_data.get("stage_a_probability"),
                 base_stake=recommended_stake,
@@ -1176,6 +1171,17 @@ def run_bot(mode="main"):
 
                 "advanced_total_xg": stage_b_data.get("advanced_total_xg"),
                 "advanced_over25_prob": stage_b_data.get("advanced_over25_prob"),
+                "advanced_under25_prob": stage_b_data.get("advanced_under25_prob"),
+                "advanced_market_prob": stage_b_data.get("advanced_market_prob"),
+                "advanced_probability_method": stage_b_data.get(
+                    "advanced_probability_method"
+                ),
+                "advanced_probability_version": stage_b_data.get(
+                    "advanced_probability_version"
+                ),
+                "advanced_probability_integrity": stage_b_data.get(
+                    "advanced_probability_integrity"
+                ),
                 "momentum_score": stage_b_data.get("momentum_score"),
                 "momentum_label": stage_b_data.get("momentum_label"),
                 "confidence_calibrated_v2": stage_b_data.get("confidence_calibrated_v2"),

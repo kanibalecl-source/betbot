@@ -1,0 +1,24 @@
+BETBOT SERVER V16.5 - PROBABILITY INTEGRITY
+
+Zakres:
+- Stage B liczy prawdopodobienstwa Over/Under rozkladem Poissona.
+- Over 2.5 i Under 2.5 sa zawsze para komplementarna.
+- Warstwa meta otrzymuje prawdopodobienstwo zgodne z wybranym rynkiem.
+- Wynik xG dla innego rynku nie jest juz porownywany ani mieszany z typem.
+- Brak dostepnego prawdopodobienstwa xG powoduje pominiecie skladnika,
+  a nie wyzerowanie calej diagnostyki meta.
+- Rekordy otrzymuja wersje algorytmu stage_b_poisson_v2 i status spojnosci.
+- Panel pokazuje osobno Over, Under i prawdopodobienstwo wybranego rynku.
+
+Pliki wdrozeniowe:
+- bot.py
+- stage_b_model_layer.py
+- stage_c_meta_layer.py
+- ai_self_learning_runtime.py
+- dashboard_streamlit.py
+
+Bezpieczenstwo danych:
+- paczka nie zawiera katalogu data,
+- nie zawiera historii, modeli, wag ani plikow uczacych,
+- nie usuwa i nie migruje dotychczasowych rekordow,
+- historyczne rekordy bez wersji pozostaja niezmienione.

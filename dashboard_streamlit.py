@@ -1626,6 +1626,30 @@ def render_ai_detail_card(row) -> str:
         row,
         ["advanced_over25_prob", "adv_over25", "adv_over_2_5", "over25_probability"],
     )
+    adv_under = optional_metric(
+        row,
+        ["advanced_under25_prob", "adv_under25", "adv_under_2_5"],
+    )
+    adv_market = optional_metric(
+        row,
+        ["advanced_market_prob", "advanced_selected_market_prob"],
+    )
+    adv_method = str(
+        first_existing(row, ["advanced_probability_method"], "-")
+    ).upper()
+    adv_integrity = str(
+        first_existing(row, ["advanced_probability_integrity"], "-")
+    ).upper()
+    adv_market_percent = (
+        adv_market * 100
+        if adv_market is not None and 0 <= adv_market <= 1
+        else adv_market
+    )
+    adv_over_text = "-" if adv_over is None else f"{adv_over:.2f}%"
+    adv_under_text = "-" if adv_under is None else f"{adv_under:.2f}%"
+    adv_market_text = (
+        "-" if adv_market_percent is None else f"{adv_market_percent:.2f}%"
+    )
     margin = optional_metric(row, ["marza_%", "margin", "bookmaker_margin"])
 
     momentum_score = optional_metric(row, ["momentum_score", "momentum"])
@@ -1680,7 +1704,11 @@ def render_ai_detail_card(row) -> str:
         f"<div class='ai-engine-line'><b>xG GOSPODARZY:</b> {metric_text(home_xg)}</div>"
         f"<div class='ai-engine-line'><b>xG GOŚCI:</b> {metric_text(away_xg)}</div>"
         f"<div class='ai-engine-line'><b>SUMA xG:</b> {metric_text(adv_total_xg)}</div>"
-        f"<div class='ai-engine-line'><b>OVER 2.5:</b> {metric_text(adv_over)}</div>"
+        f"<div class='ai-engine-line'><b>OVER 2.5:</b> {adv_over_text}</div>"
+        f"<div class='ai-engine-line'><b>UNDER 2.5:</b> {adv_under_text}</div>"
+        f"<div class='ai-engine-line'><b>WYBRANY RYNEK:</b> {adv_market_text}</div>"
+        f"<div class='ai-engine-line'><b>METODA:</b> {adv_method}</div>"
+        f"<div class='ai-engine-line'><b>SPÓJNOŚĆ:</b> {adv_integrity}</div>"
         f"<div class='ai-engine-line'><b>MARŻA:</b> {metric_text(margin, 1)}</div>"
         f"</div>"
 

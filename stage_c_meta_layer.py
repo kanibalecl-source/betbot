@@ -22,7 +22,6 @@ class StageCMetaLayer:
 
             model_prob = float(model_prob)
             market_prob = float(market_prob)
-            xg_prob = float(xg_prob)
             momentum_prob = float(momentum_prob)
             sharp_prob = float(sharp_prob)
 
@@ -31,9 +30,6 @@ class StageCMetaLayer:
 
             if market_prob > 1:
                 market_prob /= 100
-
-            if xg_prob > 1:
-                xg_prob /= 100
 
             if momentum_prob > 1:
                 momentum_prob /= 100
@@ -62,12 +58,26 @@ class StageCMetaLayer:
                 + meta_weight_sharp
             )
 
-            meta_probability = (
-                model_prob * meta_weight_model
-                + market_prob * meta_weight_market
-                + xg_prob * meta_weight_xg
-                + momentum_prob * meta_weight_momentum
-                + sharp_prob * meta_weight_sharp
+            components = [
+                (model_prob, meta_weight_model),
+                (market_prob, meta_weight_market),
+                (momentum_prob, meta_weight_momentum),
+                (sharp_prob, meta_weight_sharp),
+            ]
+            try:
+                aligned_xg_prob = float(xg_prob)
+                if aligned_xg_prob > 1:
+                    aligned_xg_prob /= 100
+                if 0 < aligned_xg_prob < 1:
+                    components.append((aligned_xg_prob, meta_weight_xg))
+                else:
+                    meta_weight_xg = 0.0
+            except (TypeError, ValueError):
+                meta_weight_xg = 0.0
+
+            total = sum(weight for _, weight in components)
+            meta_probability = sum(
+                value * weight for value, weight in components
             ) / total
 
             meta_probability = max(
