@@ -2,10 +2,13 @@
 
 import json
 import time
-from datetime import date, timedelta
 
 from . import SCHEMA_VERSION
-from .api_sports import ApiSportsHandballClient, HandballProviderError
+from .api_sports import (
+    ApiSportsHandballClient,
+    HandballProviderError,
+    HandballRequestBudgetExhausted,
+)
 from .config import load_handball_settings
 from .domain import HandballGame, utc_now
 from .features import (
@@ -25,24 +28,11 @@ from .training import DEFAULT_HYPERPARAMETERS, train_candidate
 from .validation import ValidationSettings, validate_candidate
 from multisport_quality_v12 import odds_snapshot_stage, policy_for
 from market_integrity_audit_v13 import sport_training_ready
+from shadow_collection_resilience_v204 import collect_games_incrementally
 
 
 MODEL_VERSION = "handball-elo-shadow-baseline-v1"
-RUNTIME_VERSION = "12.1"
-
-
-def _fetch_days(client: ApiSportsHandballClient, days: list[date]):
-    games: dict[str, HandballGame] = {}
-    succeeded = 0
-    failed = 0
-    for day in days:
-        try:
-            for game in client.games_for_date(day):
-                games[game.game_id] = game
-            succeeded += 1
-        except HandballProviderError:
-            failed += 1
-    return list(games.values()), succeeded, failed
+RUNTIME_VERSION = "12.2"
 
 
 def _best_quotes(quotes):
@@ -60,31 +50,16 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
         storage.root.parent, "handball"
     )
     governor_enabled = settings.autonomous_governor_enabled and integrity_training_ready
-    today = date.today()
-    days = [today - timedelta(days=1)] + [
-        today + timedelta(days=offset)
-        for offset in range(settings.lookahead_days + 1)
-    ]
-    if storage.state("initial_backfill_complete") != "1" and settings.backfill_days:
-        days = [
-            today - timedelta(days=offset)
-            for offset in range(settings.backfill_days, -1, -1)
-        ] + [
-            today + timedelta(days=offset)
-            for offset in range(1, settings.lookahead_days + 1)
-        ]
-    for raw_day in storage.open_pick_dates():
-        try:
-            days.append(date.fromisoformat(raw_day))
-        except ValueError:
-            continue
-    requested_days = list(dict.fromkeys(days))
-    games, days_succeeded, days_failed = _fetch_days(client, requested_days)
-    if not games and days_failed:
-        raise HandballProviderError("all handball game-date requests failed")
+    collection = collect_games_incrementally(
+        storage=storage,
+        client=client,
+        settings=settings,
+        provider_error_type=HandballProviderError,
+        request_budget_error_type=HandballRequestBudgetExhausted,
+        open_pick_dates=storage.open_pick_dates(),
+    )
+    games = collection.games
     storage.upsert_games(games)
-    if settings.backfill_days and days_failed == 0:
-        storage.set_state("initial_backfill_complete", "1")
 
     previous_candidate_rows = storage.latest_candidate_dataset_rows()
     candidate_required_rows = (
@@ -208,6 +183,9 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
     for game in sorted(games, key=lambda item: (item.scheduled_at, item.game_id)):
         if game.finished or game.status.upper() not in {"NS", "NOT_STARTED", "TBD"}:
             continue
+        if collection.provider_circuit_open or collection.request_budget_reached:
+            odds_skipped_by_cycle_cap += 1
+            continue
         if odds_attempted >= settings.maximum_odds_requests_per_cycle:
             odds_skipped_by_cycle_cap += 1
             continue
@@ -221,8 +199,14 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
         odds_attempted += 1
         try:
             quotes = client.odds_for_game(game.game_id)
-        except HandballProviderError:
+        except HandballRequestBudgetExhausted:
+            collection.request_budget_reached = True
+            collection.provider_failure_categories["REQUEST_BUDGET"] += 1
             odds_failed += 1
+            continue
+        except HandballProviderError as exc:
+            odds_failed += 1
+            collection.note_provider_error(exc)
             continue
         if not quotes:
             odds_empty_responses += 1
@@ -387,7 +371,7 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
     coverage = storage.coverage_summary()
     return {
         "schema_version": SCHEMA_VERSION,
-        "status": "HEALTHY",
+        "status": collection.status(odds_failed=odds_failed),
         "shadow_only": True,
         "runtime_version": RUNTIME_VERSION,
         "sport_quality_policy": quality_policy.__dict__,
@@ -397,9 +381,26 @@ def run_cycle(storage: HandballStorage, client: ApiSportsHandballClient, setting
         "picks_settled": settled,
         "settlement_audited": settlement_audited,
         "settlement_mismatches": settlement_mismatches,
-        "days_requested": len(requested_days),
-        "days_succeeded": days_succeeded,
-        "days_failed": days_failed,
+        "days_requested": collection.days_requested,
+        "days_attempted": collection.days_attempted,
+        "days_succeeded": collection.days_succeeded,
+        "days_failed": collection.days_failed,
+        "days_skipped_after_circuit": collection.days_skipped_after_circuit,
+        "provider_circuit_open": collection.provider_circuit_open,
+        "provider_failure_categories": dict(
+            collection.provider_failure_categories
+        ),
+        "provider_retry_after_seconds": collection.provider_retry_after_seconds,
+        "provider_quota_limit": collection.provider_quota_limit,
+        "provider_quota_remaining": collection.provider_quota_remaining,
+        "provider_date_scope_limited_days": collection.date_scope_limited_days,
+        "provider_request_budget_reached": collection.request_budget_reached,
+        "provider_requests_made": int(getattr(client, "requests_made", 0)),
+        "provider_maximum_requests_per_cycle": settings.maximum_requests_per_cycle,
+        "backfill_cursor_days": collection.backfill_cursor_days,
+        "backfill_target_days": collection.backfill_target_days,
+        "backfill_failed_dates": collection.backfill_failed_dates,
+        "backfill_complete": collection.backfill_complete,
         "odds_attempted": odds_attempted,
         "odds_failed": odds_failed,
         "odds_empty_responses": odds_empty_responses,

@@ -45,7 +45,15 @@ class VolleyballSettings:
     request_timeout_seconds: float
     retry_attempts: int
     retry_backoff_seconds: float
+    minimum_request_interval_seconds: float
+    maximum_requests_per_cycle: int
+    entitlement_circuit_threshold: int
+    backfill_days_per_cycle: int
+    backfill_retry_dates_per_cycle: int
+    lookahead_days: int
     odds_refresh_hours: int
+    empty_odds_retry_hours: int
+    maximum_odds_requests_per_cycle: int
     minimum_bookmakers: int
     training_min_games: int
     training_min_new_games: int
@@ -68,7 +76,10 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
         shadow_only=runtime.volleyball_shadow_only,
         poll_minutes=runtime.volleyball_poll_minutes,
         backfill_days=runtime.volleyball_backfill_days,
-        api_key=os.getenv("VOLLEYBALL_API_SPORTS_KEY", "").strip(),
+        api_key=(
+            os.getenv("VOLLEYBALL_API_SPORTS_KEY", "").strip()
+            or os.getenv("API_SPORTS_KEY", "").strip()
+        ),
         api_base_url=os.getenv(
             "VOLLEYBALL_API_SPORTS_BASE_URL",
             "https://v1.volleyball.api-sports.io",
@@ -84,8 +95,50 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
         retry_backoff_seconds=_float(
             "BETBOT_VOLLEYBALL_RETRY_BACKOFF_SECONDS", 1.5, 0.1, 30.0
         ),
+        minimum_request_interval_seconds=_float(
+            "BETBOT_VOLLEYBALL_MIN_REQUEST_INTERVAL_SECONDS",
+            0.25,
+            0.0,
+            10.0,
+        ),
+        maximum_requests_per_cycle=int(
+            _float("BETBOT_VOLLEYBALL_MAX_REQUESTS_PER_CYCLE", 40, 10, 500)
+        ),
+        entitlement_circuit_threshold=int(
+            _float(
+                "BETBOT_VOLLEYBALL_ENTITLEMENT_CIRCUIT_THRESHOLD",
+                3,
+                2,
+                10,
+            )
+        ),
+        backfill_days_per_cycle=int(
+            _float("BETBOT_VOLLEYBALL_BACKFILL_DAYS_PER_CYCLE", 2, 1, 14)
+        ),
+        backfill_retry_dates_per_cycle=int(
+            _float(
+                "BETBOT_VOLLEYBALL_BACKFILL_RETRY_DATES_PER_CYCLE",
+                1,
+                0,
+                7,
+            )
+        ),
+        lookahead_days=int(
+            _float("BETBOT_VOLLEYBALL_LOOKAHEAD_DAYS", 7, 1, 21)
+        ),
         odds_refresh_hours=int(
-            _float("BETBOT_VOLLEYBALL_ODDS_REFRESH_HOURS", 12, 1, 24)
+            _float("BETBOT_VOLLEYBALL_ODDS_REFRESH_HOURS", 6, 1, 24)
+        ),
+        empty_odds_retry_hours=int(
+            _float("BETBOT_VOLLEYBALL_EMPTY_ODDS_RETRY_HOURS", 3, 1, 24)
+        ),
+        maximum_odds_requests_per_cycle=int(
+            _float(
+                "BETBOT_VOLLEYBALL_MAX_ODDS_REQUESTS_PER_CYCLE",
+                20,
+                1,
+                500,
+            )
         ),
         minimum_bookmakers=int(
             _float("BETBOT_VOLLEYBALL_MIN_BOOKMAKERS", 2, 1, 20)
@@ -135,7 +188,8 @@ def load_volleyball_settings(*, require_key: bool = True) -> VolleyballSettings:
         raise VolleyballConfigurationError("Volleyball v9.0 must remain shadow-only")
     if settings.enabled and require_key and not settings.api_key:
         raise VolleyballConfigurationError(
-            "VOLLEYBALL_API_SPORTS_KEY is required when volleyball is enabled"
+            "VOLLEYBALL_API_SPORTS_KEY or API_SPORTS_KEY is required "
+            "when volleyball is enabled"
         )
     if settings.validation_max_folds < settings.validation_min_folds:
         raise VolleyballConfigurationError(

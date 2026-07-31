@@ -1,0 +1,58 @@
+BETBOT SERVER v20.4 - VOLLEYBALL/HANDBALL PROVIDER PARITY
+Build date: 2026-07-31
+
+PURPOSE
+- Make volleyball and handball ingestion as operationally resilient as the
+  basketball collector without weakening any data-quality or model gates.
+- Keep both sports isolated and shadow-only.
+
+CHANGES
+- Incremental historical backfill (default: 2 new days per cycle).
+- Persistent retry queue for dates rejected or unavailable at the provider.
+- Live lookahead window (default: 7 days) on every cycle.
+- Shared API-Sports transport with bounded retries and request pacing.
+- Per-cycle request budget and immediate stop on authentication, quota,
+  rate-limit, endpoint and malformed-provider-response failures.
+- Entitlement circuit breaker after repeated plan/access failures.
+- Quota and failure-category telemetry in cycle health events.
+- Empty-odds negative cache and bounded odds requests for volleyball.
+- Sport-specific API key with safe API_SPORTS_KEY fallback.
+
+FILES IN THIS OVERLAY
+- api_sports_resilience_v204.py
+- shadow_collection_resilience_v204.py
+- volleyball_v9/api_sports.py
+- volleyball_v9/config.py
+- volleyball_v9/runtime.py
+- volleyball_v9/storage.py
+- handball_v11/api_sports.py
+- handball_v11/config.py
+- handball_v11/runtime.py
+
+DATA SAFETY
+- No data/, models/, history/, logs/, database or secret file is included.
+- No existing database is deleted, replaced or migrated destructively.
+- No active football, basketball, tennis, volleyball or handball model is
+  replaced by this overlay.
+- Existing market-quality, multi-bookmaker, point-in-time, walk-forward and
+  autonomous-governor promotion gates remain in force.
+
+DEPLOYMENT
+1. Upload the archive contents over the repository root, preserving folders.
+2. Do not delete server files and do not replace the persistent volume.
+3. Redeploy the existing service.
+4. Existing sport-specific keys continue to work. If configured, the shared
+   API_SPORTS_KEY is now also accepted as a fallback.
+
+EXPECTED LOG SIGNALS
+- VOLLEYBALL_SHADOW_CYCLE runtime_version=12.2
+- HANDBALL_SHADOW_CYCLE runtime_version=12.2
+- status HEALTHY, LIMITED_BY_PROVIDER, REQUEST_BUDGET_REACHED or
+  PROVIDER_CIRCUIT_OPEN (the latter states are controlled protection, not
+  permission to admit incomplete data into training).
+
+LOCAL VERIFICATION
+- Python syntax compilation: PASS.
+- Volleyball + handball + v20.4 parity tests: 106/106 PASS.
+- Full discovery: 347 functional tests PASS; one FastAPI test was not loaded
+  because the isolated local interpreter lacks the optional fastapi package.

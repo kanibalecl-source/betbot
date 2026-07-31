@@ -45,6 +45,11 @@ class HandballSettings:
     request_timeout_seconds: float
     retry_attempts: int
     retry_backoff_seconds: float
+    minimum_request_interval_seconds: float
+    maximum_requests_per_cycle: int
+    entitlement_circuit_threshold: int
+    backfill_days_per_cycle: int
+    backfill_retry_dates_per_cycle: int
     odds_refresh_hours: int
     empty_odds_retry_hours: int
     lookahead_days: int
@@ -71,7 +76,10 @@ def load_handball_settings(*, require_key: bool = True) -> HandballSettings:
         shadow_only=runtime.handball_shadow_only,
         poll_minutes=runtime.handball_poll_minutes,
         backfill_days=runtime.handball_backfill_days,
-        api_key=os.getenv("HANDBALL_API_SPORTS_KEY", "").strip(),
+        api_key=(
+            os.getenv("HANDBALL_API_SPORTS_KEY", "").strip()
+            or os.getenv("API_SPORTS_KEY", "").strip()
+        ),
         api_base_url=os.getenv(
             "HANDBALL_API_SPORTS_BASE_URL",
             "https://v1.handball.api-sports.io",
@@ -87,11 +95,39 @@ def load_handball_settings(*, require_key: bool = True) -> HandballSettings:
         retry_backoff_seconds=_float(
             "BETBOT_HANDBALL_RETRY_BACKOFF_SECONDS", 1.5, 0.1, 30.0
         ),
+        minimum_request_interval_seconds=_float(
+            "BETBOT_HANDBALL_MIN_REQUEST_INTERVAL_SECONDS",
+            0.25,
+            0.0,
+            10.0,
+        ),
+        maximum_requests_per_cycle=int(
+            _float("BETBOT_HANDBALL_MAX_REQUESTS_PER_CYCLE", 40, 10, 500)
+        ),
+        entitlement_circuit_threshold=int(
+            _float(
+                "BETBOT_HANDBALL_ENTITLEMENT_CIRCUIT_THRESHOLD",
+                3,
+                2,
+                10,
+            )
+        ),
+        backfill_days_per_cycle=int(
+            _float("BETBOT_HANDBALL_BACKFILL_DAYS_PER_CYCLE", 2, 1, 14)
+        ),
+        backfill_retry_dates_per_cycle=int(
+            _float(
+                "BETBOT_HANDBALL_BACKFILL_RETRY_DATES_PER_CYCLE",
+                1,
+                0,
+                7,
+            )
+        ),
         odds_refresh_hours=int(
-            _float("BETBOT_HANDBALL_ODDS_REFRESH_HOURS", 12, 1, 24)
+            _float("BETBOT_HANDBALL_ODDS_REFRESH_HOURS", 6, 1, 24)
         ),
         empty_odds_retry_hours=int(
-            _float("BETBOT_HANDBALL_EMPTY_ODDS_RETRY_HOURS", 6, 1, 24)
+            _float("BETBOT_HANDBALL_EMPTY_ODDS_RETRY_HOURS", 3, 1, 24)
         ),
         lookahead_days=int(
             _float("BETBOT_HANDBALL_LOOKAHEAD_DAYS", 7, 1, 21)
@@ -147,7 +183,8 @@ def load_handball_settings(*, require_key: bool = True) -> HandballSettings:
         raise HandballConfigurationError("Handball v11 must remain shadow-only")
     if settings.enabled and require_key and not settings.api_key:
         raise HandballConfigurationError(
-            "HANDBALL_API_SPORTS_KEY is required when handball is enabled"
+            "HANDBALL_API_SPORTS_KEY or API_SPORTS_KEY is required "
+            "when handball is enabled"
         )
     if settings.validation_max_folds < settings.validation_min_folds:
         raise HandballConfigurationError(
