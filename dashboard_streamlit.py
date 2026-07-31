@@ -66,6 +66,11 @@ try:
 except Exception:
     load_tennis_dashboard = None
 
+try:
+    from basketball_v1.dashboard import load_basketball_dashboard
+except Exception:
+    load_basketball_dashboard = None
+
 
 try:
     from manual_betting import (
@@ -2957,6 +2962,11 @@ def _volleyball_datetime(value) -> str:
 def _volleyball_status(value: str) -> str:
     labels = {
         "HEALTHY": "System działa",
+        "PROVIDER_CIRCUIT_OPEN": "Ochrona dostawcy aktywna",
+        "REQUEST_BUDGET_REACHED": "Limit cyklu osiągnięty",
+        "LIMITED_BY_PROVIDER": "Ograniczenie dostawcy",
+        "READ_ERROR": "Błąd odczytu panelu",
+        "WAITING_FOR_DATABASE": "Oczekiwanie na bazę danych",
         "WAITING_FIRST_CYCLE": "Oczekiwanie na pierwszy cykl",
         "WAITING_MINIMUM_SAMPLE": "Zbieranie danych",
         "WAITING_REPRODUCIBLE_CANDIDATE": "Oczekiwanie na kandydata",
@@ -3447,6 +3457,168 @@ def render_tennis() -> None:
         )
 
 
+def render_basketball() -> None:
+    page_banner(
+        "Koszykówka",
+        "KOSZYKÓWKA",
+        "Autonomiczne zbieranie i rozliczanie danych w bezpiecznym trybie shadow.",
+    )
+    if load_basketball_dashboard is None:
+        st.error("Panel koszykówki nie został załadowany.")
+        return
+
+    snapshot = load_basketball_dashboard()
+    coverage = snapshot.get("coverage", {})
+    quota = coverage.get("provider_quota", {}) or {}
+    quota_remaining = quota.get("remaining")
+    quota_text = "—" if quota_remaining is None else str(quota_remaining)
+    total_games = int(coverage.get("games_total", 0) or 0)
+    settled = int(coverage.get("games_quality_settled", 0) or 0)
+    odds_games = int(coverage.get("games_with_odds", 0) or 0)
+
+    metrics([
+        ("Zebrane mecze", str(total_games), "izolowana baza koszykówki"),
+        ("Rozliczone", str(settled), "dane jakościowe"),
+        ("Mecze z kursami", str(odds_games), f"{int(coverage.get('odds_quotes', 0) or 0)} notowań"),
+        ("Pozostały limit API", quota_text, "ostatni odczyt dostawcy"),
+    ])
+
+    if not snapshot.get("available"):
+        st.info(
+            "Moduł oczekuje na utworzenie izolowanej bazy koszykówki. "
+            "Panel zapełni się automatycznie po pierwszym cyklu."
+        )
+        return
+
+    health = snapshot.get("health", {})
+    status = _volleyball_status(snapshot.get("status", ""))
+    if health.get("provider_circuit_open"):
+        st.warning(
+            "Dostawca danych ograniczył bieżący cykl. Bezpiecznik zatrzymał "
+            "kolejne zapytania; moduł wznowi pracę automatycznie."
+        )
+    elif snapshot.get("status") == "HEALTHY":
+        st.success("Zbieranie i rozliczanie danych koszykówki działa poprawnie.")
+    else:
+        st.info(f"Aktualny stan modułu: {status}.")
+
+    games_tab, odds_tab, safety_tab = st.tabs(
+        ["Mecze", "Kursy shadow", "Automatyzacja i bezpieczeństwo"]
+    )
+    with games_tab:
+        games = snapshot.get("games", [])
+        if not games:
+            st.info("Brak zapisanych meczów koszykówki.")
+        else:
+            rows = []
+            for game in games:
+                score = "—"
+                if (
+                    game.get("home_score") is not None
+                    and game.get("away_score") is not None
+                ):
+                    score = (
+                        f"{int(game['home_score'])} : "
+                        f"{int(game['away_score'])}"
+                    )
+                    if game.get("overtime"):
+                        score += " (OT)"
+                status_label = _volleyball_status(game.get("status", ""))
+                status_class = (
+                    "pill-green" if game.get("finished") else "pill-yellow"
+                )
+                rows.append([
+                    _volleyball_datetime(game.get("scheduled_at")),
+                    html.escape(str(game.get("country") or "—")),
+                    html.escape(str(game.get("league_name") or "—")),
+                    (
+                        f"<b>{html.escape(str(game.get('home_team') or '—'))}</b>"
+                        '<span class="ka-match-separator">–</span>'
+                        f"<b>{html.escape(str(game.get('away_team') or '—'))}</b>"
+                    ),
+                    f"<b>{html.escape(score)}</b>",
+                    (
+                        f'<span class="pill {status_class}">'
+                        f"{html.escape(status_label)}</span>"
+                    ),
+                ])
+            st.markdown(
+                '<div class="ka-table-scroll">'
+                + html_table(
+                    ["Data", "Kraj", "Liga", "Mecz", "Wynik", "Status"],
+                    rows,
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+
+    with odds_tab:
+        odds = snapshot.get("odds", [])
+        if not odds:
+            st.info(
+                "Kursy pojawią się po udostępnieniu rynku przez dostawcę. "
+                "Brak kursów nie uruchamia uczenia ani rekomendacji."
+            )
+        else:
+            rows = []
+            for quote in odds:
+                line = quote.get("line")
+                line_text = "—" if line is None else f"{float(line):g}"
+                rows.append([
+                    _volleyball_datetime(quote.get("observed_at")),
+                    html.escape(str(quote.get("league_name") or "—")),
+                    (
+                        f"{html.escape(str(quote.get('home_team') or '—'))}"
+                        '<span class="ka-match-separator">–</span>'
+                        f"{html.escape(str(quote.get('away_team') or '—'))}"
+                    ),
+                    html.escape(str(quote.get("bookmaker") or "—")),
+                    html.escape(str(quote.get("market") or "—")),
+                    html.escape(str(quote.get("outcome") or "—")),
+                    line_text,
+                    f"<b>{float(quote.get('odds', 0) or 0):.2f}</b>",
+                ])
+            st.markdown(
+                '<div class="ka-table-scroll">'
+                + html_table(
+                    [
+                        "Odczyt", "Liga", "Mecz", "Bukmacher",
+                        "Rynek", "Wybór", "Linia", "Kurs",
+                    ],
+                    rows,
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+
+    with safety_tab:
+        backfill_cursor = int(health.get("backfill_cursor_days", 0) or 0)
+        backfill_target = int(health.get("backfill_target_days", 0) or 0)
+        safety_rows = [
+            ["Stan systemu", html.escape(status)],
+            ["Zbieranie autonomiczne", "Aktywne" if snapshot.get("collection_autonomous") else "Wyłączone"],
+            ["Rozliczanie autonomiczne", "Aktywne" if snapshot.get("settlement_autonomous") else "Wyłączone"],
+            ["Backfill", f"{backfill_cursor} / {backfill_target} dni"],
+            ["Integralność bazy", "Poprawna" if snapshot.get("database_integrity") else "Wymaga kontroli"],
+            ["Bramka uczenia", "Zamknięta" if not snapshot.get("training_admission_allowed") else "Otwarta"],
+            ["Tworzenie kandydata", "Zablokowane" if not snapshot.get("model_candidate_creation_allowed") else "Dozwolone"],
+            ["Automatyczna promocja", "Zablokowana" if not snapshot.get("automatic_model_promotion_allowed") else "Dozwolona"],
+            ["Realny kapitał", "Zablokowany" if not snapshot.get("real_execution_allowed") else "Dozwolony"],
+        ]
+        st.markdown(
+            '<div class="ka-panel"><h3>STATUS MODUŁU SHADOW</h3>'
+            '<div class="ka-table-scroll">'
+            + html_table(["Element", "Stan"], safety_rows)
+            + "</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Na tym etapie koszykówka wyłącznie zbiera i rozlicza dane. "
+            "Nie generuje typów, nie uczy modelu i nie zmienia modeli "
+            "piłki nożnej, siatkówki, piłki ręcznej ani tenisa."
+        )
+
+
 require_login()
 css()
 raw_picks = load_picks()
@@ -3468,4 +3640,5 @@ elif selected_page == "Ranking": render_ranking(picks, results)
 elif selected_page == "Siatkówka": render_volleyball()
 elif selected_page == "Piłka ręczna": render_handball()
 elif selected_page == "Tenis": render_tennis()
+elif selected_page == "Koszykówka": render_basketball()
 st.markdown('<div class="footer-ka"><span>KANIBAL ANALYTICS | ANALIZA. PRZEWAGA. ZYSK.</span><span>DANE AKTUALIZOWANE NA ŻYWO <span class="status-dot"></span></span></div>', unsafe_allow_html=True)

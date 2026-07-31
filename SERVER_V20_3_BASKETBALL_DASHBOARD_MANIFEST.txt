@@ -1,0 +1,26 @@
+BETBOT SERVER v20.3 — BASKETBALL SHADOW DASHBOARD
+
+CEL
+- dodać widoczną po zalogowaniu zakładkę „Koszykówka”,
+- prezentować mecze, kursy, postęp zbierania i stan zabezpieczeń,
+- zachować pełną izolację od modeli pozostałych dyscyplin.
+
+PLIKI
+- basketball_v1/dashboard.py
+- dashboard_streamlit.py
+- executive_dashboard_theme.py
+- tests/test_basketball_dashboard.py
+- SERVER_V20_3_BASKETBALL_DASHBOARD_MANIFEST.txt
+
+BEZPIECZEŃSTWO
+- panel jest wyłącznie odczytowy i nie odpytuje zewnętrznego API,
+- nie usuwa ani nie zastępuje /data/basketball/basketball_shadow.sqlite3,
+- nie zmienia danych piłki nożnej, siatkówki, piłki ręcznej ani tenisa,
+- nie otwiera bramki uczenia, tworzenia kandydata ani promocji modelu,
+- nie umożliwia gry realnym kapitałem.
+
+OCZEKIWANY EFEKT
+- po zalogowaniu w menu bocznym pojawia się „Koszykówka”,
+- zakładka pokazuje aktualną zawartość istniejącej bazy shadow,
+- przy limicie dostawcy wyświetlane jest czytelne ostrzeżenie,
+  a nie fałszywy komunikat o awarii całego bota.

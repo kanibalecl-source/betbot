@@ -10,7 +10,8 @@ import streamlit as st
 
 NAV_ITEMS = (
     "Na żywo", "Przedmeczowe", "Model AI", "Analityka",
-    "Historia", "Moje zakłady", "Ranking", "Siatkówka", "Piłka ręczna", "Tenis",
+    "Historia", "Moje zakłady", "Ranking", "Siatkówka", "Piłka ręczna",
+    "Tenis", "Koszykówka",
 )
 
 NAV_LABELS = {
@@ -24,6 +25,7 @@ NAV_LABELS = {
     "Siatkówka": "◆   Siatkówka",
     "Piłka ręczna": "◇   Piłka ręczna",
     "Tenis": "◈   Tenis",
+    "Koszykówka": "◉   Koszykówka",
 }
 
 NAV_PRESENTATION = {
@@ -37,6 +39,7 @@ NAV_PRESENTATION = {
     "Siatkówka": ("volleyball", "◉", "Dane i shadow", "SHADOW"),
     "Piłka ręczna": ("handball", "◌", "Dane i shadow", "SHADOW"),
     "Tenis": ("tennis", "◈", "ATP/WTA i shadow", "SHADOW"),
+    "Koszykówka": ("basketball", "●", "Dane i rozliczenia", "SHADOW"),
 }
 
 PAGE_META = {
@@ -50,6 +53,7 @@ PAGE_META = {
     "Siatkówka": ("Centrum siatkówki", "Mecze, typy shadow i autonomiczne uczenie modelu"),
     "Piłka ręczna": ("Centrum piłki ręcznej", "Mecze, typy shadow i autonomiczne uczenie modelu"),
     "Tenis": ("Centrum tenisa", "ATP/WTA, typy shadow i uczenie powierzchniowego Elo"),
+    "Koszykówka": ("Centrum koszykówki", "Autonomiczne zbieranie, kursy i rozliczanie danych shadow"),
 }
 
 
