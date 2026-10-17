@@ -11,7 +11,7 @@ ZASADY PO ZMIANIE
 2. Konsensus może korzystać ze wszystkich identyfikowalnych bukmacherów
    zwracanych przez API-Football.
 3. Kurs wyświetlany w kolumnie "Buk" nadal może pochodzić wyłącznie z
-   BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST.
+   BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST (domyslnie *).
 4. Jeśli rynek ma konsensus, ale nie ma kursu z polskiej listy, typ pozostaje
    w kwarantannie i nie jest publikowany.
 5. Historia, modele, dane uczące i pliki na woluminie nie są modyfikowane.
@@ -39,7 +39,7 @@ BEZPIECZNE WDROŻENIE
    - ODDS STATUS: 200
    - ODDS MARKETS: [...]
 6. Dopuszczalny log zabezpieczenia:
-   ODDS V13 PUBLICATION QUARANTINE ... NO_POLISH_BOOKMAKER_QUOTE
+   ODDS V13 PUBLICATION QUARANTINE ... NO_ALLOWED_BOOKMAKER_QUOTE
    Oznacza on, że konsensus istnieje, ale nie ma legalnego polskiego kursu
    do opublikowania.
 

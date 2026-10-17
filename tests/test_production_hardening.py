@@ -81,8 +81,8 @@ class SameBookmakerMarginTests(unittest.TestCase):
 class OddsAggregationTests(unittest.TestCase):
     def test_preserves_prices_by_bookmaker(self):
         original = data_api._iter_fixture_odds
-        previous = os.environ.get("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST")
-        os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = "*"
+        previous = os.environ.get("BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST")
+        os.environ["BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST"] = "*"
         data_api._iter_fixture_odds = lambda match, publication_only=True: [
             {"market": "BTTS_YES", "odds": 1.9, "bookmaker": "A",
              "observed_at": "2026-07-22T12:00:00+00:00"},
@@ -98,9 +98,9 @@ class OddsAggregationTests(unittest.TestCase):
         finally:
             data_api._iter_fixture_odds = original
             if previous is None:
-                os.environ.pop("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST", None)
+                os.environ.pop("BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST", None)
             else:
-                os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = previous
+                os.environ["BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST"] = previous
         self.assertEqual(result["BTTS_YES"]["best_odds"], 2.1)
         self.assertEqual(result["BTTS_YES"]["by_bookmaker"], {"A": 1.9, "B": 2.1})
         self.assertIn("observed_at", result["BTTS_YES"])
@@ -108,8 +108,8 @@ class OddsAggregationTests(unittest.TestCase):
 
     def test_rejects_wrong_over_under_scope_and_non_allowlisted_bookmaker(self):
         original = data_api.fetch_fixture_odds
-        previous = os.environ.get("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST")
-        os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = "superbet,betclic"
+        previous = os.environ.get("BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST")
+        os.environ["BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST"] = "superbet,betclic"
         data_api.fetch_fixture_odds = lambda **kwargs: {
             "cached": False,
             "status_code": 200,
@@ -164,9 +164,9 @@ class OddsAggregationTests(unittest.TestCase):
         finally:
             data_api.fetch_fixture_odds = original
             if previous is None:
-                os.environ.pop("BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST", None)
+                os.environ.pop("BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST", None)
             else:
-                os.environ["BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST"] = previous
+                os.environ["BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST"] = previous
 
         self.assertEqual(
             [(row["market"], row["odds"], row["bookmaker"]) for row in rows],

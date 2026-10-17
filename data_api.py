@@ -15,12 +15,10 @@ HEADERS = {
     "x-apisports-key": API_KEY
 }
 
-# Fail closed: football odds shown as "Buk" must come from a configured,
-# identifiable bookmaker accepted for the Polish-facing product.  The list is
-# deliberately configurable because provider coverage and licences can change.
-DEFAULT_POLISH_BOOKMAKERS = (
-    "superbet,sts,fortuna,betclic,etoto,forbet,totalbet,pzbuk"
-)
+# Publication may use every identifiable bookmaker that survived the real-data
+# consensus gate.  Operators can still narrow this list explicitly, but a
+# legacy Polish-only setting must not silently block international quotes.
+DEFAULT_PUBLICATION_BOOKMAKERS = "*"
 
 # API-Football often has broad bookmaker coverage but does not guarantee a
 # Polish-facing quote for every fixture.  The existing Odds API subscription is
@@ -452,8 +450,8 @@ def _normalized_bet_name(value):
 
 def _allowed_football_bookmakers():
     configured = os.getenv(
-        "BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST",
-        DEFAULT_POLISH_BOOKMAKERS,
+        "BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST",
+        DEFAULT_PUBLICATION_BOOKMAKERS,
     )
     values = [item.strip() for item in str(configured or "").split(",") if item.strip()]
     if any(item == "*" for item in values):
@@ -472,8 +470,8 @@ def _football_consensus_bookmakers():
     """Return the independent sources allowed to confirm market quality.
 
     Publication and consensus are deliberately separate concerns:
-    ``BETBOT_FOOTBALL_BOOKMAKER_ALLOWLIST`` controls which Polish-facing
-    bookmaker may be shown to the user, while this list controls which
+    ``BETBOT_FOOTBALL_PUBLICATION_BOOKMAKER_ALLOWLIST`` optionally controls
+    which identifiable bookmaker may be shown to the user, while this list controls which
     identifiable provider bookmakers may contribute to the two-source market
     consensus.  ``*`` keeps all named API-Football bookmakers eligible; the
     integrity layer still requires complete, aligned and non-outlying markets.
@@ -699,7 +697,7 @@ def get_odds_market_data(match):
                 if not publication_quotes:
                     print(
                         "ODDS V13 PUBLICATION QUARANTINE: "
-                        f"{outcome} reason=NO_POLISH_BOOKMAKER_QUOTE "
+                        f"{outcome} reason=NO_ALLOWED_BOOKMAKER_QUOTE "
                         f"consensus_bookmakers={consensus['bookmaker_count']}"
                     )
                     continue
@@ -718,7 +716,7 @@ def get_odds_market_data(match):
                     "bookmaker": bookmaker,
                     "bookmaker_id": best_row.get("bookmaker_id", ""),
                     "by_bookmaker": by_bookmaker,
-                    "bookmaker_scope": "POLAND_ALLOWLIST",
+                    "bookmaker_scope": "VERIFIED_PROVIDER_BOOKMAKER",
                     "bookmaker_verified": True,
                     "consensus_bookmaker_scope": (
                         "CONFIGURED_ALLOWLIST"

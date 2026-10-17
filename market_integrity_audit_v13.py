@@ -193,7 +193,9 @@ def _evaluate(rows: Iterable[Mapping[str, Any]], sport: str) -> dict[str, Any]:
             if not _truthy(row.get("bookmaker_verified")):
                 reasons["unverified_bookmaker"] += 1
                 continue
-            if str(row.get("bookmaker_scope", "")).strip() != "POLAND_ALLOWLIST":
+            if str(row.get("bookmaker_scope", "")).strip() not in {
+                "POLAND_ALLOWLIST", "VERIFIED_PROVIDER_BOOKMAKER"
+            }:
                 reasons["invalid_bookmaker_scope"] += 1
                 continue
             if str(row.get("market_scope", "")).strip() != "FULL_MATCH":

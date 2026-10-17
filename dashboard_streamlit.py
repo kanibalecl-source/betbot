@@ -277,7 +277,7 @@ def normalize_picks(df: pd.DataFrame) -> pd.DataFrame:
     valid_scope = (
         out.get("bookmaker_scope", pd.Series("", index=out.index))
         .astype(str)
-        .eq("POLAND_ALLOWLIST")
+        .isin({"POLAND_ALLOWLIST", "VERIFIED_PROVIDER_BOOKMAKER"})
     )
     valid_market = (
         out.get("market_scope", pd.Series("", index=out.index))

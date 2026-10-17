@@ -306,7 +306,12 @@ def validate_candidate(row: Any) -> tuple[bool, str, Dict[str, Any]]:
             "stale_odds",
         ),
         (bookmaker_verified, "unverified_bookmaker"),
-        (bookmaker_scope == "POLAND_ALLOWLIST", "invalid_bookmaker_scope"),
+        (
+            bookmaker_scope in {
+                "POLAND_ALLOWLIST", "VERIFIED_PROVIDER_BOOKMAKER"
+            },
+            "invalid_bookmaker_scope",
+        ),
         (market_scope == "FULL_MATCH", "invalid_market_scope"),
         (integrity_status == "PASS", "market_integrity_not_passed"),
         (bool(consensus_id), "missing_market_consensus"),

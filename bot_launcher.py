@@ -113,7 +113,9 @@ def run_bot():
                 "bookmaker_id": data.get("bookmaker_id", ""),
                 "bookmaker_scope": data.get("bookmaker_scope", ""),
                 "bookmaker_verified": bool(
-                    data.get("bookmaker_scope") == "POLAND_ALLOWLIST"
+                    data.get("bookmaker_scope") in {
+                        "POLAND_ALLOWLIST", "VERIFIED_PROVIDER_BOOKMAKER"
+                    }
                     and data.get("market_scope") == "FULL_MATCH"
                     and data.get("bookmaker")
                 ),

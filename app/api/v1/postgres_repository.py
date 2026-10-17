@@ -200,7 +200,9 @@ def validate_pick(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, str | Non
     if sport == "football":
         if not _truthy(raw.get("bookmaker_verified")):
             return None, "unverified_bookmaker_odds"
-        if str(raw.get("bookmaker_scope", "")).strip() != "POLAND_ALLOWLIST":
+        if str(raw.get("bookmaker_scope", "")).strip() not in {
+            "POLAND_ALLOWLIST", "VERIFIED_PROVIDER_BOOKMAKER"
+        }:
             return None, "invalid_bookmaker_scope"
         if str(raw.get("market_scope", "")).strip() != "FULL_MATCH":
             return None, "invalid_market_scope"
@@ -327,7 +329,10 @@ def list_picks(sport: str, page: int, page_size: int, status: str | None = None)
         # Historical snapshots created before strict bookmaker provenance are
         # retained for auditability, but never exposed as actionable picks.
         clauses.append("payload->>'bookmaker_verified'='true'")
-        clauses.append("payload->>'bookmaker_scope'='POLAND_ALLOWLIST'")
+        clauses.append(
+            "payload->>'bookmaker_scope' IN "
+            "('POLAND_ALLOWLIST','VERIFIED_PROVIDER_BOOKMAKER')"
+        )
         clauses.append("payload->>'market_scope'='FULL_MATCH'")
     if status:
         clauses.append("status=%s")
