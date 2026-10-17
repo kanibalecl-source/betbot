@@ -598,7 +598,16 @@ def candidates(label: str = "AI") -> pd.DataFrame:
         frames.append(pre)
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True, sort=False)
+    combined = pd.concat(frames, ignore_index=True, sort=False)
+    # auto_all_picks.csv is deliberately preserved when a prematch cycle has
+    # no replacement picks.  Legacy preserved rows can predate pick_id and
+    # must never be presented as current AI candidates.  This is filtering,
+    # not migration: history remains byte-for-byte untouched and no identity
+    # is guessed or fabricated.
+    if "pick_id" not in combined.columns:
+        return combined.iloc[0:0].copy()
+    identities = combined["pick_id"].fillna("").astype(str).str.strip()
+    return combined.loc[identities.ne("")].copy()
 
 
 def risk_for(score: float, edge: float, odds: float) -> str:

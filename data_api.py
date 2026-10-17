@@ -2,6 +2,7 @@
 import requests
 from datetime import datetime, timedelta, timezone
 import re
+import unicodedata
 
 from api_football_request_control import fetch_fixture_odds
 from market_data_integrity_v13 import build_market_consensus
@@ -20,6 +21,32 @@ HEADERS = {
 DEFAULT_POLISH_BOOKMAKERS = (
     "superbet,sts,fortuna,betclic,etoto,forbet,totalbet,pzbuk"
 )
+
+# API-Football often has broad bookmaker coverage but does not guarantee a
+# Polish-facing quote for every fixture.  The existing Odds API subscription is
+# therefore used as a second, real-data source.  Responses are cached per
+# competition so one bot cycle does not spend one request per fixture.
+THE_ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"
+THE_ODDS_API_CACHE = {}
+THE_ODDS_API_LEAGUES = {
+    39: "soccer_epl",
+    140: "soccer_spain_la_liga",
+    135: "soccer_italy_serie_a",
+    78: "soccer_germany_bundesliga",
+    61: "soccer_france_ligue_one",
+    88: "soccer_netherlands_eredivisie",
+    94: "soccer_portugal_primeira_liga",
+    203: "soccer_turkey_super_league",
+    106: "soccer_poland_ekstraklasa",
+    2: "soccer_uefa_champs_league",
+    3: "soccer_uefa_europa_league",
+    71: "soccer_brazil_campeonato",
+    128: "soccer_argentina_primera_division",
+    218: "soccer_austria_bundesliga",
+    119: "soccer_denmark_superliga",
+    103: "soccer_norway_eliteserien",
+    113: "soccer_sweden_allsvenskan",
+}
 
 # Only the full-match goals-total market is allowed to create OVER/UNDER keys.
 # Substring matching is forbidden because provider feeds also contain team,
@@ -257,6 +284,168 @@ def _normalized_token(value):
     return re.sub(r"[^a-z0-9]+", "", str(value or "").strip().lower())
 
 
+def _normalized_team_name(value):
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    removable = {"fc", "cf", "sc", "afc", "ac", "fk", "sk", "club"}
+    return " ".join(word for word in words if word not in removable)
+
+
+def _parse_utc(value):
+    try:
+        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def _the_odds_api_key():
+    return (
+        os.getenv("THE_ODDS_API_KEY", "").strip()
+        or os.getenv("ODDS_API_KEY", "").strip()
+    )
+
+
+def _the_odds_api_events(sport_key):
+    api_key = _the_odds_api_key()
+    if not api_key or not sport_key:
+        return []
+    ttl = max(60, int(os.getenv("BETBOT_THE_ODDS_API_CACHE_SECONDS", "300")))
+    cached = THE_ODDS_API_CACHE.get(sport_key)
+    now = datetime.now(timezone.utc)
+    if cached and (now - cached[0]).total_seconds() <= ttl:
+        return cached[1]
+    try:
+        response = requests.get(
+            f"{THE_ODDS_API_BASE_URL}/sports/{sport_key}/odds",
+            params={
+                "apiKey": api_key,
+                "regions": os.getenv("BETBOT_THE_ODDS_API_REGIONS", "eu"),
+                # The competition endpoint guarantees featured markets. BTTS
+                # is an event-level additional market at The Odds API and must
+                # not make the whole bulk request fail.
+                "markets": "h2h,totals",
+                "oddsFormat": "decimal",
+                "dateFormat": "iso",
+            },
+            timeout=25,
+        )
+        print(
+            "THE ODDS API STATUS: "
+            f"{response.status_code} | sport={sport_key} | "
+            f"remaining={response.headers.get('x-requests-remaining', '?')}"
+        )
+        if response.status_code != 200:
+            return []
+        payload = response.json()
+        events = payload if isinstance(payload, list) else []
+        observed_at = now.isoformat()
+        for event in events:
+            if isinstance(event, dict):
+                event["_betbot_observed_at"] = observed_at
+        THE_ODDS_API_CACHE[sport_key] = (now, events)
+        return events
+    except Exception as exc:
+        print(f"THE ODDS API ERROR: sport={sport_key} type={type(exc).__name__}")
+        return []
+
+
+def _matching_the_odds_event(match, events):
+    home = _normalized_team_name(match.get("home") or match.get("home_team"))
+    away = _normalized_team_name(match.get("away") or match.get("away_team"))
+    kickoff = _parse_utc(match.get("match_date") or match.get("date"))
+    if not home or not away or kickoff is None:
+        return None
+    matches = []
+    for event in events:
+        event_home = _normalized_team_name(event.get("home_team"))
+        event_away = _normalized_team_name(event.get("away_team"))
+        event_time = _parse_utc(event.get("commence_time"))
+        if event_home != home or event_away != away or event_time is None:
+            continue
+        delta = abs((event_time - kickoff).total_seconds())
+        if delta <= 12 * 60 * 60:
+            matches.append((delta, event))
+    # Fail closed on ambiguous event identity instead of guessing.
+    if len(matches) != 1:
+        if len(matches) > 1:
+            print(f"THE ODDS API QUARANTINE: fixture={match.get('fixture_id')} ambiguous_event")
+        return None
+    return matches[0][1]
+
+
+def _iter_the_odds_api_rows(match):
+    try:
+        league_id = int(match.get("league_id"))
+    except (TypeError, ValueError):
+        return []
+    sport_key = THE_ODDS_API_LEAGUES.get(league_id)
+    event = _matching_the_odds_event(match, _the_odds_api_events(sport_key))
+    if not event:
+        return []
+    rows = []
+    for bookmaker in event.get("bookmakers", []):
+        bookmaker_name = str(bookmaker.get("title") or bookmaker.get("key") or "").strip()
+        bookmaker_id = str(bookmaker.get("key") or "").strip()
+        if not bookmaker_name:
+            continue
+        for market in bookmaker.get("markets", []):
+            market_key = str(market.get("key") or "").strip().lower()
+            provider_updated_at = market.get("last_update") or bookmaker.get("last_update")
+            observed_at = event.get("_betbot_observed_at") or datetime.now(timezone.utc).isoformat()
+            for outcome in market.get("outcomes", []):
+                try:
+                    odd = float(outcome.get("price"))
+                except (TypeError, ValueError):
+                    continue
+                if odd <= 1:
+                    continue
+                name = str(outcome.get("name") or "").strip()
+                key = None
+                if market_key == "h2h":
+                    if _normalized_team_name(name) == _normalized_team_name(event.get("home_team")):
+                        key = "HOME_WIN"
+                    elif _normalized_team_name(name) == _normalized_team_name(event.get("away_team")):
+                        key = "AWAY_WIN"
+                    elif name.lower() == "draw":
+                        key = "DRAW"
+                elif market_key == "totals":
+                    try:
+                        line = f"{float(outcome.get('point')):.1f}"
+                    except (TypeError, ValueError):
+                        line = ""
+                    if line in {"0.5", "1.5", "2.5", "3.5", "4.5"} and name in {"Over", "Under"}:
+                        key = f"{name.upper()}_{line}"
+                elif market_key == "btts" and name.lower() in {"yes", "no"}:
+                    key = f"BTTS_{name.upper()}"
+                if key:
+                    rows.append({
+                        "market": key,
+                        "odds": odd,
+                        "bookmaker": bookmaker_name,
+                        # Consensus independence is bookmaker-based, not
+                        # provider-based. The same bookmaker received through
+                        # two APIs must never count as two independent sources.
+                        "bookmaker_id": f"bookmaker:{_normalized_token(bookmaker_name)}",
+                        "provider_bookmaker_id": bookmaker_id,
+                        "bet_id": market_key,
+                        "bet_name": market_key,
+                        "market_scope": "FULL_MATCH",
+                        "observed_at": observed_at,
+                        "provider_updated_at": provider_updated_at,
+                        "odds_provider": "THE_ODDS_API",
+                        "odds_event_id": event.get("id", ""),
+                    })
+    print(
+        f"THE ODDS API MATCH: fixture={match.get('fixture_id')} "
+        f"event={event.get('id')} quotes={len(rows)}"
+    )
+    return rows
+
+
 def _normalized_bet_name(value):
     return re.sub(r"[^a-z0-9]+", " ", str(value or "").strip().lower()).strip()
 
@@ -439,7 +628,8 @@ def _iter_fixture_odds(match, publication_only=True):
                         "market": key,
                         "odds": odd,
                         "bookmaker": bookmaker_name,
-                        "bookmaker_id": bookmaker_id,
+                        "bookmaker_id": f"bookmaker:{_normalized_token(bookmaker_name)}",
+                        "provider_bookmaker_id": bookmaker_id,
                         "bet_id": bet_id,
                         "bet_name": market_name,
                         "market_scope": "FULL_MATCH",
@@ -453,6 +643,9 @@ def get_odds_market_data(match):
 
     try:
         rows = _iter_fixture_odds(match, publication_only=False)
+        # Merge two independent real-data feeds.  Missing keys or unmatched
+        # event identities simply keep the original fail-closed behaviour.
+        rows.extend(_iter_the_odds_api_rows(match))
         markets = {}
         groups = {
             "MATCH_WINNER": ("HOME_WIN", "DRAW", "AWAY_WIN"),
